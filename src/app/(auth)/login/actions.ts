@@ -1,10 +1,11 @@
 "use server"
 
-import { signIn } from "@/lib/auth"
+import { signIn }      from "@/lib/auth"
 import { loginSchema } from "@/lib/validations/auth"
-import { AuthError } from "next-auth"
+import { AuthError }   from "next-auth"
+import { redirect }    from "next/navigation"
 
-export async function loginAction(_: unknown, formData: FormData) {
+export async function loginAction(formData: FormData) {
   const raw = {
     email:    formData.get("email"),
     password: formData.get("password"),
@@ -12,7 +13,7 @@ export async function loginAction(_: unknown, formData: FormData) {
 
   const parsed = loginSchema.safeParse(raw)
   if (!parsed.success) {
-    return { error: "Preencha o e-mail e a senha corretamente." }
+    redirect("/login?error=invalid")
   }
 
   try {
@@ -23,8 +24,9 @@ export async function loginAction(_: unknown, formData: FormData) {
     })
   } catch (err) {
     if (err instanceof AuthError) {
-      return { error: "E-mail ou senha incorretos." }
+      redirect("/login?error=credentials")
     }
-    throw err // re-throw NEXT_REDIRECT
+    // Re-throw o NEXT_REDIRECT para o Next.js processar o redirecionamento
+    throw err
   }
 }
