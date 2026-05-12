@@ -2,12 +2,10 @@
 
 import { useState, useEffect, useTransition } from "react"
 import { Bell }    from "lucide-react"
-import { Button }  from "@/components/ui/button"
-import { Badge }   from "@/components/ui/badge"
 import {
   Popover, PopoverContent, PopoverTrigger,
 } from "@/components/ui/popover"
-import { format, formatDistanceToNow } from "date-fns"
+import { formatDistanceToNow } from "date-fns"
 import { ptBR }    from "date-fns/locale"
 
 interface Notification {
