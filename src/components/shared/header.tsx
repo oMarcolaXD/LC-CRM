@@ -1,6 +1,7 @@
 import { Bell }          from "lucide-react"
 import { Button }         from "@/components/ui/button"
 import { MobileSidebar }  from "./mobile-sidebar"
+import { LogoutButton }   from "./logout-button"
 import type { Role }      from "@prisma/client"
 
 const PAGE_TITLES: Record<string, string> = {
@@ -43,10 +44,11 @@ export function Header({ pathname, name, email, role, image }: HeaderProps) {
         <h2 className="font-sub font-semibold text-base text-foreground">{title}</h2>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1">
         <Button variant="ghost" size="icon" aria-label="Notificações">
           <Bell className="w-5 h-5" />
         </Button>
+        <LogoutButton />
       </div>
     </header>
   )
