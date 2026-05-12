@@ -1,0 +1,311 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum Role {
+  ADMIN
+  COLLABORATOR
+  TEACHER
+  STUDENT
+  GUARDIAN
+}
+
+enum LessonStatus {
+  SCHEDULED
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  MISSED
+}
+
+enum LessonModality {
+  PRESENCIAL
+  ONLINE
+}
+
+enum RequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  OVERDUE
+}
+
+enum PackageStatus {
+  ACTIVE
+  EXPIRED
+  EXHAUSTED
+}
+
+enum HomeworkStatus {
+  PENDING
+  COMPLETED
+}
+
+enum PayoutStatus {
+  PENDING
+  PAID
+}
+
+// ─── Usuário Base ─────────────────────────────────────────────────────────────
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  phone     String?
+  role      Role     @default(STUDENT)
+  avatar    String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  student       Student?
+  guardian      Guardian?
+  teacher       Teacher?
+  notifications Notification[]
+  activityLogs  ActivityLog[]
+
+  @@map("users")
+}
+
+// ─── Perfis ───────────────────────────────────────────────────────────────────
+
+model Student {
+  id         String    @id @default(cuid())
+  userId     String    @unique
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  grade      String
+  school     String?
+  birthDate  DateTime?
+  guardianId String?
+  guardian   Guardian? @relation(fields: [guardianId], references: [id])
+  notes      String?
+
+  packages LessonPackage[]
+  lessons  Lesson[]
+  requests LessonRequest[]
+  payments Payment[]
+
+  @@map("students")
+}
+
+model Guardian {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  students Student[]
+
+  @@map("guardians")
+}
+
+model Teacher {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  hourlyRate   Decimal  @db.Decimal(10, 2)
+  bio          String?
+  availability Json?
+
+  subjects  TeacherSubject[]
+  lessons   Lesson[]
+  requests  LessonRequest[]
+  materials Material[]
+  payouts   TeacherPayout[]
+
+  @@map("teachers")
+}
+
+// ─── Matérias ─────────────────────────────────────────────────────────────────
+
+model Subject {
+  id    String  @id @default(cuid())
+  name  String
+  level String?
+
+  teacherSubjects TeacherSubject[]
+  lessons         Lesson[]
+  materials       Material[]
+
+  @@map("subjects")
+}
+
+model TeacherSubject {
+  teacherId String
+  subjectId String
+  teacher   Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  subject   Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@id([teacherId, subjectId])
+  @@map("teacher_subjects")
+}
+
+// ─── Pacotes de Aulas ─────────────────────────────────────────────────────────
+
+model LessonPackage {
+  id               String        @id @default(cuid())
+  studentId        String
+  student          Student       @relation(fields: [studentId], references: [id])
+  totalLessons     Int
+  remainingLessons Int
+  pricePerLesson   Decimal       @db.Decimal(10, 2)
+  purchaseDate     DateTime      @default(now())
+  expiresAt        DateTime?
+  status           PackageStatus @default(ACTIVE)
+
+  @@map("lesson_packages")
+}
+
+// ─── Aulas ────────────────────────────────────────────────────────────────────
+
+model Lesson {
+  id              String         @id @default(cuid())
+  studentId       String
+  student         Student        @relation(fields: [studentId], references: [id])
+  teacherId       String
+  teacher         Teacher        @relation(fields: [teacherId], references: [id])
+  subjectId       String
+  subject         Subject        @relation(fields: [subjectId], references: [id])
+  scheduledAt     DateTime
+  duration        Int            @default(60)
+  modality        LessonModality @default(PRESENCIAL)
+  location        String?
+  meetingLink     String?
+  status          LessonStatus   @default(SCHEDULED)
+  topicsCovered   String?
+  teacherNotes    String?
+  studentRating   Int?
+  studentFeedback String?
+  isGroupLesson   Boolean        @default(false)
+  groupId         String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  homework Homework[]
+
+  @@map("lessons")
+}
+
+model LessonRequest {
+  id          String        @id @default(cuid())
+  studentId   String
+  student     Student       @relation(fields: [studentId], references: [id])
+  teacherId   String
+  teacher     Teacher       @relation(fields: [teacherId], references: [id])
+  requestedAt DateTime      @default(now())
+  preferredAt DateTime
+  subjectId   String?
+  status      RequestStatus @default(PENDING)
+  approvedBy  String?
+  reason      String?
+
+  @@map("lesson_requests")
+}
+
+// ─── Lição de Casa ────────────────────────────────────────────────────────────
+
+model Homework {
+  id          String         @id @default(cuid())
+  lessonId    String
+  lesson      Lesson         @relation(fields: [lessonId], references: [id])
+  title       String
+  description String?
+  dueDate     DateTime?
+  attachments String[]
+  status      HomeworkStatus @default(PENDING)
+  completedAt DateTime?
+  createdAt   DateTime       @default(now())
+
+  @@map("homework")
+}
+
+// ─── Material Didático ────────────────────────────────────────────────────────
+
+model Material {
+  id         String   @id @default(cuid())
+  teacherId  String
+  teacher    Teacher  @relation(fields: [teacherId], references: [id])
+  studentId  String?
+  subjectId  String?
+  subject    Subject? @relation(fields: [subjectId], references: [id])
+  title      String
+  fileUrl    String
+  fileType   String
+  uploadedAt DateTime @default(now())
+
+  @@map("materials")
+}
+
+// ─── Financeiro ───────────────────────────────────────────────────────────────
+
+model Payment {
+  id            String        @id @default(cuid())
+  studentId     String
+  student       Student       @relation(fields: [studentId], references: [id])
+  amount        Decimal       @db.Decimal(10, 2)
+  dueDate       DateTime
+  paidAt        DateTime?
+  status        PaymentStatus @default(PENDING)
+  method        String?
+  mercadoPagoId String?
+  description   String?
+  createdAt     DateTime      @default(now())
+
+  @@map("payments")
+}
+
+model TeacherPayout {
+  id           String       @id @default(cuid())
+  teacherId    String
+  teacher      Teacher      @relation(fields: [teacherId], references: [id])
+  month        Int
+  year         Int
+  totalLessons Int
+  totalAmount  Decimal      @db.Decimal(10, 2)
+  paidAt       DateTime?
+  status       PayoutStatus @default(PENDING)
+
+  @@map("teacher_payouts")
+}
+
+// ─── Notificações e Auditoria ─────────────────────────────────────────────────
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String
+  title     String
+  message   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@map("notifications")
+}
+
+model ActivityLog {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  action     String
+  entityType String
+  entityId   String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  @@map("activity_logs")
+}
