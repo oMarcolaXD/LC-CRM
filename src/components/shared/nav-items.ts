@@ -40,10 +40,11 @@ export const NAV_ITEMS: Record<Role, NavItem[]> = {
     { label: "Minhas Aulas", href: "/aluno/aulas",      icon: BookOpen        },
     { label: "Materiais",    href: "/aluno/materiais",  icon: FolderOpen      },
     { label: "Lições",       href: "/aluno/licoes",     icon: PenLine         },
+    { label: "Pagamentos",   href: "/aluno/pagamentos", icon: Wallet          },
   ],
   GUARDIAN: [
-    { label: "Dashboard",  href: "/aluno/dashboard", icon: LayoutDashboard },
-    { label: "Agenda",     href: "/aluno/aulas",     icon: CalendarDays    },
-    { label: "Pagamentos", href: "/aluno/pagamentos",icon: Wallet          },
+    { label: "Dashboard",  href: "/aluno/dashboard",  icon: LayoutDashboard },
+    { label: "Agenda",     href: "/aluno/aulas",      icon: CalendarDays    },
+    { label: "Pagamentos", href: "/aluno/pagamentos", icon: Wallet          },
   ],
 }
