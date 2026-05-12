@@ -1,7 +1,6 @@
 import { prisma }         from "@/lib/prisma"
 import { PageHeader }     from "@/components/shared/page-header"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge }          from "@/components/ui/badge"
 import { SimpleAreaChart } from "@/components/charts/area-chart"
 import { SimpleBarChart }  from "@/components/charts/bar-chart"
 import { DonutChart }      from "@/components/charts/donut-chart"

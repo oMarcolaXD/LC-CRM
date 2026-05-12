@@ -4,6 +4,7 @@ import bcrypt        from "bcryptjs"
 import { prisma }    from "@/lib/prisma"
 import { loginSchema } from "@/lib/validations/auth"
 import { authConfig, ROLE_HOME } from "@/lib/auth.config"
+import type { Role } from "@prisma/client"
 
 export { ROLE_HOME }
 
@@ -12,8 +13,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [
     Credentials({
       credentials: {
-        email:    { label: "Email",  type: "email"    },
-        password: { label: "Senha",  type: "password" },
+        email:    { label: "Email", type: "email"    },
+        password: { label: "Senha", type: "password" },
       },
       async authorize(credentials) {
         const parsed = loginSchema.safeParse(credentials)
@@ -31,4 +32,20 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
     }),
   ],
+  callbacks: {
+    jwt({ token, user }) {
+      if (user) {
+        token.id   = user.id ?? ""
+        token.role = (user as { id: string; role: Role }).role
+      }
+      return token
+    },
+    session({ session, token }) {
+      if (session.user) {
+        session.user.id   = token.id   as string
+        session.user.role = token.role as Role
+      }
+      return session
+    },
+  },
 })
