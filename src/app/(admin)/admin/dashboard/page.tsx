@@ -94,7 +94,7 @@ export default async function AdminDashboard() {
   return (
     <div className="space-y-6">
       {/* Cabeçalho */}
-      <div className="flex items-start justify-between flex-wrap gap-3">
+      <div className="animate-fade-up flex items-start justify-between flex-wrap gap-3">
         <div>
           <h1 className="font-heading text-3xl text-foreground">
             {saudacao}, {session?.user?.name?.split(" ")[0]}!
@@ -114,8 +114,9 @@ export default async function AdminDashboard() {
 
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-        {kpis.map(({ title, value, icon: Icon, color, bg, alert }) => (
-          <Card key={title}>
+        {kpis.map(({ title, value, icon: Icon, color, bg, alert }, i) => (
+          <Card key={title} className="card-lift animate-fade-up"
+            style={{ "--delay": `${i * 60}ms` } as React.CSSProperties}>
             <CardContent className="p-5 flex items-start justify-between gap-2">
               <div>
                 <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium">{title}</p>
@@ -132,7 +133,7 @@ export default async function AdminDashboard() {
 
       {/* Gráficos principais */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Card>
+        <Card className="animate-scale-in" style={{ "--delay": "120ms" } as React.CSSProperties}>
           <CardHeader className="pb-2">
             <CardTitle className="font-sub text-sm flex items-center gap-2">
               <DollarSign className="w-4 h-4 text-primary" /> Receita — Últimos 6 Meses
@@ -146,7 +147,7 @@ export default async function AdminDashboard() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="animate-scale-in" style={{ "--delay": "180ms" } as React.CSSProperties}>
           <CardHeader className="pb-2">
             <CardTitle className="font-sub text-sm flex items-center gap-2">
               <CalendarCheck className="w-4 h-4 text-primary" /> Aulas — Últimos 6 Meses
@@ -163,7 +164,7 @@ export default async function AdminDashboard() {
 
       {/* Status das aulas + distribuição de usuários */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Card>
+        <Card className="animate-scale-in" style={{ "--delay": "240ms" } as React.CSSProperties}>
           <CardHeader className="pb-2">
             <CardTitle className="font-sub text-sm flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-primary" /> Status das Aulas (Mês Atual)
@@ -177,7 +178,7 @@ export default async function AdminDashboard() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="animate-scale-in" style={{ "--delay": "300ms" } as React.CSSProperties}>
           <CardHeader className="pb-2">
             <CardTitle className="font-sub text-sm flex items-center gap-2">
               <Users className="w-4 h-4 text-primary" /> Distribuição de Usuários

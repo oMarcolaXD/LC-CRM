@@ -93,8 +93,9 @@ export default async function ProfessorDashboard() {
           { title: "Meus Alunos",            value: totalAlunos,        icon: GraduationCap, color: "text-secondary",  bg: "bg-secondary/10" },
           { title: "Projeção do Mês",        value: brl(projecaoMes),   icon: Wallet,        color: "text-green-600",  bg: "bg-green-50"     },
           { title: "Avaliação Média",        value: `${avgRating}★`,    icon: Star,          color: "text-yellow-500", bg: "bg-yellow-50"    },
-        ].map(({ title, value, icon: Icon, color, bg }) => (
-          <Card key={title}>
+        ].map(({ title, value, icon: Icon, color, bg }, i) => (
+          <Card key={title} className="card-lift animate-fade-up"
+            style={{ "--delay": `${i * 60}ms` } as React.CSSProperties}>
             <CardContent className="p-5 flex items-start justify-between gap-2">
               <div>
                 <p className="text-xs text-muted-foreground uppercase tracking-wide">{title}</p>
@@ -108,7 +109,7 @@ export default async function ProfessorDashboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Aulas por mês */}
-        <Card>
+        <Card className="animate-scale-in" style={{ "--delay": "120ms" } as React.CSSProperties}>
           <CardHeader className="pb-2">
             <CardTitle className="font-sub text-sm flex items-center gap-2">
               <CalendarCheck className="w-4 h-4 text-primary" /> Aulas Realizadas — 6 Meses
@@ -123,7 +124,7 @@ export default async function ProfessorDashboard() {
         </Card>
 
         {/* Status geral */}
-        <Card>
+        <Card className="animate-scale-in" style={{ "--delay": "180ms" } as React.CSSProperties}>
           <CardHeader className="pb-2">
             <CardTitle className="font-sub text-sm flex items-center gap-2">
               <Star className="w-4 h-4 text-primary" /> Status das Aulas
@@ -140,7 +141,7 @@ export default async function ProfessorDashboard() {
 
       {/* Próximas aulas */}
       {proximas.length > 0 && (
-        <Card>
+        <Card className="animate-fade-up" style={{ "--delay": "240ms" } as React.CSSProperties}>
           <CardHeader className="pb-3">
             <CardTitle className="font-sub text-base flex items-center justify-between">
               <span className="flex items-center gap-2">
@@ -150,8 +151,10 @@ export default async function ProfessorDashboard() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            {proximas.map((l) => (
-              <div key={l.id} className="flex items-center justify-between p-3 rounded-lg border border-border">
+            {proximas.map((l, i) => (
+              <div key={l.id} className="flex items-center justify-between p-3 rounded-lg border border-border
+                transition-colors duration-150 hover:bg-muted/40"
+                style={{ animationDelay: `${260 + i * 40}ms` }}>
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="shrink-0 w-12 text-center">
                     <p className="text-base font-bold text-primary">{format(l.scheduledAt, "dd")}</p>

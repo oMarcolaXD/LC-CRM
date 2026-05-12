@@ -155,8 +155,33 @@
   --sidebar-ring: oklch(0.75 0.195 55.4);
 }
 
+/* ─── Keyframes ──────────────────────────────────────────────────────────── */
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: translateY(0);    }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.97); }
+  to   { opacity: 1; transform: scale(1);    }
+}
+
+@keyframes slide-right {
+  from { opacity: 0; transform: translateX(-12px); }
+  to   { opacity: 1; transform: translateX(0);     }
+}
+
 /* ─── Estilos Base ───────────────────────────────────────────────────────── */
 @layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
   * {
     @apply border-border outline-ring/50;
   }
@@ -195,5 +220,30 @@
   /* Card com sombra suave da marca */
   .card-brand {
     @apply rounded-xl border border-border bg-card shadow-sm;
+  }
+
+  /* ── Animações de entrada ── */
+  .animate-fade-up {
+    animation: fade-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) var(--delay, 0ms) both;
+  }
+
+  .animate-fade-in {
+    animation: fade-in 0.4s ease-out var(--delay, 0ms) both;
+  }
+
+  .animate-scale-in {
+    animation: scale-in 0.45s cubic-bezier(0.16, 1, 0.3, 1) var(--delay, 0ms) both;
+  }
+
+  .animate-slide-right {
+    animation: slide-right 0.4s cubic-bezier(0.16, 1, 0.3, 1) var(--delay, 0ms) both;
+  }
+
+  /* ── Hover lift em cards ── */
+  .card-lift {
+    @apply transition-all duration-200 ease-out;
+  }
+  .card-lift:hover {
+    @apply shadow-md -translate-y-px;
   }
 }

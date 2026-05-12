@@ -123,7 +123,7 @@ export default async function RelatoriosPage() {
       <PageHeader title="RELATÓRIOS" description="Visão analítica completa do negócio" />
 
       {/* ─── Resumo Executivo ──────────────────────────────────────────────── */}
-      <section>
+      <section className="animate-fade-in" style={{ "--delay": "50ms" } as React.CSSProperties}>
         <h2 className="font-sub font-semibold text-base text-muted-foreground uppercase tracking-wide mb-3">
           Resumo Executivo
         </h2>
@@ -137,8 +137,9 @@ export default async function RelatoriosPage() {
             { title: "Taxa de Conclusão", value: `${d.taxaConclusao}%`,  icon: CheckCircle2,  color: "text-primary",     bg: "bg-primary/10"  },
             { title: "Alunos Cadastrados",value: d.totalStudents,        icon: GraduationCap, color: "text-purple-600",  bg: "bg-purple-50"   },
             { title: "Avaliação Média",   value: `${d.avgRating}★`,      icon: Star,          color: "text-yellow-500",  bg: "bg-yellow-50"   },
-          ].map(({ title, value, icon: Icon, color, bg }) => (
-            <Card key={title}>
+          ].map(({ title, value, icon: Icon, color, bg }, i) => (
+            <Card key={title} className="card-lift animate-fade-up"
+              style={{ "--delay": `${i * 55}ms` } as React.CSSProperties}>
               <CardContent className="p-4 flex items-start justify-between gap-2">
                 <div>
                   <p className="text-xs text-muted-foreground uppercase tracking-wide">{title}</p>

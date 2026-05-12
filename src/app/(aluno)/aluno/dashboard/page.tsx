@@ -73,7 +73,8 @@ export default async function AlunoDashboard() {
 
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className={saldo <= 2 && saldo > 0 ? "border-orange-300" : ""}>
+        <Card className={`card-lift animate-fade-up ${saldo <= 2 && saldo > 0 ? "border-orange-300" : ""}`}
+          style={{ "--delay": "0ms" } as React.CSSProperties}>
           <CardContent className="p-5 flex items-start justify-between gap-2">
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wide">Saldo de Aulas</p>
@@ -88,8 +89,9 @@ export default async function AlunoDashboard() {
           { title: "Aulas Realizadas", value: realizadas,     icon: TrendingUp,  color: "text-green-600",   bg: "bg-green-50"   },
           { title: "Lições Pendentes", value: homework,       icon: PenLine,     color: "text-orange-500",  bg: "bg-orange-50"  },
           { title: "Materiais",        value: materials,      icon: FolderOpen,  color: "text-secondary",   bg: "bg-secondary/10"},
-        ].map(({ title, value, icon: Icon, color, bg }) => (
-          <Card key={title}>
+        ].map(({ title, value, icon: Icon, color, bg }, i) => (
+          <Card key={title} className="card-lift animate-fade-up"
+            style={{ "--delay": `${(i + 1) * 60}ms` } as React.CSSProperties}>
             <CardContent className="p-5 flex items-start justify-between gap-2">
               <div>
                 <p className="text-xs text-muted-foreground uppercase tracking-wide">{title}</p>
@@ -103,7 +105,7 @@ export default async function AlunoDashboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Frequência */}
-        <Card>
+        <Card className="animate-scale-in" style={{ "--delay": "120ms" } as React.CSSProperties}>
           <CardHeader className="pb-2">
             <CardTitle className="font-sub text-sm flex items-center gap-2">
               <TrendingUp className="w-4 h-4 text-primary" /> Frequência — Últimos 6 Meses
@@ -118,7 +120,7 @@ export default async function AlunoDashboard() {
         </Card>
 
         {/* Matérias */}
-        <Card>
+        <Card className="animate-scale-in" style={{ "--delay": "180ms" } as React.CSSProperties}>
           <CardHeader className="pb-2">
             <CardTitle className="font-sub text-sm flex items-center gap-2">
               <BookOpen className="w-4 h-4 text-primary" /> Aulas por Matéria
@@ -135,7 +137,7 @@ export default async function AlunoDashboard() {
 
       {/* Próximas aulas */}
       {proximas.length > 0 && (
-        <Card>
+        <Card className="animate-fade-up" style={{ "--delay": "240ms" } as React.CSSProperties}>
           <CardHeader className="pb-3">
             <CardTitle className="font-sub text-base flex items-center justify-between">
               <span className="flex items-center gap-2">
@@ -148,7 +150,8 @@ export default async function AlunoDashboard() {
           </CardHeader>
           <CardContent className="space-y-2">
             {proximas.map((l) => (
-              <div key={l.id} className="flex items-center justify-between p-3 rounded-lg border border-border">
+              <div key={l.id} className="flex items-center justify-between p-3 rounded-lg border border-border
+                transition-colors duration-150 hover:bg-muted/40">
                 <div className="flex items-center gap-3">
                   <div className="w-12 text-center shrink-0">
                     <p className="text-base font-bold text-primary">{format(l.scheduledAt, "dd")}</p>
@@ -167,7 +170,7 @@ export default async function AlunoDashboard() {
 
       {/* Avaliação média */}
       {avgRating && (
-        <Card>
+        <Card className="animate-fade-up" style={{ "--delay": "300ms" } as React.CSSProperties}>
           <CardContent className="p-5 flex items-center gap-4">
             <div className="w-14 h-14 rounded-2xl bg-yellow-50 flex items-center justify-center shrink-0">
               <Star className="w-7 h-7 text-yellow-500 fill-yellow-400" />

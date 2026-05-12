@@ -73,8 +73,9 @@ export default async function ColaboradorDashboard() {
           { title: "Professores",     value: totalProfessores,icon: Users,         color: "text-secondary",  bg: "bg-secondary/10" },
           { title: "Aulas este mês",  value: aulasHoje,      icon: CalendarCheck, color: "text-green-600",  bg: "bg-green-50"     },
           { title: "Ag. Pendentes",   value: requests.length,icon: Clock,         color: "text-orange-500", bg: "bg-orange-50",   alert: requests.length > 0 },
-        ].map(({ title, value, icon: Icon, color, bg, alert }: { title: string; value: number; icon: React.ElementType; color: string; bg: string; alert?: boolean }) => (
-          <Card key={title}>
+        ].map(({ title, value, icon: Icon, color, bg, alert }: { title: string; value: number; icon: React.ElementType; color: string; bg: string; alert?: boolean }, i: number) => (
+          <Card key={title} className="card-lift animate-fade-up"
+            style={{ "--delay": `${i * 60}ms` } as React.CSSProperties}>
             <CardContent className="p-5 flex items-start justify-between gap-2">
               <div>
                 <p className="text-xs text-muted-foreground uppercase tracking-wide">{title}</p>
@@ -89,7 +90,7 @@ export default async function ColaboradorDashboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Gráfico de aulas */}
-        <Card>
+        <Card className="animate-scale-in" style={{ "--delay": "120ms" } as React.CSSProperties}>
           <CardHeader className="pb-2">
             <CardTitle className="font-sub text-sm flex items-center gap-2">
               <CalendarCheck className="w-4 h-4 text-primary" /> Aulas — Últimos 6 Meses
@@ -104,7 +105,7 @@ export default async function ColaboradorDashboard() {
         </Card>
 
         {/* Solicitações pendentes */}
-        <Card>
+        <Card className="animate-scale-in" style={{ "--delay": "180ms" } as React.CSSProperties}>
           <CardHeader className="pb-2">
             <CardTitle className="font-sub text-sm flex items-center justify-between">
               <span className="flex items-center gap-2">
