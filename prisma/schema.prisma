@@ -216,7 +216,8 @@ model LessonRequest {
   preferredAt DateTime
   subjectId   String?
   subject     Subject?      @relation(fields: [subjectId], references: [id])
-  status      RequestStatus @default(PENDING)
+  modality    LessonModality @default(PRESENCIAL)
+  status      RequestStatus  @default(PENDING)
   approvedBy  String?
   reason      String?
 
@@ -292,6 +293,16 @@ model TeacherPayout {
   status       PayoutStatus @default(PENDING)
 
   @@map("teacher_payouts")
+}
+
+// ─── Configurações do Sistema ─────────────────────────────────────────────────
+
+model SystemConfig {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+
+  @@map("system_config")
 }
 
 // ─── Notificações e Auditoria ─────────────────────────────────────────────────

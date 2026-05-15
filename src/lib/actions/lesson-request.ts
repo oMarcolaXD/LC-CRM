@@ -4,6 +4,8 @@ import { prisma }              from "@/lib/prisma"
 import { auth }                from "@/lib/auth"
 import { revalidatePath }      from "next/cache"
 import { notify, notifyLessonConfirmed, notifyLowBalance } from "@/lib/notifications"
+import { getRoomCount }        from "@/lib/config"
+import { startOfDay, endOfDay } from "date-fns"
 import { format }              from "date-fns"
 import { ptBR }                from "date-fns/locale"
 
@@ -18,7 +20,10 @@ async function requireCollaboratorOrAdmin() {
 
 // ─── Aprovar solicitação de aula ──────────────────────────────────────────────
 
-export async function approveRequestAction(requestId: string) {
+export async function approveRequestAction(
+  requestId: string,
+  modalityOverride?: "PRESENCIAL" | "ONLINE",
+) {
   const session = await requireCollaboratorOrAdmin()
 
   const request = await prisma.lessonRequest.findUnique({
@@ -39,6 +44,40 @@ export async function approveRequestAction(requestId: string) {
   const pkg = request.student.packages[0]
   if (!pkg) throw new Error("Aluno sem saldo de aulas")
 
+  // Modalidade final: override do colaborador > modality do request > PRESENCIAL
+  const finalModality = modalityOverride ?? request.modality ?? "PRESENCIAL"
+
+  // ── Verificação de salas (apenas aulas presenciais) ─────────────────────────
+  if (finalModality === "PRESENCIAL") {
+    const roomCount  = await getRoomCount()
+    const reqStart   = request.preferredAt.getTime()
+    const reqEnd     = reqStart + 60 * 60_000 // assume 60 min se não definido
+    const dayStart   = startOfDay(request.preferredAt)
+    const dayEnd     = endOfDay(request.preferredAt)
+
+    const presencialLessons = await prisma.lesson.findMany({
+      where: {
+        modality:    "PRESENCIAL",
+        status:      { in: ["CONFIRMED", "SCHEDULED"] },
+        scheduledAt: { gte: dayStart, lte: dayEnd },
+      },
+      select: { scheduledAt: true, duration: true },
+    })
+
+    const conflicts = presencialLessons.filter((l) => {
+      const lStart = l.scheduledAt.getTime()
+      const lEnd   = lStart + (l.duration ?? 60) * 60_000
+      return lStart < reqEnd && lEnd > reqStart
+    })
+
+    if (conflicts.length >= roomCount) {
+      throw new Error(
+        `Todas as ${roomCount} sala${roomCount !== 1 ? "s" : ""} estão ocupadas neste horário. ` +
+        `Altere para ONLINE para aprovar mesmo assim.`
+      )
+    }
+  }
+
   await prisma.$transaction([
     prisma.lesson.create({
       data: {
@@ -46,7 +85,7 @@ export async function approveRequestAction(requestId: string) {
         teacherId:   request.teacherId,
         subjectId:   request.subjectId ?? "",
         scheduledAt: request.preferredAt,
-        modality:    "PRESENCIAL",
+        modality:    finalModality,
         status:      "CONFIRMED",
       },
     }),

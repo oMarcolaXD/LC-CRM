@@ -1,7 +1,8 @@
-import { prisma }     from "@/lib/prisma"
-import { PageHeader } from "@/components/shared/page-header"
-import { AgendaGrid } from "./agenda-grid"
+import { prisma }       from "@/lib/prisma"
+import { PageHeader }   from "@/components/shared/page-header"
+import { AgendaGrid }   from "./agenda-grid"
 import type { TeacherCol, LessonSlot } from "./agenda-grid"
+import { getRoomCount } from "@/lib/config"
 import { format, startOfDay, endOfDay, parseISO, isValid } from "date-fns"
 import { ptBR } from "date-fns/locale"
 
@@ -19,7 +20,7 @@ export default async function ColaboradorAgendaPage({ searchParams }: AgendaPage
   const dayStart = startOfDay(dateObj)
   const dayEnd   = endOfDay(dateObj)
 
-  const [teachers, lessons] = await Promise.all([
+  const [teachers, lessons, roomCount] = await Promise.all([
     prisma.teacher.findMany({
       where:   { user: { active: true } },
       include: { user: true },
@@ -39,6 +40,7 @@ export default async function ColaboradorAgendaPage({ searchParams }: AgendaPage
       },
       orderBy: { scheduledAt: "asc" },
     }),
+    getRoomCount(),
   ])
 
   // Serializa para o client component (evita problemas com Date objects)
@@ -51,14 +53,15 @@ export default async function ColaboradorAgendaPage({ searchParams }: AgendaPage
     const d   = l.scheduledAt
     const min = d.getHours() * 60 + d.getMinutes()
     return {
-      id:          l.id,
-      teacherId:   l.teacherId,
-      startMin:    min,
-      duration:    l.duration ?? 60,
-      status:      l.status as LessonSlot["status"],
-      time:        format(d, "HH:mm"),
-      studentName: l.student.user.name,
-      subjectName: l.subject.name,
+      id:           l.id,
+      teacherId:    l.teacherId,
+      startMin:     min,
+      duration:     l.duration ?? 60,
+      status:       l.status as LessonSlot["status"],
+      modality:     l.modality as LessonSlot["modality"],
+      time:         format(d, "HH:mm"),
+      studentName:  l.student.user.name,
+      subjectName:  l.subject.name,
       guardianName: l.student.guardian?.user.name ?? null,
     }
   })
@@ -75,6 +78,7 @@ export default async function ColaboradorAgendaPage({ searchParams }: AgendaPage
         date={dateStr}
         teachers={teacherCols}
         lessons={lessonSlots}
+        roomCount={roomCount}
       />
     </div>
   )

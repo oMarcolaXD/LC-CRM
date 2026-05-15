@@ -9,7 +9,7 @@ import { useTransition } from "react"
 import { updateLessonStatusAction } from "@/lib/actions/lesson-request"
 import { sendLessonWhatsAppAction }  from "@/lib/actions/colaborador"
 import { toast }        from "sonner"
-import { CheckCircle2, XCircle, UserX, MessageCircle, Loader2 } from "lucide-react"
+import { CheckCircle2, XCircle, UserX, MessageCircle, Loader2, Wifi, MapPin } from "lucide-react"
 
 // ─── Constantes de layout ────────────────────────────────────────────────────
 
@@ -48,14 +48,15 @@ export interface TeacherCol {
 }
 
 export interface LessonSlot {
-  id:          string
-  teacherId:   string
-  startMin:    number   // minutos desde meia-noite
-  duration:    number   // minutos (default 60)
-  status:      LessonStatus
-  time:        string   // "HH:mm"
-  studentName: string
-  subjectName: string
+  id:           string
+  teacherId:    string
+  startMin:     number   // minutos desde meia-noite
+  duration:     number   // minutos (default 60)
+  status:       LessonStatus
+  modality:     "PRESENCIAL" | "ONLINE"
+  time:         string   // "HH:mm"
+  studentName:  string
+  subjectName:  string
   guardianName: string | null
 }
 
@@ -97,7 +98,13 @@ function LessonBlock({ lesson }: { lesson: LessonSlot }) {
     >
       {/* Info principal */}
       <div className="px-1.5 pt-1 pb-0.5">
-        <p className="text-[11px] font-bold leading-tight">{lesson.time}</p>
+        <div className="flex items-center gap-1">
+          <p className="text-[11px] font-bold leading-tight">{lesson.time}</p>
+          {lesson.modality === "ONLINE"
+            ? <Wifi className="w-2.5 h-2.5 opacity-80 shrink-0" />
+            : <MapPin className="w-2.5 h-2.5 opacity-80 shrink-0" />
+          }
+        </div>
         <p className="text-[12px] font-semibold leading-tight truncate">
           {lesson.studentName.split(" ")[0]}
           {lesson.studentName.split(" ").length > 1 && (
@@ -166,12 +173,13 @@ function LessonBlock({ lesson }: { lesson: LessonSlot }) {
 // ─── Grade principal ──────────────────────────────────────────────────────────
 
 interface AgendaGridProps {
-  date:     string        // "YYYY-MM-DD"
-  teachers: TeacherCol[]
-  lessons:  LessonSlot[]
+  date:      string        // "YYYY-MM-DD"
+  teachers:  TeacherCol[]
+  lessons:   LessonSlot[]
+  roomCount?: number
 }
 
-export function AgendaGrid({ date, teachers, lessons }: AgendaGridProps) {
+export function AgendaGrid({ date, teachers, lessons, roomCount = 3 }: AgendaGridProps) {
   const router = useRouter()
   const parsed = parseISO(date)
   const today  = isToday(parsed)
@@ -188,6 +196,18 @@ export function AgendaGrid({ date, teachers, lessons }: AgendaGridProps) {
 
   const hours   = Array.from({ length: TOTAL }, (_, i) => START + i)
   const byTeacher = (id: string) => lessons.filter(l => l.teacherId === id)
+
+  // Ocupação de salas presenciais por hora cheia
+  const roomUsage = (hour: number): number => {
+    const slotStart = hour * 60
+    const slotEnd   = slotStart + 60
+    return lessons.filter(l => {
+      if (l.modality !== "PRESENCIAL") return false
+      if (l.status === "CANCELLED" || l.status === "MISSED") return false
+      const lEnd = l.startMin + l.duration
+      return l.startMin < slotEnd && lEnd > slotStart
+    }).length
+  }
 
   const totalW = TIME_W + teachers.length * COL_W
 
@@ -267,14 +287,29 @@ export function AgendaGrid({ date, teachers, lessons }: AgendaGridProps) {
               style={{ width: TIME_W, minWidth: TIME_W, height: TOTAL * HOUR_H }}
               className="sticky left-0 z-10 bg-background border-r border-border shrink-0"
             >
-              {hours.map(h => (
-                <div key={h} style={{ height: HOUR_H }}
-                  className="flex items-start justify-end pr-2 pt-1 border-b border-border/30">
-                  <span className="text-[11px] text-muted-foreground tabular-nums">
-                    {String(h).padStart(2, "0")}:00
-                  </span>
-                </div>
-              ))}
+              {hours.map(h => {
+                const used = roomUsage(h)
+                const full = used >= roomCount
+                const warn = used === roomCount - 1
+                return (
+                  <div key={h} style={{ height: HOUR_H }}
+                    className={`flex flex-col items-end justify-start pr-1.5 pt-1 border-b border-border/30 ${
+                      full ? "bg-red-50/60 dark:bg-red-950/20" :
+                      warn ? "bg-yellow-50/60 dark:bg-yellow-950/20" : ""
+                    }`}>
+                    <span className="text-[11px] text-muted-foreground tabular-nums">
+                      {String(h).padStart(2, "0")}:00
+                    </span>
+                    {used > 0 && (
+                      <span className={`text-[9px] tabular-nums font-medium leading-tight ${
+                        full ? "text-red-600" : warn ? "text-yellow-600" : "text-muted-foreground/60"
+                      }`}>
+                        {used}/{roomCount}
+                      </span>
+                    )}
+                  </div>
+                )
+              })}
             </div>
 
             {/* Colunas dos professores */}
