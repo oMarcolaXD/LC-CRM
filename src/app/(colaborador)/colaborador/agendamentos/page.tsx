@@ -3,7 +3,7 @@ import { PageHeader }  from "@/components/shared/page-header"
 import { RequestCard } from "@/components/shared/request-card"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge }       from "@/components/ui/badge"
-import { ClipboardList, CheckCircle2 } from "lucide-react"
+import { ClipboardList, CheckCircle2, UserRound } from "lucide-react"
 import { format }      from "date-fns"
 import { ptBR }        from "date-fns/locale"
 
@@ -12,7 +12,7 @@ export default async function AgendamentosPage() {
     prisma.lessonRequest.findMany({
       where:   { status: "PENDING" },
       include: {
-        student: { include: { user: true } },
+        student: { include: { user: true, guardian: { include: { user: true } } } },
         teacher: { include: { user: true } },
         subject: true,
       },
@@ -21,7 +21,7 @@ export default async function AgendamentosPage() {
     prisma.lessonRequest.findMany({
       where:   { status: { in: ["APPROVED", "REJECTED"] } },
       include: {
-        student: { include: { user: true } },
+        student: { include: { user: true, guardian: { include: { user: true } } } },
         teacher: { include: { user: true } },
         subject: true,
       },
@@ -81,6 +81,12 @@ export default async function AgendamentosPage() {
               <div key={r.id} className="flex items-center justify-between gap-4 p-3 rounded-lg bg-muted/30">
                 <div>
                   <p className="text-sm font-medium">{r.student.user.name}</p>
+                  {r.student.guardian && (
+                    <div className="flex items-center gap-1">
+                      <UserRound className="w-3 h-3 text-muted-foreground" />
+                      <p className="text-xs text-muted-foreground">Resp.: {r.student.guardian.user.name}</p>
+                    </div>
+                  )}
                   <p className="text-xs text-muted-foreground">
                     {r.subject?.name ?? "–"} · {format(r.preferredAt, "dd/MM/yyyy", { locale: ptBR })}
                   </p>

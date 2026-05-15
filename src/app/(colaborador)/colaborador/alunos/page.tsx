@@ -1,12 +1,12 @@
-import { prisma }     from "@/lib/prisma"
-import { PageHeader } from "@/components/shared/page-header"
+import { prisma }          from "@/lib/prisma"
+import { PageHeader }      from "@/components/shared/page-header"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge }      from "@/components/ui/badge"
-import { Button }     from "@/components/ui/button"
-import { buttonVariants } from "@/components/ui/button"
-import { GraduationCap, BookOpen, MessageCircle, CalendarDays, AlertCircle } from "lucide-react"
-import { format }     from "date-fns"
-import { ptBR }       from "date-fns/locale"
+import { Badge }           from "@/components/ui/badge"
+import { buttonVariants }  from "@/components/ui/button"
+import Link                from "next/link"
+import { GraduationCap, BookOpen, MessageCircle, CalendarDays, AlertCircle, UserRound, Plus } from "lucide-react"
+import { format }          from "date-fns"
+import { ptBR }            from "date-fns/locale"
 
 function brl(v: number) { return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) }
 
@@ -34,11 +34,18 @@ const PAYMENT_CFG = {
   OVERDUE: { label: "Vencido",  variant: "destructive" as const },
 }
 
-export default async function ColaboradorAlunosPage() {
+interface AlunosPageProps {
+  searchParams: Promise<{ success?: string }>
+}
+
+export default async function ColaboradorAlunosPage({ searchParams }: AlunosPageProps) {
+  const { success } = await searchParams
+
   const students = await prisma.student.findMany({
     where:   { user: { active: true } },
     include: {
       user: true,
+      guardian: { include: { user: true } },
       packages: {
         where:   { status: { in: ["ACTIVE", "EXHAUSTED"] } },
         orderBy: { purchaseDate: "desc" },
@@ -62,24 +69,42 @@ export default async function ColaboradorAlunosPage() {
   const normal = students.filter((s) => (s.packages[0]?.remainingLessons ?? 0) > 2)
 
   function StudentCard({ student }: { student: typeof students[number] }) {
-    const pkg        = student.packages[0]
-    const remaining  = pkg?.remainingLessons ?? 0
-    const nextLesson = student.lessons[0]
+    const pkg         = student.packages[0]
+    const remaining   = pkg?.remainingLessons ?? 0
+    const nextLesson  = student.lessons[0]
     const lastPayment = student.payments[0]
-    const phone      = student.user.phone?.replace(/\D/g, "")
+    const phone       = student.user.phone?.replace(/\D/g, "")
+    const guardian    = student.guardian
+    const guardianPhone = guardian?.user.phone?.replace(/\D/g, "")
 
     return (
-      <div className="flex flex-col sm:flex-row sm:items-center gap-4 p-4 rounded-xl border border-border bg-card">
-        {/* Avatar + info */}
+      <div className="flex flex-col sm:flex-row sm:items-start gap-4 p-4 rounded-xl border border-border bg-card">
+        {/* Info principal */}
         <div className="flex gap-3 flex-1 min-w-0">
           <div className="w-10 h-10 shrink-0 rounded-xl bg-primary/10 flex items-center justify-center">
             <GraduationCap className="w-5 h-5 text-primary" />
           </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2 mb-0.5">
+          <div className="min-w-0 flex-1 space-y-1">
+            {/* Nome + saldo */}
+            <div className="flex flex-wrap items-center gap-2">
               <p className="font-medium text-sm">{student.user.name}</p>
               <BalanceBadge remaining={remaining} />
             </div>
+
+            {/* Responsável */}
+            {guardian && (
+              <div className="flex items-center gap-1.5">
+                <UserRound className="w-3 h-3 text-muted-foreground shrink-0" />
+                <p className="text-xs text-muted-foreground">
+                  Resp.: <span className="font-medium text-foreground">{guardian.user.name}</span>
+                  {guardian.user.phone && (
+                    <span className="text-muted-foreground"> · {guardian.user.phone}</span>
+                  )}
+                </p>
+              </div>
+            )}
+
+            {/* Pacote */}
             {pkg ? (
               <p className="text-xs text-muted-foreground">
                 Pacote: {pkg.totalLessons} aulas · {brl(Number(pkg.pricePerLesson))}/aula
@@ -88,8 +113,10 @@ export default async function ColaboradorAlunosPage() {
             ) : (
               <p className="text-xs text-destructive">Sem pacote ativo</p>
             )}
+
+            {/* Próxima aula */}
             {nextLesson && (
-              <div className="flex items-center gap-1 mt-1">
+              <div className="flex items-center gap-1">
                 <CalendarDays className="w-3 h-3 text-muted-foreground" />
                 <p className="text-xs text-muted-foreground">
                   Próx: {format(nextLesson.scheduledAt, "dd/MM HH:mm", { locale: ptBR })} · {nextLesson.subject.name}
@@ -100,21 +127,26 @@ export default async function ColaboradorAlunosPage() {
         </div>
 
         {/* Ações */}
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
           {lastPayment && (
             <Badge variant={PAYMENT_CFG[lastPayment.status].variant} className="text-xs">
               {PAYMENT_CFG[lastPayment.status].label}
             </Badge>
           )}
+          {/* WhatsApp do aluno */}
           {phone && (
-            <a
-              href={`https://wa.me/55${phone}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={buttonVariants({ variant: "outline", size: "sm" }) + " text-brand-blue border-brand-blue/30 hover:bg-brand-blue/10 h-8 text-xs px-2"}
-            >
+            <a href={`https://wa.me/55${phone}`} target="_blank" rel="noopener noreferrer"
+              className={buttonVariants({ variant: "outline", size: "sm" }) + " text-brand-blue border-brand-blue/30 hover:bg-brand-blue/10 h-8 text-xs px-2"}>
               <MessageCircle className="w-3 h-3 mr-1" />
-              WhatsApp
+              Aluno
+            </a>
+          )}
+          {/* WhatsApp do responsável */}
+          {guardianPhone && (
+            <a href={`https://wa.me/55${guardianPhone}`} target="_blank" rel="noopener noreferrer"
+              className={buttonVariants({ variant: "outline", size: "sm" }) + " text-brand-blue border-brand-blue/30 hover:bg-brand-blue/10 h-8 text-xs px-2"}>
+              <MessageCircle className="w-3 h-3 mr-1" />
+              Resp.
             </a>
           )}
         </div>
@@ -129,6 +161,22 @@ export default async function ColaboradorAlunosPage() {
         description={`${students.length} aluno${students.length !== 1 ? "s" : ""} cadastrado${students.length !== 1 ? "s" : ""}`}
       />
 
+      {success && (
+        <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm">
+          {decodeURIComponent(success)}
+        </div>
+      )}
+
+      {/* Botão de cadastro */}
+      <div className="flex justify-end">
+        <Link href="/colaborador/alunos/novo"
+          className={buttonVariants({ variant: "default" }) + " gap-2"}>
+          <Plus className="w-4 h-4" />
+          Novo Aluno
+        </Link>
+      </div>
+
+      {/* Alunos com saldo baixo */}
       {low.length > 0 && (
         <Card className="border-red-200">
           <CardHeader className="pb-3">
@@ -144,6 +192,7 @@ export default async function ColaboradorAlunosPage() {
         </Card>
       )}
 
+      {/* Todos os alunos */}
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="font-sub text-base flex items-center gap-2">
@@ -152,8 +201,15 @@ export default async function ColaboradorAlunosPage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
-          {normal.length === 0 && low.length === 0 && (
-            <p className="text-sm text-muted-foreground text-center py-8">Nenhum aluno cadastrado</p>
+          {students.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-10 text-center gap-3">
+              <GraduationCap className="w-10 h-10 text-muted-foreground/30" />
+              <p className="text-sm text-muted-foreground">Nenhum aluno cadastrado</p>
+              <Link href="/colaborador/alunos/novo"
+                className={buttonVariants({ variant: "outline", size: "sm" })}>
+                <Plus className="w-4 h-4 mr-1" /> Cadastrar primeiro aluno
+              </Link>
+            </div>
           )}
           {normal.map((s) => <StudentCard key={s.id} student={s} />)}
         </CardContent>

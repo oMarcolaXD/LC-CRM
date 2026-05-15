@@ -3,7 +3,7 @@ import { PageHeader }  from "@/components/shared/page-header"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge }       from "@/components/ui/badge"
 import { LessonActions } from "./lesson-actions"
-import { CalendarDays, BookOpen } from "lucide-react"
+import { CalendarDays, BookOpen, UserRound } from "lucide-react"
 import { format }      from "date-fns"
 import { ptBR }        from "date-fns/locale"
 
@@ -35,6 +35,7 @@ export default async function ColaboradorAgendaPage() {
       student: {
         include: {
           user:     true,
+          guardian: { include: { user: true } },
           packages: {
             where:   { status: { in: ["ACTIVE", "EXHAUSTED"] } },
             orderBy: { purchaseDate: "desc" },
@@ -56,6 +57,7 @@ export default async function ColaboradorAgendaPage() {
     const pkg       = lesson.student.packages[0]
     const remaining = pkg ? pkg.remainingLessons : 0
     const cfg       = STATUS_CFG[lesson.status]
+    const guardian  = lesson.student.guardian
 
     return (
       <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 rounded-lg border border-border">
@@ -73,6 +75,12 @@ export default async function ColaboradorAgendaPage() {
               <p className="text-sm font-medium">{lesson.student.user.name}</p>
               <BalanceBadge remaining={remaining} />
             </div>
+            {guardian && (
+              <div className="flex items-center gap-1">
+                <UserRound className="w-3 h-3 text-muted-foreground shrink-0" />
+                <p className="text-xs text-muted-foreground">Resp.: {guardian.user.name}</p>
+              </div>
+            )}
             <p className="text-xs text-muted-foreground truncate">
               {lesson.subject.name} · Prof. {lesson.teacher.user.name}
             </p>
