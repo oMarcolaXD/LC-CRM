@@ -1,19 +1,27 @@
 "use client"
 
-import { signOut } from "next-auth/react"
+import { signOut }    from "next-auth/react"
+import { useRouter }  from "next/navigation"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { LogOut, User } from "lucide-react"
-
 const ROLE_LABEL: Record<string, string> = {
   ADMIN:        "Administrador",
   COLLABORATOR: "Colaborador",
   TEACHER:      "Professor",
   STUDENT:      "Aluno",
   GUARDIAN:     "Responsável",
+}
+
+const PROFILE_PATH: Record<string, string> = {
+  ADMIN:        "/admin/perfil",
+  COLLABORATOR: "/colaborador/perfil",
+  TEACHER:      "/professor/perfil",
+  STUDENT:      "/aluno/perfil",
+  GUARDIAN:     "/aluno/perfil",
 }
 
 interface UserMenuProps {
@@ -24,6 +32,7 @@ interface UserMenuProps {
 }
 
 export function UserMenu({ name, email, role, image }: UserMenuProps) {
+  const router   = useRouter()
   const initials = name
     .split(" ")
     .slice(0, 2)
@@ -54,7 +63,7 @@ export function UserMenu({ name, email, role, image }: UserMenuProps) {
           <p className="text-xs text-muted-foreground font-normal">{email}</p>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem>
+        <DropdownMenuItem onClick={() => router.push(PROFILE_PATH[role] ?? "#")}>
           <User className="w-4 h-4 mr-2" />
           Meu Perfil
         </DropdownMenuItem>
