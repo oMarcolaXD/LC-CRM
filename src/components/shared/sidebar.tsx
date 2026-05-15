@@ -31,7 +31,7 @@ export function Sidebar({ name, email, role, image, onNavigate }: SidebarProps) 
 
       {/* Usuário */}
       <div className="p-3">
-        <UserMenu name={name} email={email} role={role} image={image} />
+        <UserMenu name={name} email={email} role={role} image={image} onBeforeOpen={onNavigate} />
       </div>
     </div>
   )

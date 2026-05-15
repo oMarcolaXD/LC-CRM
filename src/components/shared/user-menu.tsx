@@ -31,13 +31,14 @@ const ROLE_LABEL: Record<string, string> = {
 }
 
 interface UserMenuProps {
-  name:   string
-  email:  string
-  role:   string
-  image?: string | null
+  name:          string
+  email:         string
+  role:          string
+  image?:        string | null
+  onBeforeOpen?: () => void
 }
 
-export function UserMenu({ name: initialName, email, role, image: initialImage }: UserMenuProps) {
+export function UserMenu({ name: initialName, email, role, image: initialImage, onBeforeOpen }: UserMenuProps) {
   const { update: updateSession } = useSession()
 
   const [sheetOpen,       setSheetOpen]       = useState(false)
@@ -128,7 +129,7 @@ export function UserMenu({ name: initialName, email, role, image: initialImage }
             <p className="text-xs text-muted-foreground font-normal truncate">{email}</p>
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => { setSheetOpen(true) }}>
+          <DropdownMenuItem onClick={() => { onBeforeOpen?.(); setSheetOpen(true) }}>
             <User className="w-4 h-4 mr-2" />
             Editar perfil
           </DropdownMenuItem>
