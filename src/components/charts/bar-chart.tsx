@@ -64,14 +64,17 @@ export function SimpleBarChart({
         )}
         <Tooltip
           contentStyle={{
-            background: "hsl(var(--card))",
-            border: "1px solid hsl(var(--border))",
+            background: "#ffffff",
+            border: "1px solid #e5e7eb",
             borderRadius: 10,
             fontSize: 12,
-            boxShadow: "0 4px 16px rgba(0,0,0,0.08)",
+            color: "#111827",
+            boxShadow: "0 4px 16px rgba(0,0,0,0.10)",
           }}
+          labelStyle={{ color: "#111827", fontWeight: 600, marginBottom: 2 }}
+          itemStyle={{ color: "#374151" }}
           formatter={(v) => [`${valuePrefix}${Number(v ?? 0).toLocaleString("pt-BR")}`, ""]}
-          cursor={{ fill: "hsl(var(--muted))", radius: 4 }}
+          cursor={{ fill: "rgba(0,0,0,0.05)", radius: 4 }}
           animationDuration={150}
         />
         <Bar
