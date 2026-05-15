@@ -19,6 +19,21 @@ export default auth((req) => {
     return NextResponse.redirect(new URL(home, req.url))
   }
 
+  // Redireciona para home do role se tentar acessar área de outro perfil
+  if (isLoggedIn) {
+    const role = req.auth?.user?.role as string
+    const home = ROLE_HOME[role]
+    const isWrongArea =
+      (pathname.startsWith("/admin")       && role !== "ADMIN") ||
+      (pathname.startsWith("/colaborador") && !["ADMIN", "COLLABORATOR"].includes(role)) ||
+      (pathname.startsWith("/professor")   && !["ADMIN", "TEACHER"].includes(role)) ||
+      (pathname.startsWith("/aluno")       && !["STUDENT", "GUARDIAN"].includes(role))
+
+    if (isWrongArea && home) {
+      return NextResponse.redirect(new URL(home, req.url))
+    }
+  }
+
   const response = NextResponse.next()
   response.headers.set("x-pathname", pathname)
   return response

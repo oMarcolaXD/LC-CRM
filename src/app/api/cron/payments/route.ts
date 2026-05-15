@@ -8,7 +8,8 @@ const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", curren
 const fmt = (d: Date)    => format(d, "dd/MM/yyyy", { locale: ptBR })
 
 export async function GET(request: NextRequest) {
-  if (request.headers.get("authorization") !== `Bearer ${process.env.CRON_SECRET}`) {
+  const secret = process.env.CRON_SECRET
+  if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`) {
     return Response.json({ error: "Unauthorized" }, { status: 401 })
   }
 

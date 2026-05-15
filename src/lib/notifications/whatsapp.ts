@@ -33,6 +33,10 @@ export async function sendWhatsApp(payload: NotificationPayload): Promise<void> 
       }
     )
   } catch (err) {
-    console.error("[WhatsApp] Falha ao enviar:", err)
+    console.error("[WhatsApp] Falha ao enviar", {
+      to:    phone,
+      type:  payload.type,
+      error: err instanceof Error ? err.message : String(err),
+    })
   }
 }

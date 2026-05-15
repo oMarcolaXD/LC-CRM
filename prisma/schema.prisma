@@ -198,6 +198,11 @@ model Lesson {
 
   homework Homework[]
 
+  @@index([studentId])
+  @@index([teacherId])
+  @@index([status])
+  @@index([scheduledAt])
+  @@index([teacherId, status, scheduledAt])
   @@map("lessons")
 }
 
@@ -215,6 +220,8 @@ model LessonRequest {
   approvedBy  String?
   reason      String?
 
+  @@index([teacherId, status])
+  @@index([studentId, status])
   @@map("lesson_requests")
 }
 
@@ -267,6 +274,9 @@ model Payment {
   description   String?
   createdAt     DateTime      @default(now())
 
+  @@index([studentId])
+  @@index([status])
+  @@index([dueDate])
   @@map("payments")
 }
 
@@ -296,6 +306,8 @@ model Notification {
   read      Boolean  @default(false)
   createdAt DateTime @default(now())
 
+  @@index([userId, read])
+  @@index([createdAt])
   @@map("notifications")
 }
 
@@ -309,5 +321,7 @@ model ActivityLog {
   metadata   Json?
   createdAt  DateTime @default(now())
 
+  @@index([userId])
+  @@index([entityType, entityId])
   @@map("activity_logs")
 }

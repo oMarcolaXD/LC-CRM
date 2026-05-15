@@ -20,97 +20,123 @@ async function getReportData() {
     return { start: startOfMonth(d), end: endOfMonth(d), label: format(d, "MMM/yy", { locale: ptBR }) }
   })
 
-  const [lessons, payments, students, teachers, subjects] = await Promise.all([
-    prisma.lesson.findMany({
-      include: { teacher: { include: { user: true } }, subject: true, student: { include: { user: true } } },
+  const COLORS = ["#FB8500","#219EBC","#8b5cf6","#ef4444","#f97316","#10b981","#3b82f6","#ec4899"]
+
+  // Queries agregadas — sem carregar todos os registros em memória
+  const [
+    receitaTotal, aReceber, inadimplencia, totalPagamentos, totalPagos,
+    aulasRealizadas, aulasCanceladas, aulasFaltou, aulasConfirmadas, aulasAgendadas, totalLessons,
+    totalStudents, totalTeachers,
+    subjects, teachers, topAlunosRaw, ratingData,
+  ] = await Promise.all([
+    // Financeiro
+    prisma.payment.aggregate({ where: { status: "PAID" },     _sum: { amount: true } }),
+    prisma.payment.aggregate({ where: { status: "PENDING" },  _sum: { amount: true } }),
+    prisma.payment.aggregate({ where: { status: "OVERDUE" },  _sum: { amount: true } }),
+    prisma.payment.count(),
+    prisma.payment.count({ where: { status: "PAID" } }),
+    // Aulas por status
+    prisma.lesson.count({ where: { status: "COMPLETED" } }),
+    prisma.lesson.count({ where: { status: "CANCELLED" } }),
+    prisma.lesson.count({ where: { status: "MISSED" } }),
+    prisma.lesson.count({ where: { status: "CONFIRMED" } }),
+    prisma.lesson.count({ where: { status: "SCHEDULED" } }),
+    prisma.lesson.count(),
+    // Totais
+    prisma.student.count(),
+    prisma.teacher.count(),
+    // Matérias
+    prisma.subject.findMany({
+      select: { name: true, _count: { select: { lessons: { where: { status: "COMPLETED" } } } } },
     }),
-    prisma.payment.findMany(),
-    prisma.student.findMany({ include: { user: true, lessons: true } }),
+    // Top professores
     prisma.teacher.findMany({
-      include: { user: true, lessons: { where: { status: "COMPLETED" } } },
+      select: {
+        user:   { select: { name: true } },
+        _count: { select: { lessons: { where: { status: "COMPLETED" } } } },
+      },
+      orderBy: { lessons: { _count: "desc" } },
+      take: 6,
     }),
-    prisma.subject.findMany({ include: { lessons: true } }),
+    // Top alunos
+    prisma.student.findMany({
+      select: {
+        user:   { select: { name: true } },
+        _count: { select: { lessons: { where: { status: "COMPLETED" } } } },
+      },
+      orderBy: { lessons: { _count: "desc" } },
+      take: 5,
+    }),
+    // Avaliações
+    prisma.lesson.aggregate({
+      where: { studentRating: { not: null } },
+      _avg:  { studentRating: true },
+      _count: { studentRating: true },
+    }),
   ])
 
-  // ─── Financeiro ──────────────────────────────────────────────────────────────
-  const receitaMeses = months.map(({ start, end, label }) => ({
-    label,
-    value: payments
-      .filter((p) => p.status === "PAID" && p.paidAt && p.paidAt >= start && p.paidAt <= end)
-      .reduce((s, p) => s + Number(p.amount), 0),
-  }))
+  // Receita e aulas por mês (queries paralelas por mês)
+  const [receitaMeses, aulasMeses] = await Promise.all([
+    Promise.all(months.map(({ start, end, label }) =>
+      prisma.payment.aggregate({
+        where: { status: "PAID", paidAt: { gte: start, lte: end } },
+        _sum:  { amount: true },
+      }).then((r) => ({ label, value: Number(r._sum.amount ?? 0) }))
+    )),
+    Promise.all(months.map(({ start, end, label }) =>
+      prisma.lesson.count({ where: { scheduledAt: { gte: start, lte: end } } })
+        .then((value) => ({ label, value }))
+    )),
+  ])
 
-  const receitaTotal  = payments.filter((p) => p.status === "PAID").reduce((s, p) => s + Number(p.amount), 0)
-  const aReceber      = payments.filter((p) => p.status === "PENDING").reduce((s, p) => s + Number(p.amount), 0)
-  const inadimplencia = payments.filter((p) => p.status === "OVERDUE").reduce((s, p) => s + Number(p.amount), 0)
-  const taxaAdimplencia = payments.length > 0
-    ? Math.round(payments.filter((p) => p.status === "PAID").length / payments.length * 100)
-    : 0
+  // Distribuição de notas por estrela
+  const ratingDist = await Promise.all(
+    [1,2,3,4,5].map((star) =>
+      prisma.lesson.count({ where: { studentRating: star } })
+        .then((value) => ({
+          label: `${star}★`,
+          value,
+          color: star >= 4 ? "#FB8500" : star === 3 ? "#f97316" : "#ef4444",
+        }))
+    )
+  )
 
-  // ─── Aulas ──────────────────────────────────────────────────────────────────
-  const aulasMeses = months.map(({ start, end, label }) => ({
-    label,
-    value: lessons.filter((l) => l.scheduledAt >= start && l.scheduledAt <= end).length,
-  }))
-
-  const aulasRealizadas = lessons.filter((l) => l.status === "COMPLETED").length
-  const aulasCanceladas = lessons.filter((l) => l.status === "CANCELLED").length
-  const aulasFaltou     = lessons.filter((l) => l.status === "MISSED").length
-  const taxaConclusao   = lessons.length > 0 ? Math.round(aulasRealizadas / lessons.length * 100) : 0
+  const taxaAdimplencia = totalPagamentos > 0 ? Math.round(totalPagos / totalPagamentos * 100) : 0
+  const taxaConclusao   = totalLessons > 0 ? Math.round(aulasRealizadas / totalLessons * 100) : 0
+  const avgRating       = ratingData._avg.studentRating ? Number(ratingData._avg.studentRating).toFixed(1) : "–"
 
   const statusAulas = [
-    { label: "Realizadas",  value: aulasRealizadas,                                          color: "#FB8500" },
-    { label: "Confirmadas", value: lessons.filter((l) => l.status === "CONFIRMED").length,  color: "#219EBC" },
-    { label: "Agendadas",   value: lessons.filter((l) => l.status === "SCHEDULED").length,  color: "#8b5cf6" },
-    { label: "Canceladas",  value: aulasCanceladas,                                          color: "#ef4444" },
-    { label: "Faltou",      value: aulasFaltou,                                              color: "#f97316" },
+    { label: "Realizadas",  value: aulasRealizadas,  color: "#FB8500" },
+    { label: "Confirmadas", value: aulasConfirmadas, color: "#219EBC" },
+    { label: "Agendadas",   value: aulasAgendadas,   color: "#8b5cf6" },
+    { label: "Canceladas",  value: aulasCanceladas,  color: "#ef4444" },
+    { label: "Faltou",      value: aulasFaltou,       color: "#f97316" },
   ].filter((d) => d.value > 0)
 
-  // ─── Por matéria ─────────────────────────────────────────────────────────────
-  const COLORS = ["#FB8500","#219EBC","#8b5cf6","#ef4444","#f97316","#10b981","#3b82f6","#ec4899"]
   const materiaData = subjects
-    .map((s, i) => ({
-      label: s.name,
-      value: s.lessons.filter((l) => l.status === "COMPLETED").length,
-      color: COLORS[i % COLORS.length],
-    }))
+    .map((s, i) => ({ label: s.name, value: s._count.lessons, color: COLORS[i % COLORS.length] }))
     .filter((d) => d.value > 0)
     .sort((a, b) => b.value - a.value)
 
-  // ─── Top professores ─────────────────────────────────────────────────────────
-  const topProfessores = teachers
-    .map((t) => ({
-      label: t.user.name.split(" ")[0],
-      value: t.lessons.length,
-    }))
-    .sort((a, b) => b.value - a.value)
-    .slice(0, 6)
-
-  // ─── Avaliações ──────────────────────────────────────────────────────────────
-  const avaliadas   = lessons.filter((l) => l.studentRating)
-  const avgRating   = avaliadas.length > 0
-    ? (avaliadas.reduce((s, l) => s + (l.studentRating ?? 0), 0) / avaliadas.length).toFixed(1)
-    : "–"
-  const ratingDist  = [1,2,3,4,5].map((star) => ({
-    label: `${star}★`,
-    value: avaliadas.filter((l) => l.studentRating === star).length,
-    color: star >= 4 ? "#FB8500" : star === 3 ? "#f97316" : "#ef4444",
+  const topProfessores = teachers.map((t) => ({
+    label: t.user.name.split(" ")[0],
+    value: t._count.lessons,
   }))
 
-  // ─── Top alunos (mais aulas) ──────────────────────────────────────────────────
-  const topAlunos = students
-    .map((s) => ({
-      name:  s.user.name,
-      aulas: s.lessons.filter((l) => l.status === "COMPLETED").length,
-    }))
-    .sort((a, b) => b.aulas - a.aulas)
-    .slice(0, 5)
+  const topAlunos = topAlunosRaw.map((s) => ({
+    name:  s.user.name,
+    aulas: s._count.lessons,
+  }))
 
   return {
-    receitaMeses, receitaTotal, aReceber, inadimplencia, taxaAdimplencia,
+    receitaMeses,
+    receitaTotal:  Number(receitaTotal._sum.amount ?? 0),
+    aReceber:      Number(aReceber._sum.amount ?? 0),
+    inadimplencia: Number(inadimplencia._sum.amount ?? 0),
+    taxaAdimplencia,
     aulasMeses, aulasRealizadas, aulasCanceladas, aulasFaltou, taxaConclusao, statusAulas,
     materiaData, topProfessores, avgRating, ratingDist, topAlunos,
-    totalLessons: lessons.length, totalStudents: students.length, totalTeachers: teachers.length,
+    totalLessons, totalStudents, totalTeachers,
   }
 }
 
@@ -305,7 +331,7 @@ export default async function RelatoriosPage() {
 
 function EmptyChart({ label }: { label: string }) {
   return (
-    <div className="h-[180px] flex flex-col items-center justify-center text-center gap-2">
+    <div className="h-45 flex flex-col items-center justify-center text-center gap-2">
       <p className="text-sm text-muted-foreground">{label}</p>
       <p className="text-xs text-muted-foreground/60">Os dados aparecerão conforme o sistema for utilizado</p>
     </div>

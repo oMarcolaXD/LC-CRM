@@ -1,11 +1,21 @@
 "use server"
 
-import { signIn }      from "@/lib/auth"
-import { loginSchema } from "@/lib/validations/auth"
-import { AuthError }   from "next-auth"
-import { redirect }    from "next/navigation"
+import { signIn }          from "@/lib/auth"
+import { loginSchema }     from "@/lib/validations/auth"
+import { checkRateLimit }  from "@/lib/rate-limit"
+import { AuthError }       from "next-auth"
+import { redirect }        from "next/navigation"
+import { headers }         from "next/headers"
 
 export async function loginAction(formData: FormData) {
+  const headerList = await headers()
+  const ip = headerList.get("x-forwarded-for")?.split(",")[0].trim() ?? "unknown"
+
+  const { allowed, retryAfterSeconds } = checkRateLimit(`login:${ip}`)
+  if (!allowed) {
+    redirect(`/login?error=${encodeURIComponent(`Muitas tentativas. Aguarde ${Math.ceil(retryAfterSeconds / 60)} minuto(s).`)}`)
+  }
+
   const raw = {
     email:    formData.get("email"),
     password: formData.get("password"),
@@ -26,7 +36,6 @@ export async function loginAction(formData: FormData) {
     if (err instanceof AuthError) {
       redirect("/login?error=credentials")
     }
-    // Re-throw o NEXT_REDIRECT para o Next.js processar o redirecionamento
     throw err
   }
 }

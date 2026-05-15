@@ -1,36 +1,99 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Lição de Casa — CRM
 
-## Getting Started
+Sistema de gestão de aulas particulares para a empresa **Lição de Casa**. Atende alunos do 6º EF ao Superior com aulas presenciais e online, individuais ou em grupo.
 
-First, run the development server:
+## Stack
+
+- **Next.js 15** (App Router, Turbopack) + TypeScript
+- **PostgreSQL** via **Prisma ORM** hospedado no **Supabase**
+- **Auth.js v5** com 4 roles: ADMIN, COLLABORATOR, TEACHER, STUDENT (+GUARDIAN)
+- **Tailwind CSS v4** + **shadcn/ui**
+- **Resend** (email) + **Z-API** (WhatsApp) + **Mercado Pago** (pagamentos)
+
+## Pré-requisitos
+
+- Node.js 20+
+- Conta no [Supabase](https://supabase.com) (banco PostgreSQL)
+- Conta no [Resend](https://resend.com) (opcional — emails)
+- Conta no [Z-API](https://z-api.io) (opcional — WhatsApp)
+
+## Setup local
+
+### 1. Clone e instale
+
+```bash
+git clone <repo-url>
+npm install
+```
+
+### 2. Configure as variáveis de ambiente
+
+```bash
+cp .env.example .env.local
+```
+
+Edite `.env.local` com suas credenciais. Campos obrigatórios:
+
+| Variável | Descrição |
+|----------|-----------|
+| `DATABASE_URL` | URL do Supabase com PgBouncer (porta 6543) |
+| `DIRECT_URL` | URL direta do Supabase (porta 5432) |
+| `AUTH_SECRET` | Gere com `openssl rand -base64 32` |
+| `CRON_SECRET` | Gere com `openssl rand -base64 32` |
+
+### 3. Banco de dados
+
+```bash
+npx prisma migrate dev   # cria as tabelas
+npx prisma db seed       # popula dados de exemplo
+```
+
+### 4. Inicie o servidor
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Acesse [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Credenciais do seed:
+- **Admin:** `admin@licaodecasa.com.br` / `Admin123`
+- **Professor:** `prof@licaodecasa.com.br` / `Prof123`
+- **Aluno:** `aluno@licaodecasa.com.br` / `Aluno123`
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Comandos úteis
 
-## Learn More
+```bash
+npm run dev              # Servidor de desenvolvimento (Turbopack)
+npm run build            # Build de produção
+npm run lint             # ESLint
+npx prisma studio        # Interface visual do banco
+npx prisma migrate dev   # Rodar migrations
+npx prisma generate      # Regerar o Prisma Client
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Deploy (Vercel + Supabase)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. Conecte o repositório ao Vercel
+2. Configure todas as variáveis de ambiente no painel do Vercel
+3. O Vercel executa automaticamente os cron jobs definidos em `vercel.json`
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Estrutura de pastas
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```
+src/
+├── app/
+│   ├── (admin)/       → Rotas do administrador
+│   ├── (colaborador)/ → Rotas do colaborador
+│   ├── (professor)/   → Rotas do professor
+│   ├── (aluno)/       → Rotas do aluno/responsável
+│   ├── (auth)/        → Login
+│   └── api/           → Endpoints de API e cron jobs
+├── components/
+│   ├── shared/        → Componentes compartilhados (sidebar, header…)
+│   └── ui/            → Componentes shadcn/ui
+└── lib/
+    ├── actions/       → Server Actions
+    ├── notifications/ → Email, WhatsApp, in-app
+    └── validations/   → Schemas Zod
+```

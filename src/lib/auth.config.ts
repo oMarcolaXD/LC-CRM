@@ -12,7 +12,7 @@ export const ROLE_HOME: Record<string, string> = {
 
 // Config mínima para o middleware Edge — sem callbacks, sem Prisma, sem bcrypt
 export const authConfig: NextAuthConfig = {
-  session:   { strategy: "jwt" },
+  session:   { strategy: "jwt", maxAge: 8 * 60 * 60 },  // 8 horas
   pages:     { signIn: "/login" },
   providers: [],
   callbacks: {

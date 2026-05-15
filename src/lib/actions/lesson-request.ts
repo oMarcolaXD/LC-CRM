@@ -7,9 +7,19 @@ import { notify, notifyLessonConfirmed, notifyLowBalance } from "@/lib/notificat
 import { format }              from "date-fns"
 import { ptBR }                from "date-fns/locale"
 
-export async function approveRequestAction(requestId: string) {
+// ─── Helpers de autorização ───────────────────────────────────────────────────
+
+async function requireCollaboratorOrAdmin() {
   const session = await auth()
   if (!session?.user) throw new Error("Sem permissão")
+  if (!["ADMIN", "COLLABORATOR"].includes(session.user.role)) throw new Error("Sem permissão")
+  return session
+}
+
+// ─── Aprovar solicitação de aula ──────────────────────────────────────────────
+
+export async function approveRequestAction(requestId: string) {
+  const session = await requireCollaboratorOrAdmin()
 
   const request = await prisma.lessonRequest.findUnique({
     where:   { id: requestId },
@@ -50,7 +60,6 @@ export async function approveRequestAction(requestId: string) {
     }),
   ])
 
-  // Notifica o aluno
   const scheduledAt = format(request.preferredAt, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
   await notifyLessonConfirmed({
     studentUserId: request.student.userId,
@@ -62,7 +71,6 @@ export async function approveRequestAction(requestId: string) {
     modality:      "Presencial",
   })
 
-  // Avisa saldo baixo se restam ≤ 2
   const remaining = pkg.remainingLessons - 1
   if (remaining <= 2 && remaining > 0) {
     await notifyLowBalance({
@@ -78,36 +86,37 @@ export async function approveRequestAction(requestId: string) {
   revalidatePath("/professor/agenda")
 }
 
+// ─── Rejeitar solicitação de aula ─────────────────────────────────────────────
+
 export async function rejectRequestAction(requestId: string, reason?: string) {
-  const session = await auth()
-  if (!session?.user) throw new Error("Sem permissão")
+  const session = await requireCollaboratorOrAdmin()
 
   const request = await prisma.lessonRequest.findUnique({
     where:   { id: requestId },
     include: { student: { include: { user: true } }, subject: true },
   })
+  if (!request) throw new Error("Solicitação não encontrada")
 
   await prisma.lessonRequest.update({
     where: { id: requestId },
     data:  { status: "REJECTED", reason, approvedBy: session.user.id },
   })
 
-  // Notifica o aluno
-  if (request) {
-    await notify({
-      userId:  request.student.userId,
-      type:    "LESSON_CANCELLED",
-      title:   "Solicitação de aula recusada",
-      message: `Sua solicitação de aula de ${request.subject?.name ?? "–"} não pôde ser aprovada.${reason ? ` Motivo: ${reason}` : ""}`,
-      email:   request.student.user.email,
-      phone:   request.student.user.phone ?? undefined,
-    })
-  }
+  await notify({
+    userId:  request.student.userId,
+    type:    "LESSON_CANCELLED",
+    title:   "Solicitação de aula recusada",
+    message: `Sua solicitação de aula de ${request.subject?.name ?? "–"} não pôde ser aprovada.${reason ? ` Motivo: ${reason}` : ""}`,
+    email:   request.student.user.email,
+    phone:   request.student.user.phone ?? undefined,
+  })
 
   revalidatePath("/colaborador/agendamentos")
   revalidatePath("/admin/agenda")
   revalidatePath("/professor/agenda")
 }
+
+// ─── Atualizar status da aula ─────────────────────────────────────────────────
 
 export async function updateLessonStatusAction(
   lessonId:      string,
@@ -117,6 +126,7 @@ export async function updateLessonStatusAction(
 ) {
   const session = await auth()
   if (!session?.user) throw new Error("Sem permissão")
+  if (!["ADMIN", "COLLABORATOR", "TEACHER"].includes(session.user.role)) throw new Error("Sem permissão")
 
   const lesson = await prisma.lesson.findUnique({
     where:   { id: lessonId },
@@ -126,39 +136,63 @@ export async function updateLessonStatusAction(
       subject: true,
     },
   })
+  if (!lesson) throw new Error("Aula não encontrada")
 
-  await prisma.lesson.update({
-    where: { id: lessonId },
-    data:  { status, topicsCovered, teacherNotes },
-  })
+  // Professor só pode alterar suas próprias aulas
+  if (session.user.role === "TEACHER") {
+    const teacher = await prisma.teacher.findFirst({
+      where: { user: { email: session.user.email ?? "" } },
+    })
+    if (!teacher || lesson.teacherId !== teacher.id) {
+      throw new Error("Sem permissão para alterar esta aula")
+    }
+  }
 
-  // Notifica o aluno sobre o status final
-  if (lesson) {
-    const messages: Record<string, { title: string; message: string }> = {
-      COMPLETED: {
-        title:   "Aula realizada!",
-        message: `Sua aula de ${lesson.subject.name} foi concluída.${topicsCovered ? ` Conteúdo: ${topicsCovered}` : ""}`,
-      },
-      CANCELLED: {
-        title:   "Aula cancelada",
-        message: `Sua aula de ${lesson.subject.name} foi cancelada.`,
-      },
-      MISSED: {
-        title:   "Falta registrada",
-        message: `Você não compareceu à aula de ${lesson.subject.name}. Entre em contato para remarcar.`,
-      },
+  // Cancelamento devolve a aula ao pacote do aluno
+  if (status === "CANCELLED") {
+    const activePkg = await prisma.lessonPackage.findFirst({
+      where:   { studentId: lesson.studentId, status: { in: ["ACTIVE", "EXHAUSTED"] } },
+      orderBy: { purchaseDate: "desc" },
+    })
+    if (activePkg) {
+      await prisma.$transaction([
+        prisma.lesson.update({ where: { id: lessonId }, data: { status, topicsCovered, teacherNotes } }),
+        prisma.lessonPackage.update({
+          where: { id: activePkg.id },
+          data:  { remainingLessons: { increment: 1 }, status: "ACTIVE" },
+        }),
+      ])
+    } else {
+      await prisma.lesson.update({ where: { id: lessonId }, data: { status, topicsCovered, teacherNotes } })
     }
-    const msg = messages[status]
-    if (msg) {
-      await notify({
-        userId:  lesson.student.userId,
-        type:    status === "COMPLETED" ? "LESSON_COMPLETED" : status === "CANCELLED" ? "LESSON_CANCELLED" : "LESSON_MISSED",
-        title:   msg.title,
-        message: msg.message,
-        email:   lesson.student.user.email,
-        phone:   lesson.student.user.phone ?? undefined,
-      })
-    }
+  } else {
+    await prisma.lesson.update({ where: { id: lessonId }, data: { status, topicsCovered, teacherNotes } })
+  }
+
+  const messages: Record<string, { title: string; message: string }> = {
+    COMPLETED: {
+      title:   "Aula realizada!",
+      message: `Sua aula de ${lesson.subject.name} foi concluída.${topicsCovered ? ` Conteúdo: ${topicsCovered}` : ""}`,
+    },
+    CANCELLED: {
+      title:   "Aula cancelada",
+      message: `Sua aula de ${lesson.subject.name} foi cancelada. O saldo foi devolvido ao seu pacote.`,
+    },
+    MISSED: {
+      title:   "Falta registrada",
+      message: `Você não compareceu à aula de ${lesson.subject.name}. Entre em contato para remarcar.`,
+    },
+  }
+  const msg = messages[status]
+  if (msg) {
+    await notify({
+      userId:  lesson.student.userId,
+      type:    status === "COMPLETED" ? "LESSON_COMPLETED" : status === "CANCELLED" ? "LESSON_CANCELLED" : "LESSON_MISSED",
+      title:   msg.title,
+      message: msg.message,
+      email:   lesson.student.user.email,
+      phone:   lesson.student.user.phone ?? undefined,
+    })
   }
 
   revalidatePath("/professor/agenda")

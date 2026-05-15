@@ -1,9 +1,19 @@
 // Integração com Resend — ativa quando RESEND_API_KEY estiver no .env
-// Instale: npm install resend
 
 import type { NotificationPayload } from "./types"
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;")
+}
+
 function buildEmailHtml(title: string, message: string, data?: Record<string, string>) {
+  const safeTitle   = escapeHtml(title)
+  const safeMessage = escapeHtml(message)
   return `
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -18,14 +28,14 @@ function buildEmailHtml(title: string, message: string, data?: Record<string, st
         </td></tr>
         <!-- Body -->
         <tr><td style="padding:32px;">
-          <h2 style="margin:0 0 12px;color:#000;font-size:18px;">${title}</h2>
-          <p style="margin:0 0 24px;color:#444;font-size:15px;line-height:1.6;">${message}</p>
+          <h2 style="margin:0 0 12px;color:#000;font-size:18px;">${safeTitle}</h2>
+          <p style="margin:0 0 24px;color:#444;font-size:15px;line-height:1.6;">${safeMessage}</p>
           ${data && Object.keys(data).length ? `
           <table cellpadding="0" cellspacing="0" style="background:#f9f9f9;border-radius:8px;width:100%;margin-bottom:24px;">
             ${Object.entries(data).map(([k, v]) => `
             <tr>
-              <td style="padding:10px 16px;color:#777;font-size:13px;width:40%;">${k}</td>
-              <td style="padding:10px 16px;color:#000;font-size:13px;font-weight:600;">${v}</td>
+              <td style="padding:10px 16px;color:#777;font-size:13px;width:40%;">${escapeHtml(k)}</td>
+              <td style="padding:10px 16px;color:#000;font-size:13px;font-weight:600;">${escapeHtml(v)}</td>
             </tr>`).join("")}
           </table>` : ""}
         </td></tr>
@@ -40,9 +50,18 @@ function buildEmailHtml(title: string, message: string, data?: Record<string, st
 </html>`
 }
 
+function buildEmailText(title: string, message: string, data?: Record<string, string>): string {
+  let text = `${title}\n\n${message}`
+  if (data && Object.keys(data).length) {
+    text += "\n\n" + Object.entries(data).map(([k, v]) => `${k}: ${v}`).join("\n")
+  }
+  text += "\n\n---\nLição de Casa — e-mail automático, não responda."
+  return text
+}
+
 export async function sendEmail(payload: NotificationPayload): Promise<void> {
   const key = process.env.RESEND_API_KEY
-  if (!key || !payload.email) return   // silently skip se não configurado
+  if (!key || !payload.email) return
 
   try {
     const { Resend } = await import("resend")
@@ -53,8 +72,13 @@ export async function sendEmail(payload: NotificationPayload): Promise<void> {
       to:      payload.email,
       subject: `[Lição de Casa] ${payload.title}`,
       html:    buildEmailHtml(payload.title, payload.message, payload.data),
+      text:    buildEmailText(payload.title, payload.message, payload.data),
     })
   } catch (err) {
-    console.error("[Email] Falha ao enviar:", err)
+    console.error("[Email] Falha ao enviar", {
+      to:    payload.email,
+      type:  payload.type,
+      error: err instanceof Error ? err.message : String(err),
+    })
   }
 }

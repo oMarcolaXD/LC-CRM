@@ -11,11 +11,9 @@ import { Plus, Trash2, Loader2, CheckCircle2 } from "lucide-react"
 const EMPTY: TimeSlot = { start: "09:00", end: "18:00" }
 
 export function AvailabilityForm({
-  teacherId,
   initial,
 }: {
-  teacherId: string
-  initial:   Availability
+  initial: Availability
 }) {
   const [avail,   setAvail]   = useState<Availability>(initial)
   const [saved,   setSaved]   = useState(false)
@@ -58,7 +56,7 @@ export function AvailabilityForm({
 
   const save = () => {
     start(async () => {
-      await saveAvailabilityAction(teacherId, avail)
+      await saveAvailabilityAction(avail)
       setSaved(true)
     })
   }

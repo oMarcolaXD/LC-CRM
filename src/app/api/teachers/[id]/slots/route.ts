@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma }                    from "@/lib/prisma"
+import { auth }                      from "@/lib/auth"
 import { getAvailableSlotsForDate, getAvailableDates } from "@/lib/availability"
 import type { Availability }         from "@/lib/availability"
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const session = await auth()
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
   const { id }      = await params
   const { searchParams } = req.nextUrl
   const dateStr     = searchParams.get("date") // YYYY-MM-DD

@@ -24,7 +24,7 @@ export default async function DisponibilidadePage() {
           <CardTitle className="font-sub text-base">Horários Disponíveis</CardTitle>
         </CardHeader>
         <CardContent>
-          <AvailabilityForm teacherId={teacher?.id ?? ""} initial={availability} />
+          <AvailabilityForm initial={availability} />
         </CardContent>
       </Card>
     </div>
