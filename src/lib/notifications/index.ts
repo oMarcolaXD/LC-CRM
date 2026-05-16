@@ -20,11 +20,13 @@ export async function notify(payload: NotificationPayload): Promise<void> {
     },
   })
 
-  // 2. Email + WhatsApp em paralelo (falham silenciosamente)
-  await Promise.allSettled([
-    sendEmail(payload),
-    sendWhatsApp(payload),
-  ])
+  // 2. Email + WhatsApp em paralelo — apenas em produção
+  if (process.env.NODE_ENV !== "development") {
+    await Promise.allSettled([
+      sendEmail(payload),
+      sendWhatsApp(payload),
+    ])
+  }
 }
 
 /**
