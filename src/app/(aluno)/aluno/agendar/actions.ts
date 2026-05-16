@@ -80,15 +80,19 @@ export async function requestLessonAction(formData: FormData) {
     },
   })
 
-  await notifyLessonRequest({
-    teacherId:    teacher.id,
-    teacherEmail: teacher.user.email,
-    teacherPhone: teacher.user.phone,
-    studentName:  student.user.name,
-    subject:      subject?.name ?? "–",
-    preferredAt:  format(requestDate, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR }),
-  })
+  try {
+    await notifyLessonRequest({
+      teacherId:    teacher.user.id,
+      teacherEmail: teacher.user.email,
+      teacherPhone: teacher.user.phone,
+      studentName:  student.user.name,
+      subject:      subject?.name ?? "–",
+      preferredAt:  format(requestDate, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR }),
+    })
+  } catch {
+    // Notificação falha silenciosamente — o agendamento já foi criado
+  }
 
   revalidatePath("/aluno/aulas")
-  redirect("/aluno/aulas?success=Solicitação+enviada!+Aguarde+a+confirmação+do+professor.")
+  redirect("/aluno/agendar/sucesso")
 }
