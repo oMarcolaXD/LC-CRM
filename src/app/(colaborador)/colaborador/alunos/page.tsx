@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge }           from "@/components/ui/badge"
 import { buttonVariants }  from "@/components/ui/button"
 import Link                from "next/link"
-import { GraduationCap, BookOpen, MessageCircle, CalendarDays, AlertCircle, UserRound, Plus } from "lucide-react"
+import { GraduationCap, BookOpen, MessageCircle, CalendarDays, AlertCircle, UserRound, Plus, Upload, FileSpreadsheet, ChevronDown, ChevronUp } from "lucide-react"
 import { format }          from "date-fns"
 import { ptBR }            from "date-fns/locale"
 
@@ -168,14 +168,93 @@ export default async function ColaboradorAlunosPage({ searchParams }: AlunosPage
         </div>
       )}
 
-      {/* Botão de cadastro */}
-      <div className="flex justify-end">
+      {/* Botões de ação */}
+      <div className="flex flex-wrap gap-3 justify-end">
+        <Link href="/colaborador/alunos/importar"
+          className={buttonVariants({ variant: "outline" }) + " gap-2"}>
+          <Upload className="w-4 h-4" />
+          Importar Alunos
+        </Link>
         <Link href="/colaborador/alunos/novo"
           className={buttonVariants({ variant: "default" }) + " gap-2"}>
           <Plus className="w-4 h-4" />
           Novo Aluno
         </Link>
       </div>
+
+      {/* Template de importação */}
+      <details className="group">
+        <summary className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground hover:text-foreground list-none select-none">
+          <FileSpreadsheet className="w-4 h-4 text-primary shrink-0" />
+          <span className="font-medium">Template para importação em massa</span>
+          <ChevronDown className="w-3.5 h-3.5 transition-transform group-open:rotate-180 ml-1" />
+          <span className="text-xs ml-auto">(clique para ver)</span>
+        </summary>
+
+        <Card className="mt-3 border-dashed">
+          <CardHeader className="pb-2 pt-4">
+            <CardTitle className="font-sub text-sm flex items-center gap-2">
+              <FileSpreadsheet className="w-4 h-4 text-primary" />
+              Colunas do arquivo CSV / Excel
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-xs text-muted-foreground">
+              Prepare sua planilha com as colunas abaixo (a primeira linha deve ser o cabeçalho). Campos com <strong>*</strong> são obrigatórios.
+            </p>
+
+            <div className="overflow-x-auto rounded-lg border border-border">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-muted/50 border-b border-border">
+                    <th className="text-left px-3 py-2 font-semibold text-foreground">Coluna</th>
+                    <th className="text-left px-3 py-2 font-semibold text-foreground">Obrigatório</th>
+                    <th className="text-left px-3 py-2 font-semibold text-foreground">Formato / Exemplo</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {[
+                    ["nome",                "Sim",  "Lucas Oliveira"],
+                    ["email",               "Sim",  "lucas@email.com"],
+                    ["senha",               "Não",  "Padrão: Aluno@2025"],
+                    ["telefone",            "Não",  "(11) 99999-0000"],
+                    ["dataNascimento",       "Não",  "DD/MM/AAAA — ex: 15/03/2010"],
+                    ["serie",               "Não",  "9º Ano EF · 2º Ano EM · Graduação"],
+                    ["escola",              "Não",  "Colégio São Paulo"],
+                    ["nomeResponsavel",      "Não",  "Maria Oliveira"],
+                    ["telefoneResponsavel",  "Não",  "(11) 99999-0001"],
+                    ["emailResponsavel",     "Não",  "maria@email.com"],
+                  ].map(([col, req, ex]) => (
+                    <tr key={col} className="hover:bg-muted/20">
+                      <td className="px-3 py-2 font-mono text-primary">{col}</td>
+                      <td className="px-3 py-2">{req === "Sim" ? <span className="text-destructive font-semibold">Sim</span> : <span className="text-muted-foreground">Não</span>}</td>
+                      <td className="px-3 py-2 text-muted-foreground">{ex}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Linha de exemplo */}
+            <div className="space-y-1">
+              <p className="text-xs font-medium text-foreground">Exemplo de linha:</p>
+              <div className="overflow-x-auto rounded-lg bg-muted/40 border border-border px-3 py-2">
+                <code className="text-xs text-muted-foreground whitespace-nowrap">
+                  nome,email,senha,telefone,dataNascimento,serie,escola,nomeResponsavel,telefoneResponsavel,emailResponsavel
+                  <br />
+                  Lucas Oliveira,lucas@email.com,Aluno@2025,(11) 99999-0000,15/03/2010,9º Ano EF,Colégio São Paulo,Maria Oliveira,(11) 99999-0001,maria@email.com
+                </code>
+              </div>
+            </div>
+
+            <Link href="/colaborador/alunos/importar"
+              className={buttonVariants({ variant: "default", size: "sm" }) + " gap-2 w-full sm:w-auto"}>
+              <Upload className="w-3.5 h-3.5" />
+              Ir para importação
+            </Link>
+          </CardContent>
+        </Card>
+      </details>
 
       {/* Alunos com saldo baixo */}
       {low.length > 0 && (

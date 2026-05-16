@@ -1,11 +1,13 @@
-import { PageHeader }   from "@/components/shared/page-header"
+import { PageHeader }      from "@/components/shared/page-header"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button, buttonVariants } from "@/components/ui/button"
-import { Input }        from "@/components/ui/input"
-import { Label }        from "@/components/ui/label"
-import Link             from "next/link"
+import { Input }             from "@/components/ui/input"
+import { Label }             from "@/components/ui/label"
+import Link                  from "next/link"
 import { createStudentWithGuardianAction } from "@/lib/actions/colaborador"
-import { GraduationCap, UserRound, KeyRound, AlertCircle } from "lucide-react"
+import { GraduationCap, UserRound, KeyRound, AlertCircle, History } from "lucide-react"
+import { prisma }            from "@/lib/prisma"
+import { PastLessonsInput }  from "@/components/shared/past-lessons-input"
 
 const GRADES = [
   "6º Ano EF", "7º Ano EF", "8º Ano EF", "9º Ano EF",
@@ -19,6 +21,18 @@ interface NovoAlunoPageProps {
 
 export default async function NovoAlunoPage({ searchParams }: NovoAlunoPageProps) {
   const { error } = await searchParams
+
+  const [teachers, subjects] = await Promise.all([
+    prisma.teacher.findMany({
+      where:   { user: { active: true } },
+      include: { user: { select: { name: true } } },
+      orderBy: { user: { name: "asc" } },
+    }),
+    prisma.subject.findMany({ orderBy: { name: "asc" } }),
+  ])
+
+  const teacherList = teachers.map(t => ({ id: t.id, name: t.user.name }))
+  const subjectList = subjects.map(s => ({ id: s.id, name: s.name }))
 
   return (
     <div className="space-y-6">
@@ -139,6 +153,23 @@ export default async function NovoAlunoPage({ searchParams }: NovoAlunoPageProps
             </div>
             <p className="text-xs text-muted-foreground">
               Ao preencher o nome, um perfil de responsável será criado automaticamente e vinculado ao aluno.
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* ── Aulas Já Realizadas (opcional) ─────────────────────── */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="font-sub text-base flex items-center gap-2">
+              <History className="w-4 h-4 text-primary" />
+              Aulas Já Realizadas
+              <span className="text-xs font-normal text-muted-foreground">(opcional — para alunos com histórico)</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <PastLessonsInput teachers={teacherList} subjects={subjectList} />
+            <p className="text-xs text-muted-foreground mt-3">
+              Registre aulas realizadas antes do cadastro no sistema. Elas ficam com status <strong>Concluída</strong> e aparecem no histórico do aluno.
             </p>
           </CardContent>
         </Card>
