@@ -4,7 +4,7 @@ import { PageHeader }     from "@/components/shared/page-header"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge }          from "@/components/ui/badge"
 import { LinkButton }     from "@/components/shared/link-button"
-import { CalendarDays, Clock, MapPin, Monitor, Star, BookOpen } from "lucide-react"
+import { CalendarDays, Clock, MapPin, Monitor, Star, BookOpen, Users } from "lucide-react"
 import { format }         from "date-fns"
 import { ptBR }           from "date-fns/locale"
 
@@ -47,6 +47,26 @@ export default async function AulasPage({ searchParams }: AulasPageProps) {
       orderBy: { requestedAt: "desc" },
     }) : [],
   ])
+
+  // Busca colegas de grupo para aulas em grupo
+  const groupIds = lessons
+    .filter(l => l.isGroupLesson && l.groupId)
+    .map(l => l.groupId!)
+  const groupIdSet = [...new Set(groupIds)]
+
+  const groupSiblings = groupIdSet.length > 0
+    ? await prisma.lesson.findMany({
+        where:   { groupId: { in: groupIdSet }, studentId: { not: student?.id } },
+        select:  { groupId: true, student: { select: { user: { select: { name: true } } } } },
+      })
+    : []
+
+  // Mapa: groupId → nomes dos outros alunos
+  const groupMatesMap = groupSiblings.reduce<Record<string, string[]>>((acc, l) => {
+    if (!l.groupId) return acc
+    ;(acc[l.groupId] ??= []).push(l.student.user.name)
+    return acc
+  }, {})
 
   return (
     <div className="space-y-6">
@@ -126,10 +146,20 @@ export default async function AulasPage({ searchParams }: AulasPageProps) {
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="font-medium text-sm">{lesson.subject.name}</p>
                         <Badge variant={cfg.variant} className="text-xs">{cfg.label}</Badge>
+                        {lesson.isGroupLesson && (
+                          <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-semibold">
+                            <Users className="w-2.5 h-2.5" /> Grupo
+                          </span>
+                        )}
                       </div>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         Prof. {lesson.teacher.user.name}
                       </p>
+                      {lesson.isGroupLesson && lesson.groupId && (groupMatesMap[lesson.groupId] ?? []).length > 0 && (
+                        <p className="text-xs text-primary/70 mt-0.5">
+                          Com: {[...new Set(groupMatesMap[lesson.groupId] ?? [])].join(", ")}
+                        </p>
+                      )}
                       {lesson.topicsCovered && (
                         <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
                           📚 {lesson.topicsCovered}
@@ -142,6 +172,11 @@ export default async function AulasPage({ searchParams }: AulasPageProps) {
                             : <><MapPin className="w-3 h-3" /> Presencial</>
                           }
                         </span>
+                        {lesson.isGroupLesson && lesson.priceOverride && (
+                          <span className="text-xs text-muted-foreground">
+                            R$ {Number(lesson.priceOverride).toFixed(2).replace(".", ",")} (grupo)
+                          </span>
+                        )}
                         {lesson.studentRating && (
                           <span className="flex items-center gap-1 text-xs text-yellow-500">
                             <Star className="w-3 h-3 fill-yellow-500" /> {lesson.studentRating}/5

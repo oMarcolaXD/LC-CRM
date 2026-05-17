@@ -66,6 +66,8 @@ export default async function AgendamentosPage() {
                   notes={r.reason}
                   teacherMode={r.teacher.teachingMode as "ONLINE_ONLY" | "PRESENCIAL" | "HYBRID"}
                   requestModality={r.modality as "PRESENCIAL" | "ONLINE"}
+                  isGroupRequest={r.isGroupRequest}
+                  groupNote={r.groupNote}
                 />
               ))}
             </div>

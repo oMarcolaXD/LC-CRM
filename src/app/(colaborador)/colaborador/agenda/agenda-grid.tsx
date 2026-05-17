@@ -10,7 +10,7 @@ import { ptBR }                    from "date-fns/locale"
 import {
   ChevronLeft, ChevronRight, CalendarDays, CalendarRange, LayoutGrid,
   CheckCircle2, XCircle, UserX, MessageCircle,
-  Loader2, Wifi, MapPin, Clock, Plus, Building2, Home, AlertCircle,
+  Loader2, Wifi, MapPin, Clock, Plus, Building2, Home, AlertCircle, Users,
 } from "lucide-react"
 import { Button }                  from "@/components/ui/button"
 import {
@@ -24,6 +24,7 @@ import { toast }                   from "sonner"
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog"
+import { CreateGroupLessonDialog } from "@/components/shared/create-group-lesson-dialog"
 
 // ─── Constantes de layout ────────────────────────────────────────────────────
 
@@ -785,6 +786,7 @@ interface AgendaGridProps {
   lessons:               LessonSlot[]
   roomCount?:            number
   students?:             StudentOption[]
+  allStudents?:          { id: string; name: string }[]
   weekLessons?:          WeekLessonSlot[]
   monthLessons?:         WeekLessonSlot[]
   initialView?:          ViewMode
@@ -793,7 +795,7 @@ interface AgendaGridProps {
 }
 
 export function AgendaGrid({
-  date, teachers, lessons: initialLessons, roomCount = 3, students,
+  date, teachers, lessons: initialLessons, roomCount = 3, students, allStudents,
   weekLessons: initialWeekLessons, monthLessons: initialMonthLessons, initialView = "day",
   pendingRequests: initialPending, weekPendingRequests: initialWeekPending,
 }: AgendaGridProps) {
@@ -826,6 +828,7 @@ export function AgendaGrid({
     teacherName: string
     time:        string
   } | null>(null)
+  const [showGroupDialog, setShowGroupDialog] = useState(false)
   const [hoveredCell, setHoveredCell] = useState<{
     teacherId: string
     timeMin:   number
@@ -1076,8 +1079,19 @@ export function AgendaGrid({
             )}
           </div>
 
-          {/* Direita: contagem + legenda */}
+          {/* Direita: contagem + legenda + botão grupo */}
           <div className="flex items-center gap-3 text-xs text-muted-foreground">
+            {allStudents && allStudents.length >= 2 && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs gap-1.5 border-primary/40 text-primary hover:bg-primary/5"
+                onClick={() => setShowGroupDialog(true)}
+              >
+                <Users className="w-3.5 h-3.5" />
+                Grupo
+              </Button>
+            )}
             <span>
               {view === "month"
                 ? `${(monthLessons ?? []).length} aula${(monthLessons ?? []).length !== 1 ? "s" : ""} no mês`
@@ -1540,6 +1554,20 @@ export function AgendaGrid({
           students={students}
           teachers={effectiveTeachers}
           onClose={() => { setQuickSchedule(null); fetchData(curDate, view) }}
+        />
+      )}
+      {showGroupDialog && allStudents && (
+        <CreateGroupLessonDialog
+          open={showGroupDialog}
+          onClose={() => { setShowGroupDialog(false); fetchData(curDate, view) }}
+          students={allStudents}
+          teachers={effectiveTeachers.map(t => ({
+            id:           t.id,
+            name:         t.name,
+            teachingMode: t.teachingMode,
+            subjects:     t.subjects ?? [],
+          }))}
+          defaultDate={curDate}
         />
       )}
     </>

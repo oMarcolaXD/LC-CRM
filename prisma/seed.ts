@@ -523,6 +523,64 @@ async function main() {
   })
   console.log("✅ 4 solicitações pendentes (todos os cenários de modalidade)")
 
+  // ─── Aulas em Grupo ───────────────────────────────────────────────────────
+  // Preço de grupo: diferente do individual — nunca é divisão do individual
+
+  const PRECO_GRUPO_QUIMICA = 70   // individual seria R$90
+  const PRECO_GRUPO_MAT     = 65   // individual seria R$90
+
+  // Grupo 1: Química realizada no mês passado (3 alunos)
+  const groupId1 = "group-seed-quimica-1"
+  const groupDate1 = pastDate(1, 12, 15)
+
+  await prisma.lesson.createMany({
+    data: [
+      { studentId: "student-3", teacherId: "teacher-3", subjectId: "sub-qui", scheduledAt: groupDate1, modality: LessonModality.PRESENCIAL, status: LessonStatus.COMPLETED, teacherOnsite: true, isGroupLesson: true, groupId: groupId1, groupSize: 3, priceOverride: PRECO_GRUPO_QUIMICA, topicsCovered: "Ácidos e bases — pH e escala pOH" },
+      { studentId: "student-8", teacherId: "teacher-3", subjectId: "sub-qui", scheduledAt: groupDate1, modality: LessonModality.PRESENCIAL, status: LessonStatus.COMPLETED, teacherOnsite: true, isGroupLesson: true, groupId: groupId1, groupSize: 3, priceOverride: PRECO_GRUPO_QUIMICA, topicsCovered: "Ácidos e bases — pH e escala pOH" },
+      { studentId: "student-11", teacherId: "teacher-3", subjectId: "sub-qui", scheduledAt: groupDate1, modality: LessonModality.PRESENCIAL, status: LessonStatus.COMPLETED, teacherOnsite: true, isGroupLesson: true, groupId: groupId1, groupSize: 3, priceOverride: PRECO_GRUPO_QUIMICA, topicsCovered: "Ácidos e bases — pH e escala pOH" },
+    ],
+  })
+
+  await prisma.payment.createMany({
+    data: [
+      { studentId: "student-3",  amount: PRECO_GRUPO_QUIMICA, dueDate: groupDate1, paidAt: groupDate1, status: PaymentStatus.PAID, description: `Aula em grupo – Química (3 alunos)` },
+      { studentId: "student-8",  amount: PRECO_GRUPO_QUIMICA, dueDate: groupDate1, paidAt: groupDate1, status: PaymentStatus.PAID, description: `Aula em grupo – Química (3 alunos)` },
+      { studentId: "student-11", amount: PRECO_GRUPO_QUIMICA, dueDate: groupDate1, paidAt: groupDate1, status: PaymentStatus.PAID, description: `Aula em grupo – Química (3 alunos)` },
+    ],
+  })
+
+  // Grupo 2: Matemática agendada para a próxima semana (2 alunos)
+  const groupId2 = "group-seed-mat-1"
+  const groupDate2 = addHours(now, 7 * 24)
+
+  await prisma.lesson.createMany({
+    data: [
+      { studentId: "student-1", teacherId: "teacher-1", subjectId: "sub-mat", scheduledAt: groupDate2, modality: LessonModality.PRESENCIAL, status: LessonStatus.CONFIRMED, teacherOnsite: true, isGroupLesson: true, groupId: groupId2, groupSize: 2, priceOverride: PRECO_GRUPO_MAT },
+      { studentId: "student-7", teacherId: "teacher-1", subjectId: "sub-mat", scheduledAt: groupDate2, modality: LessonModality.PRESENCIAL, status: LessonStatus.CONFIRMED, teacherOnsite: true, isGroupLesson: true, groupId: groupId2, groupSize: 2, priceOverride: PRECO_GRUPO_MAT },
+    ],
+  })
+
+  await prisma.payment.createMany({
+    data: [
+      { studentId: "student-1", amount: PRECO_GRUPO_MAT, dueDate: groupDate2, status: PaymentStatus.PENDING, description: `Aula em grupo – Matemática (2 alunos)` },
+      { studentId: "student-7", amount: PRECO_GRUPO_MAT, dueDate: groupDate2, status: PaymentStatus.PENDING, description: `Aula em grupo – Matemática (2 alunos)` },
+    ],
+  })
+
+  // Solicitação de aula em grupo (student-5 quer aula de Física em grupo)
+  await prisma.lessonRequest.create({
+    data: {
+      studentId: "student-5", teacherId: "teacher-1", subjectId: "sub-fis",
+      modality:  LessonModality.PRESENCIAL,
+      preferredAt: addHours(now, 96), status: RequestStatus.PENDING,
+      reason: "Quero fazer aula em grupo com colegas",
+      isGroupRequest: true,
+      groupNote: "Quero aula com Pedro Henrique e talvez a Camila — estamos revisando cinemática juntos",
+    },
+  })
+
+  console.log("✅ 5 aulas em grupo (2 grupos, 1 solicitação de grupo)")
+
   // ─── Notificações ──────────────────────────────────────────────────────────
   await prisma.notification.createMany({
     data: [

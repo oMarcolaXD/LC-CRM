@@ -15,8 +15,11 @@ export async function requestLessonAction(formData: FormData) {
   const session = await auth()
   if (!session?.user) redirect("/login")
 
-  const raw    = Object.fromEntries(formData)
-  const parsed = lessonRequestSchema.safeParse(raw)
+  const raw = Object.fromEntries(formData)
+  const parsed = lessonRequestSchema.safeParse({
+    ...raw,
+    isGroupRequest: raw.isGroupRequest === "on" || raw.isGroupRequest === "true",
+  })
   if (!parsed.success) {
     redirect(`/aluno/agendar?error=${encodeURIComponent(parsed.error.issues[0]?.message ?? "Dados inválidos")}`)
   }
@@ -41,7 +44,7 @@ export async function requestLessonAction(formData: FormData) {
   if (!student)                      redirect("/aluno/agendar?error=Perfil+de+aluno+não+encontrado")
   if (student.packages.length === 0) redirect("/aluno/agendar?error=Você+não+tem+aulas+disponíveis.+Adquira+um+pacote.")
 
-  const { teacherId, subjectId, preferredAt, modality, notes } = parsed.data
+  const { teacherId, subjectId, preferredAt, modality, notes, isGroupRequest, groupNote } = parsed.data
   const requestDate = new Date(preferredAt)
 
   // Busca professor com disponibilidade e aulas já marcadas
@@ -71,12 +74,15 @@ export async function requestLessonAction(formData: FormData) {
 
   await prisma.lessonRequest.create({
     data: {
-      studentId:   student.id,
+      studentId:     student.id,
       teacherId,
       subjectId,
-      preferredAt: requestDate,
-      status:      "PENDING",
-      reason:      notes,
+      preferredAt:   requestDate,
+      modality,
+      status:        "PENDING",
+      reason:        notes,
+      isGroupRequest: isGroupRequest ?? false,
+      groupNote:     groupNote,
     },
   })
 

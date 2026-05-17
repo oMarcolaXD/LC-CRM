@@ -8,7 +8,7 @@ import { LessonStatusButtons } from "./lesson-status-buttons"
 import { AddHomeworkForm }     from "./add-homework-form"
 import { format }       from "date-fns"
 import { ptBR }         from "date-fns/locale"
-import { CalendarDays, User, BookOpen, Monitor, MapPin, PenLine, CheckCircle2, Clock, CalendarPlus } from "lucide-react"
+import { CalendarDays, User, BookOpen, Monitor, MapPin, PenLine, CheckCircle2, Clock, CalendarPlus, Users } from "lucide-react"
 
 function buildGoogleCalendarUrl(lesson: {
   scheduledAt: Date
@@ -57,6 +57,14 @@ export default async function LessonDetailPage({ params }: LessonDetailProps) {
   })
   if (!lesson) notFound()
 
+  // Busca outros alunos do grupo (se for aula em grupo)
+  const groupMates = lesson.isGroupLesson && lesson.groupId
+    ? await prisma.lesson.findMany({
+        where:  { groupId: lesson.groupId, studentId: { not: lesson.studentId } },
+        select: { student: { select: { user: { select: { name: true } } } } },
+      })
+    : []
+
   const isCompleted = ["COMPLETED", "CANCELLED", "MISSED"].includes(lesson.status)
   const gcUrl       = buildGoogleCalendarUrl(lesson)
 
@@ -86,6 +94,28 @@ export default async function LessonDetailPage({ params }: LessonDetailProps) {
               </div>
             ))}
           </div>
+
+          {/* Seção de alunos do grupo */}
+          {lesson.isGroupLesson && (
+            <div className="flex items-start gap-2 rounded-xl bg-primary/5 border border-primary/20 px-4 py-3">
+              <Users className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+              <div>
+                <p className="text-xs text-muted-foreground font-medium mb-1">
+                  Aula em grupo ({lesson.groupSize ?? groupMates.length + 1} aluno{(lesson.groupSize ?? groupMates.length + 1) !== 1 ? "s" : ""})
+                </p>
+                <div className="flex flex-wrap gap-1">
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
+                    {lesson.student.user.name}
+                  </span>
+                  {groupMates.map((gm, i) => (
+                    <span key={i} className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                      {gm.student.user.name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
 
           {!isCompleted && (
             <a

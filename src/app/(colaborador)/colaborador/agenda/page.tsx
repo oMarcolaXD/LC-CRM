@@ -81,7 +81,7 @@ export default async function ColaboradorAgendaPage({ searchParams }: AgendaPage
     subject: true,
   } as const
 
-  const [teachers, lessons, roomCount, studentsRaw, pendingRaw] = await Promise.all([
+  const [teachers, lessons, roomCount, studentsRaw, pendingRaw, allStudentsRaw] = await Promise.all([
     prisma.teacher.findMany({
       where:   { user: { active: true } },
       include: {
@@ -119,6 +119,12 @@ export default async function ColaboradorAgendaPage({ searchParams }: AgendaPage
         subject: true,
       },
       orderBy: { preferredAt: "asc" },
+    }),
+    // Todos os alunos ativos (para o diálogo de aula em grupo)
+    prisma.student.findMany({
+      where:   { user: { active: true } },
+      include: { user: true },
+      orderBy: { user: { name: "asc" } },
     }),
   ])
 
@@ -209,6 +215,8 @@ export default async function ColaboradorAgendaPage({ searchParams }: AgendaPage
     remainingLessons: s.packages[0]?.remainingLessons ?? 0,
   }))
 
+  const allStudents = allStudentsRaw.map(s => ({ id: s.id, name: s.user.name }))
+
   const weekday = format(dateObj, "EEEE", { locale: ptBR })
 
   return (
@@ -223,6 +231,7 @@ export default async function ColaboradorAgendaPage({ searchParams }: AgendaPage
         lessons={lessonSlots}
         roomCount={roomCount}
         students={students}
+        allStudents={allStudents}
         weekLessons={weekLessons}
         monthLessons={monthLessons}
         initialView={viewMode}

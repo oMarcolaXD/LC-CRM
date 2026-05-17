@@ -209,6 +209,8 @@ model Lesson {
   studentFeedback String?
   isGroupLesson   Boolean        @default(false)
   groupId         String?
+  groupSize       Int?
+  priceOverride   Decimal?       @db.Decimal(10, 2)
   teacherOnsite   Boolean        @default(false)
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
@@ -233,10 +235,12 @@ model LessonRequest {
   preferredAt DateTime
   subjectId   String?
   subject     Subject?      @relation(fields: [subjectId], references: [id])
-  modality    LessonModality @default(PRESENCIAL)
-  status      RequestStatus  @default(PENDING)
-  approvedBy  String?
-  reason      String?
+  modality       LessonModality @default(PRESENCIAL)
+  status         RequestStatus  @default(PENDING)
+  approvedBy     String?
+  reason         String?
+  isGroupRequest Boolean        @default(false)
+  groupNote      String?
 
   @@index([teacherId, status])
   @@index([studentId, status])

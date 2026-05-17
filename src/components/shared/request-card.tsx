@@ -4,7 +4,7 @@ import { useState, useTransition }  from "react"
 import { Button }                   from "@/components/ui/button"
 import { Badge }                    from "@/components/ui/badge"
 import { approveRequestAction, rejectRequestAction } from "@/lib/actions/lesson-request"
-import { CalendarDays, Clock, CheckCircle2, XCircle, Loader2, AlertTriangle, Wifi, MapPin, Building2, Home } from "lucide-react"
+import { CalendarDays, Clock, CheckCircle2, XCircle, Loader2, AlertTriangle, Wifi, MapPin, Building2, Home, Users } from "lucide-react"
 import { format }                   from "date-fns"
 import { ptBR }                     from "date-fns/locale"
 import { toast }                    from "sonner"
@@ -22,12 +22,14 @@ interface RequestCardProps {
   outOfSchedule?:  boolean
   teacherMode:     TeacherMode
   requestModality: "PRESENCIAL" | "ONLINE"
+  isGroupRequest?: boolean
+  groupNote?:      string | null
 }
 
 export function RequestCard({
   id, studentName, teacherName, subjectName,
   preferredAt, notes, hasConflict, outOfSchedule,
-  teacherMode, requestModality,
+  teacherMode, requestModality, isGroupRequest, groupNote,
 }: RequestCardProps) {
   const [pending, startTransition] = useTransition()
   const [modality, setModality] = useState<"PRESENCIAL" | "ONLINE">(
@@ -93,7 +95,14 @@ export function RequestCard({
             <CalendarDays className="w-5 h-5 text-primary" />
           </div>
           <div className="min-w-0">
-            <p className="font-medium text-sm">{studentName}</p>
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="font-medium text-sm">{studentName}</p>
+              {isGroupRequest && (
+                <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-semibold">
+                  <Users className="w-2.5 h-2.5" /> Grupo
+                </span>
+              )}
+            </div>
             <p className="text-xs text-muted-foreground">{subjectName} · Prof. {teacherName}</p>
             <div className="flex items-center gap-1 mt-1">
               <Clock className="w-3 h-3 text-muted-foreground" />
@@ -111,6 +120,12 @@ export function RequestCard({
               <p className="text-xs text-muted-foreground mt-1 italic line-clamp-1">
                 &ldquo;{notes}&rdquo;
               </p>
+            )}
+            {isGroupRequest && groupNote && (
+              <div className="flex items-start gap-1 mt-1 text-xs text-primary/80 bg-primary/5 px-2 py-1 rounded-md">
+                <Users className="w-3 h-3 shrink-0 mt-0.5" />
+                <span className="line-clamp-2">{groupNote}</span>
+              </div>
             )}
           </div>
         </div>
