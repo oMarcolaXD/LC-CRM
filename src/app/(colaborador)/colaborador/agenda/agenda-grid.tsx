@@ -293,7 +293,10 @@ function QuickScheduleModal({
   teachers: TeacherCol[]
   onClose:  () => void
 }) {
-  const teacher = teachers.find(t => t.id === schedule.teacherId)
+  const teacher      = teachers.find(t => t.id === schedule.teacherId)
+  const scheduledAt  = new Date(`${date}T${schedule.time}:00`)
+  const isHistorical = scheduledAt < new Date()
+
   const [studentId, setStudentId] = useState("")
   const [subjectId, setSubjectId] = useState("")
   const [modality,  setModality]  = useState<"PRESENCIAL" | "ONLINE">("PRESENCIAL")
@@ -314,7 +317,7 @@ function QuickScheduleModal({
           time: schedule.time,
           modality,
         })
-        toast.success("Aula agendada com sucesso")
+        toast.success(isHistorical ? "Histórico importado" : "Aula agendada com sucesso")
         onClose()
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Erro ao agendar")
@@ -326,12 +329,23 @@ function QuickScheduleModal({
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Plus className="w-4 h-4 text-primary" />
-            Agendar Aula
+            {isHistorical
+              ? <Clock className="w-4 h-4 text-amber-500" />
+              : <Plus className="w-4 h-4 text-primary" />
+            }
+            {isHistorical ? "Importar Histórico" : "Agendar Aula"}
           </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
+          {isHistorical && (
+            <div className="rounded-lg bg-amber-50 border border-amber-200 dark:bg-amber-950/30 dark:border-amber-800 px-3 py-2.5 text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2">
+              <Clock className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+              <span>
+                Data no passado — será registrada como <strong>importação de histórico</strong> com status <strong>Realizada</strong>. Sem notificações.
+              </span>
+            </div>
+          )}
           <div className="rounded-lg bg-muted/50 px-3 py-2.5 text-sm">
             <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Professor · Horário</p>
             <p className="font-semibold">{schedule.teacherName}</p>
