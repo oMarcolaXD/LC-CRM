@@ -39,19 +39,26 @@ function gerarAulasMes(
   quantidade: number,
   status: LessonStatus,
   rating: number | null,
+  teacherMode: TeacherMode,
 ): Array<{
   studentId: string; teacherId: string; subjectId: string
-  scheduledAt: Date; modality: LessonModality; status: LessonStatus
-  studentRating: number | null; topicsCovered: string | null
+  scheduledAt: Date; modality: LessonModality; teacherOnsite: boolean
+  status: LessonStatus; studentRating: number | null; topicsCovered: string | null
 }> {
   const hours = [9, 10, 11, 14, 15, 16, 17]
   return Array.from({ length: quantidade }, (_, i) => {
-    const day  = 2 + i * Math.floor(28 / quantidade)
-    const hour = hours[i % hours.length]
+    const day      = 2 + i * Math.floor(28 / quantidade)
+    const hour     = hours[i % hours.length]
+    const modality = i % 3 === 0 ? LessonModality.ONLINE : LessonModality.PRESENCIAL
+    // Professor na sede: sempre se for PRESENCIAL, ou se for HYBRID com aula presencial
+    const teacherOnsite =
+      teacherMode === TeacherMode.PRESENCIAL ||
+      (teacherMode === TeacherMode.HYBRID && modality === LessonModality.PRESENCIAL)
     return {
       studentId, teacherId, subjectId,
-      scheduledAt:   pastDate(monthsAgo, day, hour),
-      modality:      i % 3 === 0 ? LessonModality.ONLINE : LessonModality.PRESENCIAL,
+      scheduledAt: pastDate(monthsAgo, day, hour),
+      modality,
+      teacherOnsite,
       status,
       studentRating: rating,
       topicsCovered: status === LessonStatus.COMPLETED
@@ -279,95 +286,103 @@ async function main() {
 
   // ─── Aulas (6 meses de histórico) ─────────────────────────────────────────
   // Volume: 4–7 aulas/mês por aluno, refletindo a operação real (~400 aulas/mês)
+  // Modos de ensino por professor (mesma ordem da array professores acima)
+  const T1 = TeacherMode.PRESENCIAL   // Ana
+  const T2 = TeacherMode.ONLINE_ONLY  // Carlos
+  const T3 = TeacherMode.HYBRID       // Fernanda
+  const T4 = TeacherMode.PRESENCIAL   // Marcos
+  const T5 = TeacherMode.ONLINE_ONLY  // Patricia
+  const T6 = TeacherMode.HYBRID       // Renato
+
   const todasAulas: ReturnType<typeof gerarAulasMes>[0][] = [
-    // Lucas — 7 aulas/mês com Ana (Matemática + Física)
-    ...gerarAulasMes("student-1","teacher-1","sub-mat",5,7,LessonStatus.COMPLETED,5),
-    ...gerarAulasMes("student-1","teacher-1","sub-mat",4,7,LessonStatus.COMPLETED,4),
-    ...gerarAulasMes("student-1","teacher-1","sub-fis",3,4,LessonStatus.COMPLETED,5),
-    ...gerarAulasMes("student-1","teacher-1","sub-mat",2,7,LessonStatus.COMPLETED,5),
-    ...gerarAulasMes("student-1","teacher-1","sub-mat",1,6,LessonStatus.COMPLETED,4),
-    ...gerarAulasMes("student-1","teacher-1","sub-mat",0,2,LessonStatus.SCHEDULED,null),  // mês atual parcial
+    // Lucas — 7 aulas/mês com Ana (PRESENCIAL)
+    ...gerarAulasMes("student-1","teacher-1","sub-mat",5,7,LessonStatus.COMPLETED,5,T1),
+    ...gerarAulasMes("student-1","teacher-1","sub-mat",4,7,LessonStatus.COMPLETED,4,T1),
+    ...gerarAulasMes("student-1","teacher-1","sub-fis",3,4,LessonStatus.COMPLETED,5,T1),
+    ...gerarAulasMes("student-1","teacher-1","sub-mat",2,7,LessonStatus.COMPLETED,5,T1),
+    ...gerarAulasMes("student-1","teacher-1","sub-mat",1,6,LessonStatus.COMPLETED,4,T1),
+    ...gerarAulasMes("student-1","teacher-1","sub-mat",0,2,LessonStatus.SCHEDULED,null,T1),
 
-    // Isabela — 4 aulas/mês com Carlos (Português)
-    ...gerarAulasMes("student-2","teacher-2","sub-por",5,4,LessonStatus.COMPLETED,4),
-    ...gerarAulasMes("student-2","teacher-2","sub-por",4,4,LessonStatus.COMPLETED,5),
-    ...gerarAulasMes("student-2","teacher-2","sub-his",3,4,LessonStatus.COMPLETED,4),
-    ...gerarAulasMes("student-2","teacher-2","sub-por",2,4,LessonStatus.COMPLETED,5),
-    ...gerarAulasMes("student-2","teacher-2","sub-por",1,3,LessonStatus.COMPLETED,4),
-    ...gerarAulasMes("student-2","teacher-2","sub-por",0,1,LessonStatus.CONFIRMED,null),
+    // Isabela — 4 aulas/mês com Carlos (ONLINE_ONLY)
+    ...gerarAulasMes("student-2","teacher-2","sub-por",5,4,LessonStatus.COMPLETED,4,T2),
+    ...gerarAulasMes("student-2","teacher-2","sub-por",4,4,LessonStatus.COMPLETED,5,T2),
+    ...gerarAulasMes("student-2","teacher-2","sub-his",3,4,LessonStatus.COMPLETED,4,T2),
+    ...gerarAulasMes("student-2","teacher-2","sub-por",2,4,LessonStatus.COMPLETED,5,T2),
+    ...gerarAulasMes("student-2","teacher-2","sub-por",1,3,LessonStatus.COMPLETED,4,T2),
+    ...gerarAulasMes("student-2","teacher-2","sub-por",0,1,LessonStatus.CONFIRMED,null,T2),
 
-    // Gabriel — 5 aulas/mês com Fernanda (Química + Biologia)
-    ...gerarAulasMes("student-3","teacher-3","sub-qui",5,5,LessonStatus.COMPLETED,5),
-    ...gerarAulasMes("student-3","teacher-3","sub-qui",4,5,LessonStatus.COMPLETED,4),
-    ...gerarAulasMes("student-3","teacher-3","sub-bio",3,5,LessonStatus.COMPLETED,5),
-    ...gerarAulasMes("student-3","teacher-3","sub-qui",2,5,LessonStatus.COMPLETED,4),
-    ...gerarAulasMes("student-3","teacher-3","sub-qui",1,4,LessonStatus.COMPLETED,5),
-    ...gerarAulasMes("student-3","teacher-3","sub-qui",0,2,LessonStatus.SCHEDULED,null),
+    // Gabriel — 5 aulas/mês com Fernanda (HYBRID)
+    ...gerarAulasMes("student-3","teacher-3","sub-qui",5,5,LessonStatus.COMPLETED,5,T3),
+    ...gerarAulasMes("student-3","teacher-3","sub-qui",4,5,LessonStatus.COMPLETED,4,T3),
+    ...gerarAulasMes("student-3","teacher-3","sub-bio",3,5,LessonStatus.COMPLETED,5,T3),
+    ...gerarAulasMes("student-3","teacher-3","sub-qui",2,5,LessonStatus.COMPLETED,4,T3),
+    ...gerarAulasMes("student-3","teacher-3","sub-qui",1,4,LessonStatus.COMPLETED,5,T3),
+    ...gerarAulasMes("student-3","teacher-3","sub-qui",0,2,LessonStatus.SCHEDULED,null,T3),
 
-    // Maria Clara — 6 aulas/mês com Marcos (Matemática + Geografia)
-    ...gerarAulasMes("student-4","teacher-4","sub-mat",5,6,LessonStatus.COMPLETED,4),
-    ...gerarAulasMes("student-4","teacher-4","sub-geo",4,6,LessonStatus.COMPLETED,4),
-    ...gerarAulasMes("student-4","teacher-4","sub-mat",3,6,LessonStatus.COMPLETED,5),
-    ...gerarAulasMes("student-4","teacher-4","sub-mat",2,6,LessonStatus.COMPLETED,4),
-    ...gerarAulasMes("student-4","teacher-4","sub-mat",1,5,LessonStatus.COMPLETED,5),
-    ...gerarAulasMes("student-4","teacher-4","sub-mat",0,2,LessonStatus.CONFIRMED,null),
+    // Maria Clara — 6 aulas/mês com Marcos (PRESENCIAL)
+    ...gerarAulasMes("student-4","teacher-4","sub-mat",5,6,LessonStatus.COMPLETED,4,T4),
+    ...gerarAulasMes("student-4","teacher-4","sub-geo",4,6,LessonStatus.COMPLETED,4,T4),
+    ...gerarAulasMes("student-4","teacher-4","sub-mat",3,6,LessonStatus.COMPLETED,5,T4),
+    ...gerarAulasMes("student-4","teacher-4","sub-mat",2,6,LessonStatus.COMPLETED,4,T4),
+    ...gerarAulasMes("student-4","teacher-4","sub-mat",1,5,LessonStatus.COMPLETED,5,T4),
+    ...gerarAulasMes("student-4","teacher-4","sub-mat",0,2,LessonStatus.CONFIRMED,null,T4),
 
-    // Pedro — 7 aulas/mês com Patricia (Inglês + Português — vestibular)
-    ...gerarAulasMes("student-5","teacher-5","sub-ing",5,7,LessonStatus.COMPLETED,5),
-    ...gerarAulasMes("student-5","teacher-5","sub-ing",4,7,LessonStatus.COMPLETED,5),
-    ...gerarAulasMes("student-5","teacher-5","sub-por",3,7,LessonStatus.COMPLETED,4),
-    ...gerarAulasMes("student-5","teacher-5","sub-ing",2,7,LessonStatus.COMPLETED,5),
-    ...gerarAulasMes("student-5","teacher-5","sub-ing",1,6,LessonStatus.COMPLETED,5),
-    ...gerarAulasMes("student-5","teacher-5","sub-ing",0,2,LessonStatus.SCHEDULED,null),
+    // Pedro — 7 aulas/mês com Patricia (ONLINE_ONLY)
+    ...gerarAulasMes("student-5","teacher-5","sub-ing",5,7,LessonStatus.COMPLETED,5,T5),
+    ...gerarAulasMes("student-5","teacher-5","sub-ing",4,7,LessonStatus.COMPLETED,5,T5),
+    ...gerarAulasMes("student-5","teacher-5","sub-por",3,7,LessonStatus.COMPLETED,4,T5),
+    ...gerarAulasMes("student-5","teacher-5","sub-ing",2,7,LessonStatus.COMPLETED,5,T5),
+    ...gerarAulasMes("student-5","teacher-5","sub-ing",1,6,LessonStatus.COMPLETED,5,T5),
+    ...gerarAulasMes("student-5","teacher-5","sub-ing",0,2,LessonStatus.SCHEDULED,null,T5),
 
-    // Larissa — 4 aulas/mês com Renato (Física)
-    ...gerarAulasMes("student-6","teacher-6","sub-fis",4,4,LessonStatus.COMPLETED,4),
-    ...gerarAulasMes("student-6","teacher-6","sub-fis",3,4,LessonStatus.COMPLETED,4),
-    ...gerarAulasMes("student-6","teacher-6","sub-mat",2,4,LessonStatus.COMPLETED,3),
-    ...gerarAulasMes("student-6","teacher-6","sub-fis",1,3,LessonStatus.COMPLETED,4),
-    ...gerarAulasMes("student-6","teacher-6","sub-fis",0,1,LessonStatus.SCHEDULED,null),
+    // Larissa — 4 aulas/mês com Renato (HYBRID)
+    ...gerarAulasMes("student-6","teacher-6","sub-fis",4,4,LessonStatus.COMPLETED,4,T6),
+    ...gerarAulasMes("student-6","teacher-6","sub-fis",3,4,LessonStatus.COMPLETED,4,T6),
+    ...gerarAulasMes("student-6","teacher-6","sub-mat",2,4,LessonStatus.COMPLETED,3,T6),
+    ...gerarAulasMes("student-6","teacher-6","sub-fis",1,3,LessonStatus.COMPLETED,4,T6),
+    ...gerarAulasMes("student-6","teacher-6","sub-fis",0,1,LessonStatus.SCHEDULED,null,T6),
 
-    // Bruno — 4 aulas/mês com Marcos (Matemática — iniciante, 6º EF)
-    ...gerarAulasMes("student-7","teacher-4","sub-mat",3,4,LessonStatus.COMPLETED,4),
-    ...gerarAulasMes("student-7","teacher-4","sub-mat",2,4,LessonStatus.COMPLETED,3),
-    ...gerarAulasMes("student-7","teacher-4","sub-mat",1,3,LessonStatus.COMPLETED,4),
-    ...gerarAulasMes("student-7","teacher-4","sub-mat",0,1,LessonStatus.SCHEDULED,null),
+    // Bruno — 4 aulas/mês com Marcos (PRESENCIAL)
+    ...gerarAulasMes("student-7","teacher-4","sub-mat",3,4,LessonStatus.COMPLETED,4,T4),
+    ...gerarAulasMes("student-7","teacher-4","sub-mat",2,4,LessonStatus.COMPLETED,3,T4),
+    ...gerarAulasMes("student-7","teacher-4","sub-mat",1,3,LessonStatus.COMPLETED,4,T4),
+    ...gerarAulasMes("student-7","teacher-4","sub-mat",0,1,LessonStatus.SCHEDULED,null,T4),
 
-    // Amanda — 5 aulas/mês com Fernanda (Biologia + Química)
-    ...gerarAulasMes("student-8","teacher-3","sub-bio",5,5,LessonStatus.COMPLETED,5),
-    ...gerarAulasMes("student-8","teacher-3","sub-bio",4,5,LessonStatus.COMPLETED,5),
-    ...gerarAulasMes("student-8","teacher-3","sub-qui",3,5,LessonStatus.COMPLETED,4),
-    ...gerarAulasMes("student-8","teacher-3","sub-bio",2,5,LessonStatus.COMPLETED,5),
-    ...gerarAulasMes("student-8","teacher-3","sub-bio",1,4,LessonStatus.COMPLETED,5),
-    ...gerarAulasMes("student-8","teacher-3","sub-bio",0,1,LessonStatus.CONFIRMED,null),
+    // Amanda — 5 aulas/mês com Fernanda (HYBRID)
+    ...gerarAulasMes("student-8","teacher-3","sub-bio",5,5,LessonStatus.COMPLETED,5,T3),
+    ...gerarAulasMes("student-8","teacher-3","sub-bio",4,5,LessonStatus.COMPLETED,5,T3),
+    ...gerarAulasMes("student-8","teacher-3","sub-qui",3,5,LessonStatus.COMPLETED,4,T3),
+    ...gerarAulasMes("student-8","teacher-3","sub-bio",2,5,LessonStatus.COMPLETED,5,T3),
+    ...gerarAulasMes("student-8","teacher-3","sub-bio",1,4,LessonStatus.COMPLETED,5,T3),
+    ...gerarAulasMes("student-8","teacher-3","sub-bio",0,1,LessonStatus.CONFIRMED,null,T3),
 
-    // Thiago — 4 aulas/mês com Ana (Física + Matemática)
-    ...gerarAulasMes("student-9","teacher-1","sub-fis",4,4,LessonStatus.COMPLETED,4),
-    ...gerarAulasMes("student-9","teacher-1","sub-fis",3,4,LessonStatus.COMPLETED,5),
-    ...gerarAulasMes("student-9","teacher-1","sub-mat",2,4,LessonStatus.COMPLETED,4),
-    ...gerarAulasMes("student-9","teacher-1","sub-fis",1,3,LessonStatus.COMPLETED,4),
-    ...gerarAulasMes("student-9","teacher-1","sub-fis",0,1,LessonStatus.SCHEDULED,null),
+    // Thiago — 4 aulas/mês com Ana (PRESENCIAL)
+    ...gerarAulasMes("student-9","teacher-1","sub-fis",4,4,LessonStatus.COMPLETED,4,T1),
+    ...gerarAulasMes("student-9","teacher-1","sub-fis",3,4,LessonStatus.COMPLETED,5,T1),
+    ...gerarAulasMes("student-9","teacher-1","sub-mat",2,4,LessonStatus.COMPLETED,4,T1),
+    ...gerarAulasMes("student-9","teacher-1","sub-fis",1,3,LessonStatus.COMPLETED,4,T1),
+    ...gerarAulasMes("student-9","teacher-1","sub-fis",0,1,LessonStatus.SCHEDULED,null,T1),
 
-    // Camila — 6 aulas/mês com Patricia (Inglês — Superior)
-    ...gerarAulasMes("student-10","teacher-5","sub-ing",5,6,LessonStatus.COMPLETED,5),
-    ...gerarAulasMes("student-10","teacher-5","sub-ing",4,6,LessonStatus.COMPLETED,5),
-    ...gerarAulasMes("student-10","teacher-5","sub-por",3,6,LessonStatus.COMPLETED,5),
-    ...gerarAulasMes("student-10","teacher-5","sub-ing",2,6,LessonStatus.COMPLETED,5),
-    ...gerarAulasMes("student-10","teacher-5","sub-ing",1,5,LessonStatus.COMPLETED,4),
-    ...gerarAulasMes("student-10","teacher-5","sub-ing",0,2,LessonStatus.CONFIRMED,null),
+    // Camila — 6 aulas/mês com Patricia (ONLINE_ONLY)
+    ...gerarAulasMes("student-10","teacher-5","sub-ing",5,6,LessonStatus.COMPLETED,5,T5),
+    ...gerarAulasMes("student-10","teacher-5","sub-ing",4,6,LessonStatus.COMPLETED,5,T5),
+    ...gerarAulasMes("student-10","teacher-5","sub-por",3,6,LessonStatus.COMPLETED,5,T5),
+    ...gerarAulasMes("student-10","teacher-5","sub-ing",2,6,LessonStatus.COMPLETED,5,T5),
+    ...gerarAulasMes("student-10","teacher-5","sub-ing",1,5,LessonStatus.COMPLETED,4,T5),
+    ...gerarAulasMes("student-10","teacher-5","sub-ing",0,2,LessonStatus.CONFIRMED,null,T5),
 
-    // Vinícius — 5 aulas/mês com Fernanda (Química)
-    ...gerarAulasMes("student-11","teacher-3","sub-qui",4,5,LessonStatus.COMPLETED,4),
-    ...gerarAulasMes("student-11","teacher-3","sub-qui",3,5,LessonStatus.COMPLETED,4),
-    ...gerarAulasMes("student-11","teacher-3","sub-qui",2,5,LessonStatus.COMPLETED,3),
-    ...gerarAulasMes("student-11","teacher-3","sub-qui",1,4,LessonStatus.COMPLETED,4),
-    ...gerarAulasMes("student-11","teacher-3","sub-qui",0,1,LessonStatus.SCHEDULED,null),
+    // Vinícius — 5 aulas/mês com Fernanda (HYBRID)
+    ...gerarAulasMes("student-11","teacher-3","sub-qui",4,5,LessonStatus.COMPLETED,4,T3),
+    ...gerarAulasMes("student-11","teacher-3","sub-qui",3,5,LessonStatus.COMPLETED,4,T3),
+    ...gerarAulasMes("student-11","teacher-3","sub-qui",2,5,LessonStatus.COMPLETED,3,T3),
+    ...gerarAulasMes("student-11","teacher-3","sub-qui",1,4,LessonStatus.COMPLETED,4,T3),
+    ...gerarAulasMes("student-11","teacher-3","sub-qui",0,1,LessonStatus.SCHEDULED,null,T3),
 
-    // Letícia — 4 aulas/mês com Carlos (História + Português)
-    ...gerarAulasMes("student-12","teacher-2","sub-his",3,4,LessonStatus.COMPLETED,4),
-    ...gerarAulasMes("student-12","teacher-2","sub-por",2,4,LessonStatus.COMPLETED,5),
-    ...gerarAulasMes("student-12","teacher-2","sub-his",1,4,LessonStatus.COMPLETED,5),
-    ...gerarAulasMes("student-12","teacher-2","sub-his",0,1,LessonStatus.SCHEDULED,null),
+    // Letícia — 4 aulas/mês com Carlos (ONLINE_ONLY)
+    ...gerarAulasMes("student-12","teacher-2","sub-his",3,4,LessonStatus.COMPLETED,4,T2),
+    ...gerarAulasMes("student-12","teacher-2","sub-por",2,4,LessonStatus.COMPLETED,5,T2),
+    ...gerarAulasMes("student-12","teacher-2","sub-his",1,4,LessonStatus.COMPLETED,5,T2),
+    ...gerarAulasMes("student-12","teacher-2","sub-his",0,1,LessonStatus.SCHEDULED,null,T2),
   ]
 
   for (const aula of todasAulas) {
