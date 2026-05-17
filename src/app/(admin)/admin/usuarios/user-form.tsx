@@ -8,7 +8,7 @@ import { Label }      from "@/components/ui/label"
 import { Textarea }   from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { AlertCircle, Loader2 } from "lucide-react"
-import type { Role }  from "@prisma/client"
+import type { Role, TeacherMode, EducationLevel } from "@prisma/client"
 
 const ROLES = [
   { value: "ADMIN",        label: "Administrador" },
@@ -24,12 +24,26 @@ const GRADES = [
   "Vestibular", "ENEM", "Concurso", "Superior",
 ]
 
+const TEACHING_MODES: { value: TeacherMode; label: string; description: string }[] = [
+  { value: "PRESENCIAL",   label: "Presencial",          description: "Vem à sede; dá aulas presenciais e pode dar online de uma sala" },
+  { value: "ONLINE_ONLY",  label: "Só Online",           description: "Dá aulas apenas online, de casa" },
+  { value: "HYBRID",       label: "Presencial e Online", description: "Pode trabalhar de casa (online) e vir à sede" },
+]
+
+const EDUCATION_LEVELS: { value: EducationLevel; label: string }[] = [
+  { value: "EF2",        label: "Fundamental 2 (6º–9º)" },
+  { value: "EM",         label: "Ensino Médio" },
+  { value: "SUPERIOR",   label: "Superior" },
+  { value: "VESTIBULAR", label: "Vestibular / ENEM" },
+]
+
 interface UserFormProps {
   action:   (formData: FormData) => void | Promise<void>
   error?:   string
   defaultValues?: {
     name?: string; email?: string; phone?: string; role?: Role
-    grade?: string; school?: string; hourlyRate?: number; bio?: string
+    grade?: string; educationLevel?: EducationLevel; school?: string
+    hourlyRate?: number; bio?: string; teachingMode?: TeacherMode
   }
   isEdit?: boolean
 }
@@ -45,7 +59,9 @@ function SubmitButton({ label }: { label: string }) {
 }
 
 export function UserForm({ action, error, defaultValues, isEdit }: UserFormProps) {
-  const [role, setRole] = useState<string>(defaultValues?.role ?? "STUDENT")
+  const [role, setRole]             = useState<string>(defaultValues?.role ?? "STUDENT")
+  const [teachingMode, setTeachingMode] = useState<string>(defaultValues?.teachingMode ?? "HYBRID")
+  const [eduLevel, setEduLevel]     = useState<string>(defaultValues?.educationLevel ?? "")
 
   return (
     <form action={action} className="space-y-6 max-w-2xl">
@@ -112,6 +128,20 @@ export function UserForm({ action, error, defaultValues, isEdit }: UserFormProps
             <Label htmlFor="school">Escola</Label>
             <Input id="school" name="school" defaultValue={defaultValues?.school ?? ""} placeholder="Nome da escola" />
           </div>
+          <div className="space-y-2 sm:col-span-2">
+            <Label>Nível de Ensino (para filtro de agendamento)</Label>
+            <input type="hidden" name="educationLevel" value={eduLevel} />
+            <div className="flex flex-wrap gap-3">
+              {EDUCATION_LEVELS.map(({ value, label }) => (
+                <label key={value} className="flex items-center gap-2 cursor-pointer">
+                  <input type="radio" name="_educationLevel" value={value}
+                    checked={eduLevel === value}
+                    onChange={() => setEduLevel(value)} />
+                  <span className="text-sm">{label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
         </div>
       )}
 
@@ -128,6 +158,26 @@ export function UserForm({ action, error, defaultValues, isEdit }: UserFormProps
             <Label htmlFor="bio">Bio / Apresentação</Label>
             <Textarea id="bio" name="bio" defaultValue={defaultValues?.bio ?? ""}
               placeholder="Breve apresentação do professor..." rows={3} />
+          </div>
+          <div className="space-y-2 sm:col-span-2">
+            <Label>Modalidade de Trabalho</Label>
+            <input type="hidden" name="teachingMode" value={teachingMode} />
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              {TEACHING_MODES.map(({ value, label, description }) => (
+                <label key={value}
+                  className={`flex flex-col gap-1 p-3 rounded-lg border cursor-pointer transition-all ${
+                    teachingMode === value ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"
+                  }`}>
+                  <div className="flex items-center gap-2">
+                    <input type="radio" name="_teachingMode" value={value}
+                      checked={teachingMode === value}
+                      onChange={() => setTeachingMode(value)} />
+                    <span className="text-sm font-medium">{label}</span>
+                  </div>
+                  <span className="text-xs text-muted-foreground pl-5">{description}</span>
+                </label>
+              ))}
+            </div>
           </div>
         </div>
       )}

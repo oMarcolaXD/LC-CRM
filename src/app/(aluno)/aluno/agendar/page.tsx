@@ -40,7 +40,10 @@ export default async function AgendarPage({ searchParams }: AgendarPageProps) {
   const [teachers, subjects] = await Promise.all([
     prisma.teacher.findMany({
       where:   { user: { active: true } },
-      include: { user: true },
+      include: {
+        user:     true,
+        subjects: { include: { subject: true } },
+      },
       orderBy: { user: { name: "asc" } },
     }),
     prisma.subject.findMany({ orderBy: { name: "asc" } }),
@@ -55,8 +58,19 @@ export default async function AgendarPage({ searchParams }: AgendarPageProps) {
       <Card>
         <CardContent className="pt-6">
           <BookingForm
-            teachers={teachers.map((t) => ({ id: t.id, name: t.user.name }))}
+            teachers={teachers.map((t) => ({
+              id:          t.id,
+              name:        t.user.name,
+              avatar:      t.user.avatar ?? undefined,
+              bio:         t.bio ?? undefined,
+              teachingMode: t.teachingMode,
+              subjects:    t.subjects.map((ts) => ({
+                subjectId: ts.subjectId,
+                levels:    ts.levels,
+              })),
+            }))}
             subjects={subjects.map((s) => ({ id: s.id, name: s.name }))}
+            studentLevel={student?.educationLevel ?? null}
             error={error}
           />
         </CardContent>

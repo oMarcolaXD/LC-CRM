@@ -25,7 +25,7 @@ export async function createUserAction(formData: FormData) {
     redirect(`/admin/usuarios/novo?error=${encodeURIComponent(msg)}`)
   }
 
-  const { name, email, password, phone, role, grade, school, hourlyRate, bio } = parsed.data
+  const { name, email, password, phone, role, grade, educationLevel, school, hourlyRate, bio, teachingMode } = parsed.data
 
   const exists = await prisma.user.findUnique({ where: { email } })
   if (exists) redirect("/admin/usuarios/novo?error=E-mail+já+cadastrado")
@@ -38,10 +38,14 @@ export async function createUserAction(formData: FormData) {
     })
 
     if (role === "STUDENT") {
-      await tx.student.create({ data: { userId: user.id, grade: grade ?? "Não informado", school } })
+      await tx.student.create({
+        data: { userId: user.id, grade: grade ?? "Não informado", school, educationLevel: educationLevel as never ?? undefined },
+      })
     }
     if (role === "TEACHER") {
-      await tx.teacher.create({ data: { userId: user.id, hourlyRate: hourlyRate ?? 0, bio } })
+      await tx.teacher.create({
+        data: { userId: user.id, hourlyRate: hourlyRate ?? 0, bio, teachingMode: (teachingMode ?? "HYBRID") as never },
+      })
     }
     if (role === "GUARDIAN") {
       await tx.guardian.create({ data: { userId: user.id } })
@@ -63,7 +67,7 @@ export async function updateUserAction(id: string, formData: FormData) {
     redirect(`/admin/usuarios/${id}?error=${encodeURIComponent(msg)}`)
   }
 
-  const { name, email, password, phone, role, grade, school, hourlyRate, bio } = parsed.data
+  const { name, email, password, phone, role, grade, educationLevel, school, hourlyRate, bio, teachingMode } = parsed.data
 
   const updateData: Record<string, unknown> = { name, email, phone, role }
   if (password) updateData.password = await bcrypt.hash(password, 12)
@@ -74,15 +78,15 @@ export async function updateUserAction(id: string, formData: FormData) {
     if (role === "STUDENT") {
       await tx.student.upsert({
         where:  { userId: id },
-        update: { grade: grade ?? "Não informado", school },
-        create: { userId: id, grade: grade ?? "Não informado", school },
+        update: { grade: grade ?? "Não informado", school, educationLevel: educationLevel as never ?? undefined },
+        create: { userId: id, grade: grade ?? "Não informado", school, educationLevel: educationLevel as never ?? undefined },
       })
     }
     if (role === "TEACHER") {
       await tx.teacher.upsert({
         where:  { userId: id },
-        update: { hourlyRate: hourlyRate ?? 0, bio },
-        create: { userId: id, hourlyRate: hourlyRate ?? 0, bio },
+        update: { hourlyRate: hourlyRate ?? 0, bio, teachingMode: (teachingMode ?? "HYBRID") as never },
+        create: { userId: id, hourlyRate: hourlyRate ?? 0, bio, teachingMode: (teachingMode ?? "HYBRID") as never },
       })
     }
   })

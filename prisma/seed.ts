@@ -1,6 +1,7 @@
 import {
   PrismaClient, Role, LessonStatus, LessonModality,
   PaymentStatus, PackageStatus, RequestStatus,
+  TeacherMode, EducationLevel,
 } from "@prisma/client"
 import bcrypt from "bcryptjs"
 import { subMonths, addHours, startOfMonth, setHours, setMinutes } from "date-fns"
@@ -130,13 +131,71 @@ async function main() {
     "6": [{ start: "09:00", end: "15:00" }],
   }
 
-  const professores = [
-    { uid: "user-prof1", tid: "teacher-1", name: "Ana Beatriz Silva",   email: "ana@licaodecasa.com.br",     avail: avail5dias,      subs: ["sub-mat","sub-fis"] },
-    { uid: "user-prof2", tid: "teacher-2", name: "Carlos Eduardo Lima", email: "carlos@licaodecasa.com.br",  avail: availSeg_Qua_Sex,subs: ["sub-por","sub-his"] },
-    { uid: "user-prof3", tid: "teacher-3", name: "Fernanda Rocha",      email: "fernanda@licaodecasa.com.br",avail: avail5dias,      subs: ["sub-qui","sub-bio"] },
-    { uid: "user-prof4", tid: "teacher-4", name: "Marcos Oliveira",     email: "marcos@licaodecasa.com.br",  avail: availTer_Qui_Sab,subs: ["sub-mat","sub-geo"] },
-    { uid: "user-prof5", tid: "teacher-5", name: "Patricia Santos",     email: "patricia@licaodecasa.com.br",avail: availSeg_Qua_Sex,subs: ["sub-ing","sub-por"] },
-    { uid: "user-prof6", tid: "teacher-6", name: "Renato Alves",        email: "renato@licaodecasa.com.br",  avail: availTer_Qui_Sab,subs: ["sub-fis","sub-mat"] },
+  type SubDef = { id: string; levels: EducationLevel[] }
+  const professores: {
+    uid: string; tid: string; name: string; email: string
+    avail: object; mode: TeacherMode; bio: string; subs: SubDef[]
+  }[] = [
+    {
+      uid: "user-prof1", tid: "teacher-1", name: "Ana Beatriz Silva",
+      email: "ana@licaodecasa.com.br", avail: avail5dias,
+      mode: TeacherMode.PRESENCIAL,
+      bio: "Professora de Matemática e Física com 8 anos de experiência em reforço escolar e pré-vestibular. Especialista em tornar o abstrato concreto.",
+      subs: [
+        { id: "sub-mat", levels: [EducationLevel.EF2, EducationLevel.EM, EducationLevel.VESTIBULAR] },
+        { id: "sub-fis", levels: [EducationLevel.EF2, EducationLevel.EM, EducationLevel.VESTIBULAR, EducationLevel.SUPERIOR] },
+      ],
+    },
+    {
+      uid: "user-prof2", tid: "teacher-2", name: "Carlos Eduardo Lima",
+      email: "carlos@licaodecasa.com.br", avail: availSeg_Qua_Sex,
+      mode: TeacherMode.ONLINE_ONLY,
+      bio: "Mestre em Letras com foco em redação dissertativa e literatura. Atende exclusivamente online com metodologia comprovada para ENEM.",
+      subs: [
+        { id: "sub-por", levels: [EducationLevel.EF2, EducationLevel.EM, EducationLevel.VESTIBULAR, EducationLevel.SUPERIOR] },
+        { id: "sub-his", levels: [EducationLevel.EF2, EducationLevel.EM, EducationLevel.VESTIBULAR] },
+      ],
+    },
+    {
+      uid: "user-prof3", tid: "teacher-3", name: "Fernanda Rocha",
+      email: "fernanda@licaodecasa.com.br", avail: avail5dias,
+      mode: TeacherMode.HYBRID,
+      bio: "Bióloga e química formada pela USP. Trabalha tanto presencialmente na sede quanto online, com ótimos resultados em Ciências da Natureza.",
+      subs: [
+        { id: "sub-qui", levels: [EducationLevel.EF2, EducationLevel.EM, EducationLevel.VESTIBULAR, EducationLevel.SUPERIOR] },
+        { id: "sub-bio", levels: [EducationLevel.EF2, EducationLevel.EM, EducationLevel.VESTIBULAR, EducationLevel.SUPERIOR] },
+      ],
+    },
+    {
+      uid: "user-prof4", tid: "teacher-4", name: "Marcos Oliveira",
+      email: "marcos@licaodecasa.com.br", avail: availTer_Qui_Sab,
+      mode: TeacherMode.PRESENCIAL,
+      bio: "Professor de Matemática e Geografia, especialista em Ensino Fundamental. Atende presencialmente na sede com metodologia lúdica e prática.",
+      subs: [
+        { id: "sub-mat", levels: [EducationLevel.EF2, EducationLevel.EM] },
+        { id: "sub-geo", levels: [EducationLevel.EF2, EducationLevel.EM] },
+      ],
+    },
+    {
+      uid: "user-prof5", tid: "teacher-5", name: "Patricia Santos",
+      email: "patricia@licaodecasa.com.br", avail: availSeg_Qua_Sex,
+      mode: TeacherMode.ONLINE_ONLY,
+      bio: "Fluente em 4 idiomas, com MBA no exterior. Especialista em inglês para negócios e proficiência. Atende apenas online.",
+      subs: [
+        { id: "sub-ing", levels: [EducationLevel.EF2, EducationLevel.EM, EducationLevel.SUPERIOR, EducationLevel.VESTIBULAR] },
+        { id: "sub-por", levels: [EducationLevel.EM, EducationLevel.SUPERIOR, EducationLevel.VESTIBULAR] },
+      ],
+    },
+    {
+      uid: "user-prof6", tid: "teacher-6", name: "Renato Alves",
+      email: "renato@licaodecasa.com.br", avail: availTer_Qui_Sab,
+      mode: TeacherMode.HYBRID,
+      bio: "Engenheiro de formação convertido ao ensino. Leciona Física e Matemática com foco em resolução de problemas e aplicações do dia a dia.",
+      subs: [
+        { id: "sub-fis", levels: [EducationLevel.EF2, EducationLevel.EM, EducationLevel.SUPERIOR] },
+        { id: "sub-mat", levels: [EducationLevel.EF2, EducationLevel.EM, EducationLevel.VESTIBULAR] },
+      ],
+    },
   ]
 
   for (const t of professores) {
@@ -148,9 +207,10 @@ async function main() {
       data: {
         id: t.tid, userId: t.uid,
         hourlyRate: TAXAS_PROFESSOR[t.tid],
-        bio: "Especialista com experiência em reforço escolar e preparação para vestibular.",
+        teachingMode: t.mode,
+        bio: t.bio,
         availability: t.avail,
-        subjects: { create: t.subs.map((s) => ({ subjectId: s })) },
+        subjects: { create: t.subs.map((s) => ({ subjectId: s.id, levels: s.levels })) },
       },
     })
   }
@@ -158,26 +218,26 @@ async function main() {
 
   // ─── Alunos ────────────────────────────────────────────────────────────────
   // 12 alunos com perfis variados (4–7 aulas/mês cada)
-  const alunos = [
-    { uid: "user-stu1",  sid: "student-1",  name: "Lucas Alves",       email: "lucas@email.com",       grade: "9º EF"      },
-    { uid: "user-stu2",  sid: "student-2",  name: "Isabela Ferreira",  email: "isabela@email.com",     grade: "1º EM"      },
-    { uid: "user-stu3",  sid: "student-3",  name: "Gabriel Souza",     email: "gabriel@email.com",     grade: "2º EM"      },
-    { uid: "user-stu4",  sid: "student-4",  name: "Maria Clara Lima",  email: "mariaclara@email.com",  grade: "3º EM"      },
-    { uid: "user-stu5",  sid: "student-5",  name: "Pedro Henrique",    email: "pedro@email.com",       grade: "Vestibular" },
-    { uid: "user-stu6",  sid: "student-6",  name: "Larissa Costa",     email: "larissa@email.com",     grade: "8º EF"      },
-    { uid: "user-stu7",  sid: "student-7",  name: "Bruno Martins",     email: "bruno@email.com",       grade: "6º EF"      },
-    { uid: "user-stu8",  sid: "student-8",  name: "Amanda Ribeiro",    email: "amanda@email.com",      grade: "7º EF"      },
-    { uid: "user-stu9",  sid: "student-9",  name: "Thiago Barbosa",    email: "thiago@email.com",      grade: "1º EM"      },
-    { uid: "user-stu10", sid: "student-10", name: "Camila Pereira",    email: "camila@email.com",      grade: "Superior"   },
-    { uid: "user-stu11", sid: "student-11", name: "Vinícius Rocha",    email: "vinicius@email.com",    grade: "2º EM"      },
-    { uid: "user-stu12", sid: "student-12", name: "Letícia Gomes",     email: "leticia@email.com",     grade: "3º EM"      },
+  const alunos: { uid: string; sid: string; name: string; email: string; grade: string; educationLevel: EducationLevel }[] = [
+    { uid: "user-stu1",  sid: "student-1",  name: "Lucas Alves",       email: "lucas@email.com",       grade: "9º EF",      educationLevel: EducationLevel.EF2        },
+    { uid: "user-stu2",  sid: "student-2",  name: "Isabela Ferreira",  email: "isabela@email.com",     grade: "1º EM",      educationLevel: EducationLevel.EM         },
+    { uid: "user-stu3",  sid: "student-3",  name: "Gabriel Souza",     email: "gabriel@email.com",     grade: "2º EM",      educationLevel: EducationLevel.EM         },
+    { uid: "user-stu4",  sid: "student-4",  name: "Maria Clara Lima",  email: "mariaclara@email.com",  grade: "3º EM",      educationLevel: EducationLevel.EM         },
+    { uid: "user-stu5",  sid: "student-5",  name: "Pedro Henrique",    email: "pedro@email.com",       grade: "Vestibular", educationLevel: EducationLevel.VESTIBULAR },
+    { uid: "user-stu6",  sid: "student-6",  name: "Larissa Costa",     email: "larissa@email.com",     grade: "8º EF",      educationLevel: EducationLevel.EF2        },
+    { uid: "user-stu7",  sid: "student-7",  name: "Bruno Martins",     email: "bruno@email.com",       grade: "6º EF",      educationLevel: EducationLevel.EF2        },
+    { uid: "user-stu8",  sid: "student-8",  name: "Amanda Ribeiro",    email: "amanda@email.com",      grade: "7º EF",      educationLevel: EducationLevel.EF2        },
+    { uid: "user-stu9",  sid: "student-9",  name: "Thiago Barbosa",    email: "thiago@email.com",      grade: "1º EM",      educationLevel: EducationLevel.EM         },
+    { uid: "user-stu10", sid: "student-10", name: "Camila Pereira",    email: "camila@email.com",      grade: "Superior",   educationLevel: EducationLevel.SUPERIOR   },
+    { uid: "user-stu11", sid: "student-11", name: "Vinícius Rocha",    email: "vinicius@email.com",    grade: "2º EM",      educationLevel: EducationLevel.EM         },
+    { uid: "user-stu12", sid: "student-12", name: "Letícia Gomes",     email: "leticia@email.com",     grade: "3º EM",      educationLevel: EducationLevel.EM         },
   ]
 
   for (const s of alunos) {
     await prisma.user.create({
       data: { id: s.uid, name: s.name, email: s.email, password: await hash("Aluno@123"), role: Role.STUDENT },
     })
-    await prisma.student.create({ data: { id: s.sid, userId: s.uid, grade: s.grade } })
+    await prisma.student.create({ data: { id: s.sid, userId: s.uid, grade: s.grade, educationLevel: s.educationLevel } })
   }
   console.log(`✅ ${alunos.length} alunos`)
 

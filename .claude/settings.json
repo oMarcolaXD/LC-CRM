@@ -12,5 +12,10 @@
         ]
       }
     ]
+  },
+  "permissions": {
+    "additionalDirectories": [
+      "c:\\Users\\licaodecasa_nprata\\Documents\\LC(CRM)\\src\\app\\(colaborador)\\colaborador\\professores"
+    ]
   }
 }

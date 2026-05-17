@@ -59,6 +59,19 @@ enum PayoutStatus {
   PAID
 }
 
+enum TeacherMode {
+  ONLINE_ONLY  // só online, de casa
+  PRESENCIAL   // vem à sede; dá presencial E pode dar online ocupando uma sala
+  HYBRID       // pode trabalhar de casa (online) E vir à sede (presencial/online)
+}
+
+enum EducationLevel {
+  EF2        // Fundamental 2 (6º–9º ano)
+  EM         // Ensino Médio
+  SUPERIOR   // Ensino Superior
+  VESTIBULAR // Preparatório vestibular
+}
+
 // ─── Usuário Base ─────────────────────────────────────────────────────────────
 
 model User {
@@ -88,10 +101,11 @@ model Student {
   id         String    @id @default(cuid())
   userId     String    @unique
   user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  grade      String
-  school     String?
-  birthDate  DateTime?
-  guardianId String?
+  grade          String
+  educationLevel EducationLevel?
+  school         String?
+  birthDate      DateTime?
+  guardianId     String?
   guardian   Guardian? @relation(fields: [guardianId], references: [id])
   notes      String?
 
@@ -117,9 +131,10 @@ model Teacher {
   id           String   @id @default(cuid())
   userId       String   @unique
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  hourlyRate   Decimal  @db.Decimal(10, 2)
+  hourlyRate   Decimal      @db.Decimal(10, 2)
   bio          String?
   availability Json?
+  teachingMode TeacherMode  @default(HYBRID)
 
   subjects  TeacherSubject[]
   lessons   Lesson[]
@@ -148,6 +163,7 @@ model Subject {
 model TeacherSubject {
   teacherId String
   subjectId String
+  levels    EducationLevel[]
   teacher   Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade)
   subject   Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
 
@@ -193,6 +209,7 @@ model Lesson {
   studentFeedback String?
   isGroupLesson   Boolean        @default(false)
   groupId         String?
+  teacherOnsite   Boolean        @default(false)
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 

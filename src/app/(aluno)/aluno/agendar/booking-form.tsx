@@ -1,19 +1,58 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { useFormStatus }       from "react-dom"
-import { Button }  from "@/components/ui/button"
-import { Label }   from "@/components/ui/label"
+import { useState, useEffect, useMemo } from "react"
+import { useFormStatus }  from "react-dom"
+import { Button }   from "@/components/ui/button"
+import { Label }    from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Badge }   from "@/components/ui/badge"
+import { Badge }    from "@/components/ui/badge"
 import { requestLessonAction } from "./actions"
 import { DAY_SHORT } from "@/lib/availability"
-import { CalendarDays, Clock, Loader2, AlertCircle, ChevronLeft, ChevronRight } from "lucide-react"
+import { CalendarDays, Clock, Loader2, AlertCircle, ChevronLeft, ChevronRight, Wifi, MapPin, LayoutGrid } from "lucide-react"
 import { format, addDays, startOfDay } from "date-fns"
 import { ptBR } from "date-fns/locale"
 
-interface Teacher { id: string; name: string }
+type TeacherMode = "ONLINE_ONLY" | "PRESENCIAL" | "HYBRID"
+type EducationLevel = "EF2" | "EM" | "SUPERIOR" | "VESTIBULAR"
+
+interface Teacher {
+  id:           string
+  name:         string
+  avatar?:      string
+  bio?:         string
+  teachingMode: TeacherMode
+  subjects:     { subjectId: string; levels: EducationLevel[] }[]
+}
+
 interface Subject { id: string; name: string }
+
+const MODE_LABEL: Record<TeacherMode, string> = {
+  ONLINE_ONLY: "Só Online",
+  PRESENCIAL:  "Presencial",
+  HYBRID:      "Presencial e Online",
+}
+
+const MODE_COLOR: Record<TeacherMode, string> = {
+  ONLINE_ONLY: "bg-blue-100 text-blue-700 border-blue-200",
+  PRESENCIAL:  "bg-green-100 text-green-700 border-green-200",
+  HYBRID:      "bg-orange-100 text-orange-700 border-orange-200",
+}
+
+const MODE_ICON: Record<TeacherMode, React.ReactNode> = {
+  ONLINE_ONLY: <Wifi className="w-3 h-3" />,
+  PRESENCIAL:  <MapPin className="w-3 h-3" />,
+  HYBRID:      <LayoutGrid className="w-3 h-3" />,
+}
+
+function getModalityOptions(mode: TeacherMode) {
+  if (mode === "ONLINE_ONLY") return [{ value: "ONLINE",     label: "Online (Meet/Zoom)" }]
+  if (mode === "PRESENCIAL")  return [{ value: "PRESENCIAL", label: "Presencial" }, { value: "ONLINE", label: "Online (Meet/Zoom)" }]
+  return                               [{ value: "PRESENCIAL", label: "Presencial" }, { value: "ONLINE", label: "Online (Meet/Zoom)" }]
+}
+
+function initials(name: string) {
+  return name.split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase()
+}
 
 function SubmitButton({ disabled }: { disabled?: boolean }) {
   const { pending } = useFormStatus()
@@ -26,23 +65,58 @@ function SubmitButton({ disabled }: { disabled?: boolean }) {
 }
 
 export function BookingForm({
-  teachers, subjects, error,
+  teachers, subjects, studentLevel, error,
 }: {
-  teachers: Teacher[]
-  subjects: Subject[]
-  error?:   string
+  teachers:     Teacher[]
+  subjects:     Subject[]
+  studentLevel: EducationLevel | null
+  error?:       string
 }) {
-  const [teacherId,   setTeacherId]   = useState("")
-  const [subjectId,   setSubjectId]   = useState("")
-  const [modality,    setModality]    = useState("PRESENCIAL")
-  const [notes,       setNotes]       = useState("")
+  const [subjectId,    setSubjectId]    = useState("")
+  const [teacherId,    setTeacherId]    = useState("")
+  const [modality,     setModality]     = useState("PRESENCIAL")
+  const [notes,        setNotes]        = useState("")
 
-  const [availDates,  setAvailDates]  = useState<string[]>([])   // YYYY-MM-DD
-  const [selectedDate,setSelectedDate]= useState("")
-  const [availSlots,  setAvailSlots]  = useState<string[]>([])
-  const [selectedSlot,setSelectedSlot]= useState("")
-  const [weekOffset,  setWeekOffset]  = useState(0)
-  const [loading,     setLoading]     = useState(false)
+  const [availDates,   setAvailDates]   = useState<string[]>([])
+  const [selectedDate, setSelectedDate] = useState("")
+  const [availSlots,   setAvailSlots]   = useState<string[]>([])
+  const [selectedSlot, setSelectedSlot] = useState("")
+  const [weekOffset,   setWeekOffset]   = useState(0)
+  const [loading,      setLoading]      = useState(false)
+
+  const selectedTeacher = useMemo(
+    () => teachers.find((t) => t.id === teacherId) ?? null,
+    [teachers, teacherId],
+  )
+
+  // Filtra professores pela matéria selecionada e nível do aluno
+  const filteredTeachers = useMemo(() => {
+    if (!subjectId) return []
+    return teachers.filter((t) =>
+      t.subjects.some(
+        (ts) =>
+          ts.subjectId === subjectId &&
+          (studentLevel === null || ts.levels.includes(studentLevel)),
+      ),
+    )
+  }, [teachers, subjectId, studentLevel])
+
+  // Reset professor ao trocar matéria
+  useEffect(() => {
+    setTeacherId("")
+    setAvailDates([])
+    setSelectedDate("")
+    setAvailSlots([])
+    setSelectedSlot("")
+    setWeekOffset(0)
+  }, [subjectId])
+
+  // Ajusta modalidade ao selecionar professor
+  useEffect(() => {
+    if (!selectedTeacher) return
+    if (selectedTeacher.teachingMode === "ONLINE_ONLY") setModality("ONLINE")
+    else setModality("PRESENCIAL")
+  }, [selectedTeacher])
 
   // Busca datas disponíveis quando professor muda
   useEffect(() => {
@@ -62,15 +136,11 @@ export function BookingForm({
       .then((d) => { setAvailSlots(d.slots ?? []); setSelectedSlot("") })
   }, [teacherId, selectedDate])
 
-  // Gera dias da semana visível
-  const today   = startOfDay(new Date())
+  const today     = startOfDay(new Date())
   const weekStart = addDays(today, 1 + weekOffset * 7)
   const weekDays  = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
 
-  const preferredAt = selectedDate && selectedSlot
-    ? `${selectedDate}T${selectedSlot}:00`
-    : ""
-
+  const preferredAt = selectedDate && selectedSlot ? `${selectedDate}T${selectedSlot}:00` : ""
   const hasAvailability = teacherId && availDates.length > 0
   const noAvailability  = teacherId && !loading && availDates.length === 0
 
@@ -90,7 +160,7 @@ export function BookingForm({
       <input type="hidden" name="modality"    value={modality} />
       <input type="hidden" name="notes"       value={notes} />
 
-      {/* Matéria */}
+      {/* 1. Matéria */}
       <div className="space-y-2">
         <Label>Matéria *</Label>
         <select value={subjectId} onChange={(e) => setSubjectId(e.target.value)} required
@@ -100,17 +170,59 @@ export function BookingForm({
         </select>
       </div>
 
-      {/* Professor */}
-      <div className="space-y-2">
-        <Label>Professor *</Label>
-        <select value={teacherId} onChange={(e) => { setTeacherId(e.target.value); setWeekOffset(0) }} required
-          className="flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring">
-          <option value="">Selecione o professor</option>
-          {teachers.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-        </select>
-      </div>
+      {/* 2. Professor — cards */}
+      {subjectId && (
+        <div className="space-y-3">
+          <Label>Professor *</Label>
 
-      {/* Calendário de disponibilidade */}
+          {filteredTeachers.length === 0 ? (
+            <div className="flex items-center gap-2 text-sm text-orange-700 bg-orange-50 px-4 py-3 rounded-lg border border-orange-200">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              Nenhum professor disponível para esta matéria no seu nível de ensino.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {filteredTeachers.map((t) => {
+                const isSelected = teacherId === t.id
+                return (
+                  <button
+                    key={t.id} type="button"
+                    onClick={() => { setTeacherId(t.id); setWeekOffset(0) }}
+                    className={`text-left p-4 rounded-xl border transition-all ${
+                      isSelected
+                        ? "border-primary bg-primary/5 ring-2 ring-primary/20"
+                        : "border-border hover:border-primary/40 hover:bg-muted/30"
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      {/* Avatar */}
+                      <div className="shrink-0 w-12 h-12 rounded-full overflow-hidden bg-primary/10 flex items-center justify-center">
+                        {t.avatar ? (
+                          <img src={t.avatar} alt={t.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <span className="text-sm font-bold text-primary">{initials(t.name)}</span>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-sm leading-tight">{t.name}</p>
+                        {t.bio && (
+                          <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{t.bio}</p>
+                        )}
+                        <span className={`inline-flex items-center gap-1 mt-2 text-[11px] font-medium px-2 py-0.5 rounded-full border ${MODE_COLOR[t.teachingMode]}`}>
+                          {MODE_ICON[t.teachingMode]}
+                          {MODE_LABEL[t.teachingMode]}
+                        </span>
+                      </div>
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 3. Calendário de disponibilidade */}
       {teacherId && (
         <div className="space-y-3">
           <Label className="flex items-center gap-2">
@@ -133,7 +245,6 @@ export function BookingForm({
 
           {hasAvailability && !loading && (
             <>
-              {/* Navegação de semana */}
               <div className="flex items-center justify-between mb-2">
                 <button type="button" onClick={() => setWeekOffset((w) => Math.max(0, w - 1))}
                   disabled={weekOffset === 0}
@@ -149,7 +260,6 @@ export function BookingForm({
                 </button>
               </div>
 
-              {/* Grid de dias */}
               <div className="grid grid-cols-7 gap-1.5">
                 {weekDays.map((day) => {
                   const dateStr  = format(day, "yyyy-MM-dd")
@@ -179,7 +289,7 @@ export function BookingForm({
         </div>
       )}
 
-      {/* Horários disponíveis */}
+      {/* 4. Horários */}
       {selectedDate && availSlots.length > 0 && (
         <div className="space-y-2">
           <Label className="flex items-center gap-2">
@@ -208,22 +318,29 @@ export function BookingForm({
         </div>
       )}
 
-      {/* Modalidade */}
-      <div className="space-y-2">
-        <Label>Modalidade *</Label>
-        <div className="flex gap-4">
-          {[{ value: "PRESENCIAL", label: "Presencial" }, { value: "ONLINE", label: "Online (Meet/Zoom)" }].map(({ value, label }) => (
-            <label key={value} className="flex items-center gap-2 cursor-pointer">
-              <input type="radio" name="_modality" value={value}
-                checked={modality === value}
-                onChange={() => setModality(value)} />
-              <span className="text-sm">{label}</span>
-            </label>
-          ))}
+      {/* 5. Modalidade — opções dependem do teachingMode do professor */}
+      {teacherId && selectedTeacher && (
+        <div className="space-y-2">
+          <Label>Modalidade *</Label>
+          <div className="flex gap-4">
+            {getModalityOptions(selectedTeacher.teachingMode).map(({ value, label }) => (
+              <label key={value} className="flex items-center gap-2 cursor-pointer">
+                <input type="radio" name="_modality" value={value}
+                  checked={modality === value}
+                  onChange={() => setModality(value)} />
+                <span className="text-sm">{label}</span>
+              </label>
+            ))}
+          </div>
+          {selectedTeacher.teachingMode === "PRESENCIAL" && modality === "ONLINE" && (
+            <p className="text-xs text-muted-foreground">
+              Este professor virá à sede e dará a aula online de uma de nossas salas.
+            </p>
+          )}
         </div>
-      </div>
+      )}
 
-      {/* Observações */}
+      {/* 6. Observações */}
       <div className="space-y-2">
         <Label>Observações (opcional)</Label>
         <Textarea value={notes} onChange={(e) => setNotes(e.target.value)}

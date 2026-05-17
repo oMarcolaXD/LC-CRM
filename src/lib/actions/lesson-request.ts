@@ -39,6 +39,11 @@ export async function approveRequestAction(
       subject: true,
     },
   })
+
+  // Professor fisicamente na sede: sempre se for PRESENCIAL, ou se for HYBRID e a aula for presencial
+  const teacherOnsite =
+    request?.teacher.teachingMode === "PRESENCIAL" ||
+    (request?.teacher.teachingMode === "HYBRID" && (modalityOverride ?? request?.modality) === "PRESENCIAL")
   if (!request) throw new Error("Solicitação não encontrada")
 
   const pkg = request.student.packages[0]
@@ -81,12 +86,13 @@ export async function approveRequestAction(
   await prisma.$transaction([
     prisma.lesson.create({
       data: {
-        studentId:   request.studentId,
-        teacherId:   request.teacherId,
-        subjectId:   request.subjectId ?? "",
-        scheduledAt: request.preferredAt,
-        modality:    finalModality,
-        status:      "CONFIRMED",
+        studentId:    request.studentId,
+        teacherId:    request.teacherId,
+        subjectId:    request.subjectId ?? "",
+        scheduledAt:  request.preferredAt,
+        modality:     finalModality,
+        status:       "CONFIRMED",
+        teacherOnsite,
       },
     }),
     prisma.lessonPackage.update({
@@ -326,16 +332,21 @@ export async function createLessonDirectAction(data: {
     prisma.subject.findUnique({ where: { id: data.subjectId } }),
   ])
 
+  const teacherOnsiteDirect =
+    teacher?.teachingMode === "PRESENCIAL" ||
+    (teacher?.teachingMode === "HYBRID" && data.modality === "PRESENCIAL")
+
   await prisma.$transaction([
     prisma.lesson.create({
       data: {
-        studentId:   data.studentId,
-        teacherId:   data.teacherId,
-        subjectId:   data.subjectId,
+        studentId:    data.studentId,
+        teacherId:    data.teacherId,
+        subjectId:    data.subjectId,
         scheduledAt,
         duration,
-        modality:    data.modality,
-        status:      "CONFIRMED",
+        modality:     data.modality,
+        status:       "CONFIRMED",
+        teacherOnsite: teacherOnsiteDirect,
       },
     }),
     prisma.lessonPackage.update({
