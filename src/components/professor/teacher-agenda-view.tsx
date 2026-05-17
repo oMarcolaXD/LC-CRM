@@ -193,19 +193,19 @@ const APP_OPTIONS: { id: App; emoji: string; label: string }[] = [
 
 const APP_STEPS: Record<App, { text: React.ReactNode }[]> = {
   google: [
-    { text: <>Clique no botão <strong>"Copiar link"</strong> acima.</> },
+    { text: <>Clique no botão <strong>&quot;Copiar link&quot;</strong> acima.</> },
     { text: <>Abra o <strong>Google Agenda</strong> no computador ou celular.</> },
-    { text: <>No menu lateral esquerdo, toque no <strong>"+"</strong> ao lado de "Outros agendas" e escolha <strong>"De URL"</strong>.</> },
-    { text: <>Cole o link copiado no campo que aparecer e clique em <strong>"Adicionar agenda"</strong>. Pronto!</> },
+    { text: <>No menu lateral esquerdo, toque no <strong>&quot;+&quot;</strong> ao lado de &quot;Outros agendas&quot; e escolha <strong>&quot;De URL&quot;</strong>.</> },
+    { text: <>Cole o link copiado no campo que aparecer e clique em <strong>&quot;Adicionar agenda&quot;</strong>. Pronto!</> },
   ],
   iphone: [
-    { text: <>Clique no botão <strong>"Baixar .ics"</strong> acima.</> },
-    { text: <>Seu iPhone vai perguntar se deseja abrir o arquivo — toque em <strong>"Permitir"</strong>.</> },
-    { text: <>Na tela seguinte, toque em <strong>"Adicionar todos"</strong> para importar as aulas para o Calendário do iPhone.</> },
+    { text: <>Clique no botão <strong>&quot;Baixar .ics&quot;</strong> acima.</> },
+    { text: <>Seu iPhone vai perguntar se deseja abrir o arquivo — toque em <strong>&quot;Permitir&quot;</strong>.</> },
+    { text: <>Na tela seguinte, toque em <strong>&quot;Adicionar todos&quot;</strong> para importar as aulas para o Calendário do iPhone.</> },
   ],
   outlook: [
-    { text: <>Clique no botão <strong>"Baixar .ics"</strong> acima.</> },
-    { text: <>O arquivo vai abrir automaticamente no Outlook. Clique em <strong>"Importar"</strong> na janela que aparecer.</> },
+    { text: <>Clique no botão <strong>&quot;Baixar .ics&quot;</strong> acima.</> },
+    { text: <>O arquivo vai abrir automaticamente no Outlook. Clique em <strong>&quot;Importar&quot;</strong> na janela que aparecer.</> },
     { text: <>As aulas serão adicionadas ao seu calendário do Outlook.</> },
   ],
 }
