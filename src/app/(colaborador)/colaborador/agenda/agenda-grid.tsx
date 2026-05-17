@@ -1406,7 +1406,7 @@ export function AgendaGrid({
               </div>
 
               {/* Corpo: horários + colunas */}
-              <div className="flex">
+              <div className="flex relative">
                 {/* Coluna de horários (sticky left) */}
                 <div
                   style={{ width: TIME_W, minWidth: TIME_W, height: TOTAL * HOUR_H }}
@@ -1500,25 +1500,6 @@ export function AgendaGrid({
                         </div>
                       )}
 
-                      {/* Linha de horário atual */}
-                      {nowTop !== null && (
-                        <div
-                          style={{ top: nowTop }}
-                          className="absolute inset-x-0 z-10 pointer-events-none"
-                        >
-                          {/* Ponto pulsante à esquerda */}
-                          <span className="absolute -left-1.5 -top-1.5 flex h-3 w-3">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-                            <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500" />
-                          </span>
-                          {/* Linha com gradiente */}
-                          <div className="h-[2px] w-full bg-gradient-to-r from-red-500 via-red-400 to-transparent" />
-                          {/* Badge com horário */}
-                          <span className="absolute left-3 -top-[10px] bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-sm shadow-red-300 leading-none">
-                            {nowLabel}
-                          </span>
-                        </div>
-                      )}
 
                       {/* Solicitações pendentes */}
                       {pendingRequests.filter(r => r.teacherId === t.id).map(req => (
@@ -1532,6 +1513,23 @@ export function AgendaGrid({
                     </div>
                   )
                 })}
+
+                {/* Linha de horário atual — única, sobre todas as colunas */}
+                {nowTop !== null && (
+                  <div
+                    style={{ top: nowTop, left: TIME_W }}
+                    className="absolute right-0 z-20 pointer-events-none"
+                  >
+                    <span className="absolute -left-1.5 -top-1.5 flex h-3 w-3">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                      <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500" />
+                    </span>
+                    <div className="h-[2px] w-full bg-gradient-to-r from-red-500 via-red-400 to-transparent" />
+                    <span className="absolute left-2 -top-[10px] bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-sm shadow-red-300 leading-none">
+                      {nowLabel}
+                    </span>
+                  </div>
+                )}
               </div>
 
             </div>
