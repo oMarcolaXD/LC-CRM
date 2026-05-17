@@ -1,7 +1,6 @@
 "use client"
 
-import { useState, useTransition } from "react"
-import { useRouter }               from "next/navigation"
+import { useState, useTransition, useEffect, useRef } from "react"
 import {
   addDays, addMonths, format, isToday, parseISO,
   startOfWeek, endOfWeek, startOfMonth, endOfMonth,
@@ -498,14 +497,23 @@ interface AgendaGridProps {
 }
 
 export function AgendaGrid({
-  date, teachers, lessons, roomCount = 3, students,
-  weekLessons, monthLessons, initialView = "day",
+  date, teachers, lessons: initialLessons, roomCount = 3, students,
+  weekLessons: initialWeekLessons, monthLessons: initialMonthLessons, initialView = "day",
 }: AgendaGridProps) {
-  const router = useRouter()
-  const parsed = parseISO(date)
+  // ── Data state (managed client-side after initial SSR) ────────────────────
+
+  const [curDate, setCurDate]       = useState(date)
+  const [isLoading, setIsLoading]   = useState(false)
+  const [lessons, setLessons]       = useState(initialLessons)
+  const [weekLessons, setWeekLessons]   = useState(initialWeekLessons ?? [])
+  const [monthLessons, setMonthLessons] = useState(initialMonthLessons ?? [])
+  const abortRef   = useRef<AbortController | null>(null)
+  const hasMounted = useRef(false)
+
+  const parsed = parseISO(curDate)
   const today  = isToday(parsed)
 
-  const [view, setView]                 = useState<ViewMode>(initialView)
+  const [view, setView]                     = useState<ViewMode>(initialView)
   const [selectedLesson, setSelectedLesson] = useState<LessonSlot | null>(null)
   const [quickSchedule,  setQuickSchedule]  = useState<{
     teacherId:   string
@@ -517,31 +525,77 @@ export function AgendaGrid({
     timeMin:   number
   } | null>(null)
 
-  // ── Navigation ────────────────────────────────────────────────────────────
+  // ── Client-side fetch ─────────────────────────────────────────────────────
+
+  const fetchData = async (d: string, v: ViewMode) => {
+    abortRef.current?.abort()
+    const ctrl = new AbortController()
+    abortRef.current = ctrl
+    setIsLoading(true)
+    try {
+      const res  = await fetch(`/api/colaborador/agenda?date=${d}&view=${v}`, { signal: ctrl.signal })
+      if (!res.ok) return
+      const data = await res.json()
+      setLessons(data.lessons)
+      setWeekLessons(v === "week"  ? data.extraLessons : [])
+      setMonthLessons(v === "month" ? data.extraLessons : [])
+    } catch (e) {
+      if ((e as Error).name !== "AbortError") console.error("agenda fetch error", e)
+    } finally {
+      if (!ctrl.signal.aborted) setIsLoading(false)
+    }
+  }
+
+  // Fetch whenever curDate or view changes (skip the initial render)
+  useEffect(() => {
+    if (!hasMounted.current) { hasMounted.current = true; return }
+    fetchData(curDate, view)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [curDate, view])
+
+  // Sync state when browser back/forward buttons are used
+  useEffect(() => {
+    const onPop = () => {
+      const sp = new URLSearchParams(window.location.search)
+      const d  = sp.get("date") ?? format(new Date(), "yyyy-MM-dd")
+      const v  = (sp.get("view") ?? "day") as ViewMode
+      setCurDate(d)
+      setView(v)
+    }
+    window.addEventListener("popstate", onPop)
+    return () => window.removeEventListener("popstate", onPop)
+  }, [])
+
+  // ── Navigation (URL via history API — no full page reload) ────────────────
+
+  const pushUrl = (d: string, v: ViewMode) => {
+    const url = new URL(window.location.href)
+    url.searchParams.set("date", d)
+    if (v !== "day") url.searchParams.set("view", v)
+    else url.searchParams.delete("view")
+    window.history.pushState({}, "", url.toString())
+  }
 
   const navigate = (delta: number) => {
-    if (view === "month") {
-      router.push(`?view=month&date=${format(addMonths(parsed, delta), "yyyy-MM-dd")}`)
-    } else if (view === "week") {
-      router.push(`?view=week&date=${format(addDays(parsed, delta * 7), "yyyy-MM-dd")}`)
-    } else {
-      router.push(`?date=${format(addDays(parsed, delta), "yyyy-MM-dd")}`)
-    }
+    const cur     = parseISO(curDate)
+    const newDate =
+      view === "month" ? format(addMonths(cur, delta), "yyyy-MM-dd") :
+      view === "week"  ? format(addDays(cur, delta * 7), "yyyy-MM-dd") :
+                         format(addDays(cur, delta), "yyyy-MM-dd")
+    setCurDate(newDate)
+    pushUrl(newDate, view)
   }
 
   const switchView = (v: ViewMode) => {
     setView(v)
     setHoveredCell(null)
-    if (v === "week")  router.push(`?view=week&date=${date}`)
-    else if (v === "month") router.push(`?view=month&date=${date}`)
-    else router.push(`?date=${date}`)
+    pushUrl(curDate, v)
   }
 
   const goToday = () => {
-    const today_ = format(new Date(), "yyyy-MM-dd")
-    if (view === "week")  router.push(`?view=week&date=${today_}`)
-    else if (view === "month") router.push(`?view=month&date=${today_}`)
-    else router.push(`?date=${today_}`)
+    const d = format(new Date(), "yyyy-MM-dd")
+    setCurDate(d)
+    pushUrl(d, view)
   }
 
   // ── Day view helpers ──────────────────────────────────────────────────────
@@ -645,7 +699,13 @@ export function AgendaGrid({
 
   return (
     <>
-      <div className="rounded-xl border border-border bg-card overflow-hidden flex flex-col">
+      <div className="rounded-xl border border-border bg-card overflow-hidden flex flex-col relative">
+        {/* Barra de progresso durante fetch */}
+        {isLoading && (
+          <div className="absolute inset-x-0 top-0 h-0.5 z-50 bg-border overflow-hidden">
+            <div className="h-full bg-primary w-1/2 animate-pulse rounded-full" />
+          </div>
+        )}
 
         {/* ── Barra de navegação ────────────────────────────── */}
         <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-border bg-muted/20 shrink-0 flex-wrap gap-y-2">
@@ -754,7 +814,7 @@ export function AgendaGrid({
                   const visible    = dayLessons.slice(0, 3)
                   const overflow   = dayLessons.length - visible.length
 
-                  const goDay = () => { switchView("day"); router.push(`?date=${dayStr}`) }
+                  const goDay = () => { setCurDate(dayStr); setView("day"); pushUrl(dayStr, "day") }
 
                   return (
                     <div
@@ -842,8 +902,9 @@ export function AgendaGrid({
                           : "bg-background/95"
                       }`}
                       onClick={() => {
+                        setCurDate(dayStr)
                         setView("day")
-                        router.push(`?date=${dayStr}`)
+                        pushUrl(dayStr, "day")
                       }}
                     >
                       <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
@@ -1086,16 +1147,16 @@ export function AgendaGrid({
         <LessonDetailModal
           lesson={selectedLesson}
           teacherName={teachers.find(t => t.id === selectedLesson.teacherId)?.name ?? ""}
-          onClose={() => setSelectedLesson(null)}
+          onClose={() => { setSelectedLesson(null); fetchData(curDate, view) }}
         />
       )}
       {quickSchedule && students && (
         <QuickScheduleModal
           schedule={quickSchedule}
-          date={date}
+          date={curDate}
           students={students}
           teachers={teachers}
-          onClose={() => setQuickSchedule(null)}
+          onClose={() => { setQuickSchedule(null); fetchData(curDate, view) }}
         />
       )}
     </>
