@@ -489,32 +489,45 @@ async function main() {
   console.log(`✅ ${repasseDefs.length} repasses (taxa R$${Math.min(...Object.values(TAXAS_PROFESSOR))}–R$${Math.max(...Object.values(TAXAS_PROFESSOR))}/aula)`)
 
   // ─── Solicitações Pendentes ────────────────────────────────────────────────
+  // Cenário 1: aluno pede presencial com prof PRESENCIAL (normal)
+  // Cenário 2: aluno pede ONLINE com prof PRESENCIAL → colaborador vê toggle "em casa / na sede"
+  // Cenário 3: aluno pede ONLINE com prof HYBRID → toggle de localização disponível
+  // Cenário 4: aluno pede com prof ONLINE_ONLY → colaborador só pode aprovar como Online
   await prisma.lessonRequest.createMany({
     data: [
       {
-        studentId: "student-7", teacherId: "teacher-4", subjectId: "sub-mat",
-        preferredAt: addHours(now, 48), status: RequestStatus.PENDING,
+        studentId: "student-7",  teacherId: "teacher-4", subjectId: "sub-mat",
+        modality:  LessonModality.PRESENCIAL,
+        preferredAt: addHours(now, 26), status: RequestStatus.PENDING,
         reason: "Preciso de reforço urgente para prova de sexta",
       },
       {
+        studentId: "student-9",  teacherId: "teacher-1", subjectId: "sub-fis",
+        modality:  LessonModality.ONLINE,
+        preferredAt: addHours(now, 27), status: RequestStatus.PENDING,
+        reason: "Prefiro online hoje, mas o professor pode ficar na sede se quiser",
+      },
+      {
         studentId: "student-11", teacherId: "teacher-3", subjectId: "sub-qui",
-        preferredAt: addHours(now, 72), status: RequestStatus.PENDING,
-        reason: "Dificuldade com reações químicas",
+        modality:  LessonModality.ONLINE,
+        preferredAt: addHours(now, 50), status: RequestStatus.PENDING,
+        reason: "Dificuldade com reações químicas — quero aula online",
       },
       {
         studentId: "student-12", teacherId: "teacher-2", subjectId: "sub-his",
-        preferredAt: addHours(now, 96), status: RequestStatus.PENDING,
-        reason: "Revisão para ENEM",
+        modality:  LessonModality.ONLINE,
+        preferredAt: addHours(now, 72), status: RequestStatus.PENDING,
+        reason: "Revisão para ENEM — Carlos é só online mesmo",
       },
     ],
   })
-  console.log("✅ 3 solicitações pendentes")
+  console.log("✅ 4 solicitações pendentes (todos os cenários de modalidade)")
 
   // ─── Notificações ──────────────────────────────────────────────────────────
   await prisma.notification.createMany({
     data: [
       { userId: "user-admin",  type: "PAYMENT_OVERDUE",  title: "Pagamentos em atraso",    message: "2 alunos com pagamentos vencidos (Thiago e Vinícius).", read: false },
-      { userId: "user-admin",  type: "LESSON_REQUEST",   title: "Novas solicitações",       message: "3 agendamentos aguardando aprovação.", read: false },
+      { userId: "user-admin",  type: "LESSON_REQUEST",   title: "Novas solicitações",       message: "4 agendamentos aguardando aprovação.", read: false },
       { userId: "user-colab1", type: "LESSON_REQUEST",   title: "Agendamento pendente",     message: "Bruno Martins solicitou aula de Matemática.", read: false },
       { userId: "user-stu1",   type: "LESSON_CONFIRMED", title: "Aula confirmada",           message: "Sua próxima aula de Matemática está confirmada.", read: false },
       { userId: "user-stu5",   type: "PACKAGE_LOW_BALANCE", title: "Saldo baixo",          message: "Você tem apenas 6 aulas restantes no pacote.", read: true },
