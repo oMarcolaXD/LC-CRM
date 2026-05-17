@@ -1,5 +1,8 @@
 'use strict'
 
+// Redireciona stderr para stdout para aparecer nos logs da Hostinger
+process.stderr.write = process.stdout.write.bind(process.stdout)
+
 const { createServer } = require('http')
 const { parse } = require('url')
 const next = require('next')
