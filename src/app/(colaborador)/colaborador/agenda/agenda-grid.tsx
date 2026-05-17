@@ -754,23 +754,23 @@ export function AgendaGrid({
                   const visible    = dayLessons.slice(0, 3)
                   const overflow   = dayLessons.length - visible.length
 
+                  const goDay = () => { switchView("day"); router.push(`?date=${dayStr}`) }
+
                   return (
                     <div
                       key={dayStr}
-                      className={`min-h-28 border-r border-border/50 last:border-r-0 flex flex-col transition-colors ${
+                      onClick={goDay}
+                      className={`min-h-28 border-r border-border/50 last:border-r-0 flex flex-col transition-colors cursor-pointer hover:bg-muted/30 ${
                         inMonth ? "bg-card" : "bg-muted/20"
                       } ${isSelected && !isCurrentDay ? "ring-1 ring-inset ring-primary/30" : ""}`}
                     >
                       {/* Número do dia */}
-                      <button
-                        className="flex items-center justify-between px-1.5 pt-1.5 pb-1 hover:bg-muted/40 transition-colors rounded-t"
-                        onClick={() => { switchView("day"); router.push(`?date=${dayStr}`) }}
-                      >
-                        <span className={`inline-flex w-6 h-6 items-center justify-center rounded-full text-xs font-bold transition-colors ${
+                      <div className="flex items-center justify-between px-1.5 pt-1.5 pb-1">
+                        <span className={`inline-flex w-6 h-6 items-center justify-center rounded-full text-xs font-bold ${
                           isCurrentDay
                             ? "bg-primary text-white"
                             : inMonth
-                            ? "text-foreground hover:bg-muted"
+                            ? "text-foreground"
                             : "text-muted-foreground/50"
                         }`}>
                           {format(day, "d")}
@@ -782,7 +782,7 @@ export function AgendaGrid({
                             {dayLessons.length}
                           </span>
                         )}
-                      </button>
+                      </div>
 
                       {/* Pills de aula */}
                       <div className="flex-1 px-1 pb-1.5 space-y-0.5">
@@ -792,7 +792,7 @@ export function AgendaGrid({
                             <button
                               key={lesson.id}
                               className={`w-full text-left rounded px-1.5 py-0.5 text-[10px] font-medium truncate transition-opacity hover:opacity-80 ${bg} ${txtCls} ${!inMonth ? "opacity-40" : ""}`}
-                              onClick={() => setSelectedLesson(lesson)}
+                              onClick={e => { e.stopPropagation(); setSelectedLesson(lesson) }}
                             >
                               {lesson.time} {lesson.studentName.split(" ")[0]}
                             </button>
@@ -801,7 +801,7 @@ export function AgendaGrid({
                         {overflow > 0 && (
                           <button
                             className="w-full text-left text-[10px] text-muted-foreground px-1.5 py-0.5 hover:bg-muted/50 rounded transition-colors"
-                            onClick={() => { switchView("day"); router.push(`?date=${dayStr}`) }}
+                            onClick={e => { e.stopPropagation(); goDay() }}
                           >
                             +{overflow} mais
                           </button>
