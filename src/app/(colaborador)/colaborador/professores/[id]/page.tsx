@@ -14,9 +14,24 @@ const MODE_DESC  = {
   HYBRID:      "Pode trabalhar de casa (online) e vir à sede (presencial/online).",
 }
 const MODES = [
-  { value: "PRESENCIAL",  label: "Presencial",          icon: <MapPin className="w-4 h-4" />   },
-  { value: "ONLINE_ONLY", label: "Só Online",           icon: <Wifi className="w-4 h-4" />     },
-  { value: "HYBRID",      label: "Presencial e Online", icon: <LayoutGrid className="w-4 h-4" /> },
+  {
+    value: "PRESENCIAL",
+    label: "Presencial",
+    desc: "Trabalha na sede. Atende alunos presencialmente e pode usar as salas para aulas online.",
+    icon: <MapPin className="w-5 h-5" />,
+  },
+  {
+    value: "ONLINE_ONLY",
+    label: "Só Online",
+    desc: "Trabalha de casa. Todas as aulas são realizadas via Google Meet ou Zoom.",
+    icon: <Wifi className="w-5 h-5" />,
+  },
+  {
+    value: "HYBRID",
+    label: "Presencial e Online",
+    desc: "Flexível. Pode atender na sede ou remotamente, conforme a demanda dos alunos.",
+    icon: <LayoutGrid className="w-5 h-5" />,
+  },
 ]
 
 interface Props {
@@ -70,27 +85,50 @@ export default async function ColabProfessorPage({ params }: Props) {
 
       {/* Modo de ensino */}
       <Card>
-        <CardHeader>
+        <CardHeader className="pb-3">
           <CardTitle className="text-base">Modalidade de Trabalho</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Selecione como este professor prefere atender os alunos.
+          </p>
         </CardHeader>
         <CardContent>
-          <form action={updateMode} className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {MODES.map(({ value, label, icon }) => (
-              <label key={value}
-                className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
-                  teacher.teachingMode === value ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"
-                }`}>
-                <input type="radio" name="teachingMode" value={value}
-                  defaultChecked={teacher.teachingMode === value}
-                  className="accent-primary" />
-                <span className="flex items-center gap-2 text-sm font-medium">
-                  {icon} {label}
-                </span>
-              </label>
-            ))}
-            <div className="sm:col-span-3 flex justify-end">
-              <button type="submit"
-                className="px-4 py-2 text-sm font-medium bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors">
+          <form action={updateMode} className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {MODES.map(({ value, label, desc, icon }) => (
+                <label key={value} className="cursor-pointer block group">
+                  <input
+                    type="radio"
+                    name="teachingMode"
+                    value={value}
+                    defaultChecked={teacher.teachingMode === value}
+                    className="peer sr-only"
+                  />
+                  <div className="h-full p-4 rounded-xl border-2 border-border transition-all
+                    peer-checked:border-primary peer-checked:bg-primary/5
+                    group-hover:border-primary/40 group-hover:bg-muted/40">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center text-muted-foreground transition-colors
+                        group-has-[input:checked]:bg-primary/10 group-has-[input:checked]:text-primary">
+                        {icon}
+                      </div>
+                      <div className="w-5 h-5 rounded-full border-2 border-muted-foreground/30 flex items-center justify-center transition-all
+                        group-has-[input:checked]:border-primary group-has-[input:checked]:bg-primary">
+                        <div className="w-2 h-2 rounded-full bg-white opacity-0 transition-opacity
+                          group-has-[input:checked]:opacity-100" />
+                      </div>
+                    </div>
+                    <p className="font-semibold text-sm mb-1
+                      group-has-[input:checked]:text-primary">{label}</p>
+                    <p className="text-xs text-muted-foreground leading-relaxed">{desc}</p>
+                  </div>
+                </label>
+              ))}
+            </div>
+            <div className="flex justify-end">
+              <button
+                type="submit"
+                className="px-5 py-2 text-sm font-medium bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
+              >
                 Salvar Modalidade
               </button>
             </div>
