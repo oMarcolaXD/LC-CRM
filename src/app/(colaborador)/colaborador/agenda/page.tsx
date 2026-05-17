@@ -1,19 +1,25 @@
 import { prisma }        from "@/lib/prisma"
 import { PageHeader }    from "@/components/shared/page-header"
 import { AgendaGrid }    from "./agenda-grid"
-import type { TeacherCol, LessonSlot, AvailSlot, StudentOption } from "./agenda-grid"
+import type {
+  TeacherCol, LessonSlot, AvailSlot, StudentOption,
+  WeekLessonSlot, ViewMode,
+} from "./agenda-grid"
 import { getRoomCount }  from "@/lib/config"
 import type { Availability } from "@/lib/availability"
-import { format, startOfDay, endOfDay, parseISO, isValid, getDay } from "date-fns"
+import {
+  format, startOfDay, endOfDay, parseISO, isValid, getDay,
+  startOfWeek, endOfWeek,
+} from "date-fns"
 import { ptBR } from "date-fns/locale"
 
 interface AgendaPageProps {
-  searchParams: Promise<{ date?: string }>
+  searchParams: Promise<{ date?: string; view?: string }>
 }
 
 function parseAvailSlots(availability: unknown, dow: number): AvailSlot[] {
   if (!availability || typeof availability !== "object") return []
-  const avail = availability as Availability
+  const avail    = availability as Availability
   const daySlots = avail[String(dow)] ?? []
   return daySlots.map(s => {
     const [sh, sm] = s.start.split(":").map(Number)
@@ -22,8 +28,36 @@ function parseAvailSlots(availability: unknown, dow: number): AvailSlot[] {
   })
 }
 
+function mapToLessonSlot(l: {
+  id: string
+  teacherId: string
+  scheduledAt: Date
+  duration: number | null
+  status: string
+  modality: string
+  teacherOnsite: boolean
+  student: { user: { name: string }; guardian: { user: { name: string } } | null }
+  subject: { name: string }
+}): LessonSlot {
+  const d   = l.scheduledAt
+  const min = d.getHours() * 60 + d.getMinutes()
+  return {
+    id:            l.id,
+    teacherId:     l.teacherId,
+    startMin:      min,
+    duration:      l.duration ?? 60,
+    status:        l.status as LessonSlot["status"],
+    modality:      l.modality as LessonSlot["modality"],
+    teacherOnsite: l.teacherOnsite,
+    time:          format(d, "HH:mm"),
+    studentName:   l.student.user.name,
+    subjectName:   l.subject.name,
+    guardianName:  l.student.guardian?.user.name ?? null,
+  }
+}
+
 export default async function ColaboradorAgendaPage({ searchParams }: AgendaPageProps) {
-  const { date: rawDate } = await searchParams
+  const { date: rawDate, view: rawView } = await searchParams
 
   const parsed   = rawDate ? parseISO(rawDate) : new Date()
   const dateObj  = isValid(parsed) ? parsed : new Date()
@@ -31,6 +65,18 @@ export default async function ColaboradorAgendaPage({ searchParams }: AgendaPage
   const dayStart = startOfDay(dateObj)
   const dayEnd   = endOfDay(dateObj)
   const dow      = getDay(dateObj)
+  const viewMode: ViewMode = rawView === "week" ? "week" : "day"
+
+  const lessonInclude = {
+    student: {
+      include: {
+        user:     true,
+        guardian: { include: { user: true } },
+      },
+    },
+    teacher: { include: { user: true } },
+    subject: true,
+  } as const
 
   const [teachers, lessons, roomCount, studentsRaw] = await Promise.all([
     prisma.teacher.findMany({
@@ -43,16 +89,7 @@ export default async function ColaboradorAgendaPage({ searchParams }: AgendaPage
     }),
     prisma.lesson.findMany({
       where:   { scheduledAt: { gte: dayStart, lte: dayEnd } },
-      include: {
-        student: {
-          include: {
-            user:     true,
-            guardian: { include: { user: true } },
-          },
-        },
-        teacher: { include: { user: true } },
-        subject: true,
-      },
+      include: lessonInclude,
       orderBy: { scheduledAt: "asc" },
     }),
     getRoomCount(),
@@ -73,6 +110,20 @@ export default async function ColaboradorAgendaPage({ searchParams }: AgendaPage
     }),
   ])
 
+  // Fetch semana inteira apenas quando necessário
+  const weekLessonsRaw = viewMode === "week"
+    ? await prisma.lesson.findMany({
+        where: {
+          scheduledAt: {
+            gte: startOfDay(startOfWeek(dateObj, { weekStartsOn: 1 })),
+            lte: endOfDay(endOfWeek(dateObj,   { weekStartsOn: 1 })),
+          },
+        },
+        include: lessonInclude,
+        orderBy: { scheduledAt: "asc" },
+      })
+    : []
+
   const teacherCols: TeacherCol[] = teachers.map(t => ({
     id:       t.id,
     name:     t.user.name,
@@ -80,23 +131,12 @@ export default async function ColaboradorAgendaPage({ searchParams }: AgendaPage
     subjects: t.subjects.map(ts => ({ id: ts.subject.id, name: ts.subject.name })),
   }))
 
-  const lessonSlots: LessonSlot[] = lessons.map(l => {
-    const d   = l.scheduledAt
-    const min = d.getHours() * 60 + d.getMinutes()
-    return {
-      id:            l.id,
-      teacherId:     l.teacherId,
-      startMin:      min,
-      duration:      l.duration ?? 60,
-      status:        l.status as LessonSlot["status"],
-      modality:      l.modality as LessonSlot["modality"],
-      teacherOnsite: l.teacherOnsite,
-      time:          format(d, "HH:mm"),
-      studentName:   l.student.user.name,
-      subjectName:   l.subject.name,
-      guardianName:  l.student.guardian?.user.name ?? null,
-    }
-  })
+  const lessonSlots: LessonSlot[] = lessons.map(mapToLessonSlot)
+
+  const weekLessons: WeekLessonSlot[] = weekLessonsRaw.map(l => ({
+    ...mapToLessonSlot(l),
+    date: format(l.scheduledAt, "yyyy-MM-dd"),
+  }))
 
   const students: StudentOption[] = studentsRaw.map(s => ({
     id:               s.id,
@@ -118,6 +158,8 @@ export default async function ColaboradorAgendaPage({ searchParams }: AgendaPage
         lessons={lessonSlots}
         roomCount={roomCount}
         students={students}
+        weekLessons={weekLessons}
+        initialView={viewMode}
       />
     </div>
   )

@@ -2,10 +2,10 @@
 
 import { useState, useTransition } from "react"
 import { useRouter }               from "next/navigation"
-import { addDays, format, isToday, parseISO } from "date-fns"
+import { addDays, format, isToday, parseISO, startOfWeek } from "date-fns"
 import { ptBR }                    from "date-fns/locale"
 import {
-  ChevronLeft, ChevronRight, CalendarDays,
+  ChevronLeft, ChevronRight, CalendarDays, CalendarRange,
   CheckCircle2, XCircle, UserX, MessageCircle,
   Loader2, Wifi, MapPin, Clock, Plus, Building2, Home,
 } from "lucide-react"
@@ -31,6 +31,7 @@ const px = (min: number) => (min / 60) * HOUR_H
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
+export type ViewMode = "day" | "week"
 type LessonStatus = "SCHEDULED" | "CONFIRMED" | "COMPLETED" | "CANCELLED" | "MISSED"
 
 const STATUS_STYLE: Record<LessonStatus, { bg: string; text: string; border: string }> = {
@@ -49,7 +50,7 @@ const STATUS_LABEL: Record<LessonStatus, string> = {
   MISSED:    "Faltou",
 }
 
-export interface AvailSlot   { start: number; end: number }
+export interface AvailSlot    { start: number; end: number }
 export interface StudentOption { id: string; name: string; remainingLessons: number }
 export interface SubjectOption { id: string; name: string }
 
@@ -72,6 +73,10 @@ export interface LessonSlot {
   studentName:   string
   subjectName:   string
   guardianName:  string | null
+}
+
+export interface WeekLessonSlot extends LessonSlot {
+  date: string // "yyyy-MM-dd"
 }
 
 // ─── Modal: detalhes de aula ─────────────────────────────────────────────────
@@ -462,27 +467,54 @@ function LessonBlock({
 // ─── Grade principal ──────────────────────────────────────────────────────────
 
 interface AgendaGridProps {
-  date:       string
-  teachers:   TeacherCol[]
-  lessons:    LessonSlot[]
-  roomCount?: number
-  students?:  StudentOption[]
+  date:         string
+  teachers:     TeacherCol[]
+  lessons:      LessonSlot[]
+  roomCount?:   number
+  students?:    StudentOption[]
+  weekLessons?: WeekLessonSlot[]
+  initialView?: ViewMode
 }
 
-export function AgendaGrid({ date, teachers, lessons, roomCount = 3, students }: AgendaGridProps) {
+export function AgendaGrid({
+  date, teachers, lessons, roomCount = 3, students,
+  weekLessons, initialView = "day",
+}: AgendaGridProps) {
   const router = useRouter()
   const parsed = parseISO(date)
   const today  = isToday(parsed)
 
+  const [view, setView]                 = useState<ViewMode>(initialView)
   const [selectedLesson, setSelectedLesson] = useState<LessonSlot | null>(null)
   const [quickSchedule,  setQuickSchedule]  = useState<{
     teacherId:   string
     teacherName: string
     time:        string
   } | null>(null)
+  const [hoveredCell, setHoveredCell] = useState<{
+    teacherId: string
+    timeMin:   number
+  } | null>(null)
 
-  const navigate = (delta: number) =>
-    router.push(`?date=${format(addDays(parsed, delta), "yyyy-MM-dd")}`)
+  // ── Navigation ────────────────────────────────────────────────────────────
+
+  const navigate = (delta: number) => {
+    const step  = view === "week" ? delta * 7 : delta
+    const param = view === "week" ? `view=week&date=` : `date=`
+    router.push(`?${param}${format(addDays(parsed, step), "yyyy-MM-dd")}`)
+  }
+
+  const switchView = (v: ViewMode) => {
+    setView(v)
+    setHoveredCell(null)
+    if (v === "week") {
+      router.push(`?view=week&date=${date}`)
+    } else {
+      router.push(`?date=${date}`)
+    }
+  }
+
+  // ── Day view helpers ──────────────────────────────────────────────────────
 
   const now    = new Date()
   const nowMin = now.getHours() * 60 + now.getMinutes()
@@ -502,6 +534,31 @@ export function AgendaGrid({ date, teachers, lessons, roomCount = 3, students }:
       const lEnd = l.startMin + l.duration
       return l.startMin < slotEnd && lEnd > slotStart
     }).length
+  }
+
+  const handleMouseMove = (t: TeacherCol, e: React.MouseEvent<HTMLDivElement>) => {
+    if (!students?.length || !t.slots.length) {
+      setHoveredCell(null)
+      return
+    }
+    if ((e.target as HTMLElement).closest("[data-lesson]")) {
+      setHoveredCell(null)
+      return
+    }
+    const rect    = e.currentTarget.getBoundingClientRect()
+    const y       = e.clientY - rect.top
+    const snapped = Math.round((START * 60 + (y / HOUR_H) * 60) / 30) * 30
+
+    if (snapped < START * 60 || snapped + 60 > END * 60) {
+      setHoveredCell(null)
+      return
+    }
+
+    const avail = t.slots.some(s => snapped >= s.start && snapped + 60 <= s.end)
+    const taken = byTeacher(t.id).some(
+      l => snapped < l.startMin + l.duration && snapped + 60 > l.startMin
+    )
+    setHoveredCell(avail && !taken ? { teacherId: t.id, timeMin: snapped } : null)
   }
 
   const handleColumnClick = (t: TeacherCol, e: React.MouseEvent<HTMLDivElement>) => {
@@ -524,41 +581,102 @@ export function AgendaGrid({ date, teachers, lessons, roomCount = 3, students }:
     setQuickSchedule({ teacherId: t.id, teacherName: t.name, time })
   }
 
+  // ── Week view helpers ─────────────────────────────────────────────────────
+
+  const weekStart = startOfWeek(parsed, { weekStartsOn: 1 })
+  const weekDays  = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
+
+  const weekLabel = (() => {
+    const from = format(weekStart, "dd/MM", { locale: ptBR })
+    const to   = format(addDays(weekStart, 6), "dd/MM/yyyy", { locale: ptBR })
+    return `${from} – ${to}`
+  })()
+
   const totalW = TIME_W + teachers.length * COL_W
+
+  // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <>
       <div className="rounded-xl border border-border bg-card overflow-hidden flex flex-col">
 
-        {/* ── Navegação de data ─────────────────────────────── */}
-        <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-border bg-muted/20 shrink-0">
-          <div className="flex items-center gap-1.5">
-            <Button size="sm" variant="outline" onClick={() => navigate(-1)} className="h-7 w-7 p-0">
-              <ChevronLeft className="w-4 h-4" />
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => navigate(1)} className="h-7 w-7 p-0">
-              <ChevronRight className="w-4 h-4" />
-            </Button>
-            {!today && (
-              <Button size="sm" variant="outline" className="h-7 text-xs"
-                onClick={() => router.push(`?date=${format(new Date(), "yyyy-MM-dd")}`)}>
-                Hoje
-              </Button>
-            )}
-          </div>
+        {/* ── Barra de navegação ────────────────────────────── */}
+        <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-border bg-muted/20 shrink-0 flex-wrap gap-y-2">
 
+          {/* Esquerda: setas + hoje + toggle de visualização */}
           <div className="flex items-center gap-2">
-            <CalendarDays className="w-4 h-4 text-primary" />
-            <p className="text-sm font-semibold capitalize">
-              {format(parsed, "EEEE, dd 'de' MMMM", { locale: ptBR })}
-            </p>
-            {today && (
-              <span className="text-[11px] bg-primary text-white px-2 py-0.5 rounded-full font-medium">Hoje</span>
+            <div className="flex items-center gap-1">
+              <Button size="sm" variant="outline" onClick={() => navigate(-1)} className="h-7 w-7 p-0">
+                <ChevronLeft className="w-4 h-4" />
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => navigate(1)} className="h-7 w-7 p-0">
+                <ChevronRight className="w-4 h-4" />
+              </Button>
+              {(!today || view === "week") && (
+                <Button
+                  size="sm" variant="outline" className="h-7 text-xs"
+                  onClick={() => router.push(view === "week"
+                    ? `?view=week&date=${format(new Date(), "yyyy-MM-dd")}`
+                    : `?date=${format(new Date(), "yyyy-MM-dd")}`
+                  )}
+                >
+                  Hoje
+                </Button>
+              )}
+            </div>
+
+            {/* Toggle Dia / Semana */}
+            <div className="flex items-center rounded-lg border border-border overflow-hidden h-7">
+              <button
+                onClick={() => switchView("day")}
+                className={`flex items-center gap-1.5 px-2.5 h-full text-xs font-medium transition-colors ${
+                  view === "day"
+                    ? "bg-primary text-white"
+                    : "text-muted-foreground hover:bg-muted/50 bg-background"
+                }`}
+              >
+                <CalendarDays className="w-3.5 h-3.5" />
+                Dia
+              </button>
+              <button
+                onClick={() => switchView("week")}
+                className={`flex items-center gap-1.5 px-2.5 h-full text-xs font-medium transition-colors border-l border-border ${
+                  view === "week"
+                    ? "bg-primary text-white"
+                    : "text-muted-foreground hover:bg-muted/50 bg-background"
+                }`}
+              >
+                <CalendarRange className="w-3.5 h-3.5" />
+                Semana
+              </button>
+            </div>
+          </div>
+
+          {/* Centro: data */}
+          <div className="flex items-center gap-2">
+            {view === "week" ? (
+              <p className="text-sm font-semibold">{weekLabel}</p>
+            ) : (
+              <>
+                <CalendarDays className="w-4 h-4 text-primary" />
+                <p className="text-sm font-semibold capitalize">
+                  {format(parsed, "EEEE, dd 'de' MMMM", { locale: ptBR })}
+                </p>
+                {today && (
+                  <span className="text-[11px] bg-primary text-white px-2 py-0.5 rounded-full font-medium">Hoje</span>
+                )}
+              </>
             )}
           </div>
 
+          {/* Direita: contagem + legenda */}
           <div className="flex items-center gap-3 text-xs text-muted-foreground">
-            <span>{lessons.length} aula{lessons.length !== 1 ? "s" : ""}</span>
+            <span>
+              {view === "week"
+                ? `${(weekLessons ?? []).length} aula${(weekLessons ?? []).length !== 1 ? "s" : ""} na semana`
+                : `${lessons.length} aula${lessons.length !== 1 ? "s" : ""}`
+              }
+            </span>
             <div className="hidden sm:flex items-center gap-2">
               {(["CONFIRMED", "SCHEDULED", "COMPLETED"] as LessonStatus[]).map(s => (
                 <span key={s} className="flex items-center gap-1">
@@ -570,154 +688,263 @@ export function AgendaGrid({ date, teachers, lessons, roomCount = 3, students }:
           </div>
         </div>
 
-        {/* ── Grid com scroll 2D ────────────────────────────── */}
-        <div className="overflow-auto" style={{ maxHeight: "calc(100vh - 240px)" }}>
-          <div style={{ minWidth: totalW }}>
+        {/* ── VISUALIZAÇÃO: SEMANA ─────────────────────────── */}
+        {view === "week" && (
+          <div className="overflow-auto" style={{ maxHeight: "calc(100vh - 240px)" }}>
+            <div className="grid" style={{ gridTemplateColumns: `repeat(7, minmax(130px, 1fr))`, minWidth: 910 }}>
+              {weekDays.map(day => {
+                const dayStr    = format(day, "yyyy-MM-dd")
+                const isCurrentDay = isToday(day)
+                const isActiveDay  = dayStr === date
+                const dayLessons   = (weekLessons ?? [])
+                  .filter(l => l.date === dayStr)
+                  .sort((a, b) => a.startMin - b.startMin)
 
-            {/* Cabeçalho de professores (sticky top) */}
-            <div className="sticky top-0 z-20 flex border-b border-border bg-background/95 backdrop-blur-sm">
-              <div
-                style={{ width: TIME_W, minWidth: TIME_W }}
-                className="sticky left-0 z-30 bg-background/95 border-r border-border shrink-0 flex flex-col items-center justify-end pb-1.5">
-                <span className="text-[9px] text-muted-foreground leading-tight">Salas</span>
-                <span className="text-[10px] font-bold text-primary">{roomCount}</span>
-              </div>
-              {teachers.map(t => {
-                const count     = byTeacher(t.id).length
-                const available = t.slots.length > 0
                 return (
                   <div
-                    key={t.id}
-                    style={{ width: COL_W, minWidth: COL_W }}
-                    className={`px-2 py-2 text-center border-l border-border ${
-                      !available ? "bg-muted/20" : ""
+                    key={dayStr}
+                    className={`flex flex-col border-l border-border/50 first:border-l-0 ${
+                      isActiveDay ? "bg-primary/[0.03]" : ""
                     }`}
                   >
-                    <p className="text-xs font-semibold truncate">{t.name.split(" ")[0]}
-                      <span className="hidden lg:inline"> {t.name.split(" ").slice(1).join(" ")}</span>
-                    </p>
-                    <div className="flex items-center justify-center gap-1.5 mt-0.5">
-                      <span className="text-[10px] text-muted-foreground">
-                        {count} aula{count !== 1 ? "s" : ""}
+                    {/* Cabeçalho do dia */}
+                    <button
+                      className={`sticky top-0 z-10 flex flex-col items-center px-2 py-2.5 border-b border-border backdrop-blur-sm transition-colors hover:bg-muted/40 ${
+                        isCurrentDay
+                          ? "bg-primary/10"
+                          : "bg-background/95"
+                      }`}
+                      onClick={() => {
+                        setView("day")
+                        router.push(`?date=${dayStr}`)
+                      }}
+                    >
+                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground capitalize">
+                        {format(day, "EEE", { locale: ptBR })}
+                      </p>
+                      <p className={`text-2xl font-bold leading-tight ${isCurrentDay ? "text-primary" : ""}`}>
+                        {format(day, "d")}
+                      </p>
+                      <span className={`inline-flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 rounded-full mt-0.5 font-medium ${
+                        dayLessons.length > 0
+                          ? "bg-primary/15 text-primary"
+                          : "text-muted-foreground/40"
+                      }`}>
+                        {dayLessons.length > 0 ? dayLessons.length : "—"}
+                        {dayLessons.length > 0 && (dayLessons.length === 1 ? " aula" : " aulas")}
                       </span>
-                      {available ? (
-                        <span className="text-[9px] bg-emerald-100 text-emerald-700 px-1 py-0.5 rounded-full font-medium">
-                          disponível
-                        </span>
+                    </button>
+
+                    {/* Lista de aulas do dia */}
+                    <div className="flex-1 p-1.5 space-y-1 min-h-48">
+                      {dayLessons.length === 0 ? (
+                        <div className="flex items-center justify-center h-20">
+                          <span className="text-[10px] text-muted-foreground/30">sem aulas</span>
+                        </div>
                       ) : (
-                        <span className="text-[9px] bg-muted text-muted-foreground px-1 py-0.5 rounded-full">
-                          indisponível
-                        </span>
+                        dayLessons.map(lesson => {
+                          const tName = teachers.find(t => t.id === lesson.teacherId)?.name ?? ""
+                          const { bg, text: txtCls } = STATUS_STYLE[lesson.status]
+                          return (
+                            <button
+                              key={lesson.id}
+                              className={`w-full text-left rounded-md px-2 py-1.5 transition-opacity hover:opacity-80 active:opacity-60 ${bg} ${txtCls}`}
+                              onClick={() => setSelectedLesson(lesson)}
+                            >
+                              <p className="text-[11px] font-bold">{lesson.time}</p>
+                              <p className="text-[11px] font-semibold truncate">
+                                {lesson.studentName.split(" ")[0]}
+                                {lesson.studentName.split(" ")[1] && (
+                                  <span className="opacity-80"> {lesson.studentName.split(" ")[1][0]}.</span>
+                                )}
+                              </p>
+                              <p className="text-[9px] opacity-75 truncate">
+                                {tName.split(" ")[0]} · {lesson.subjectName}
+                              </p>
+                            </button>
+                          )
+                        })
                       )}
                     </div>
-                    {available && (
-                      <div className="flex gap-0.5 justify-center mt-1">
-                        {t.slots.map((s, i) => (
-                          <span key={i} className="text-[8px] text-emerald-600 font-medium">
-                            {String(Math.floor(s.start / 60)).padStart(2, "0")}–{String(Math.floor(s.end / 60)).padStart(2, "0")}
-                          </span>
-                        ))}
-                      </div>
-                    )}
                   </div>
                 )
               })}
             </div>
+          </div>
+        )}
 
-            {/* Corpo: horários + colunas */}
-            <div className="flex">
-              {/* Coluna de horários (sticky left) */}
-              <div
-                style={{ width: TIME_W, minWidth: TIME_W, height: TOTAL * HOUR_H }}
-                className="sticky left-0 z-10 bg-background border-r border-border shrink-0"
-              >
-                {hours.map(h => {
-                  const used = roomUsage(h)
-                  const full = used >= roomCount
-                  const warn = used === roomCount - 1
+        {/* ── VISUALIZAÇÃO: DIA ────────────────────────────── */}
+        {view === "day" && (
+          <div className="overflow-auto" style={{ maxHeight: "calc(100vh - 240px)" }}>
+            <div style={{ minWidth: totalW }}>
+
+              {/* Cabeçalho de professores (sticky top) */}
+              <div className="sticky top-0 z-20 flex border-b border-border bg-background/95 backdrop-blur-sm">
+                <div
+                  style={{ width: TIME_W, minWidth: TIME_W }}
+                  className="sticky left-0 z-30 bg-background/95 border-r border-border shrink-0 flex flex-col items-center justify-end pb-1.5">
+                  <span className="text-[9px] text-muted-foreground leading-tight">Salas</span>
+                  <span className="text-[10px] font-bold text-primary">{roomCount}</span>
+                </div>
+                {teachers.map(t => {
+                  const count     = byTeacher(t.id).length
+                  const available = t.slots.length > 0
                   return (
-                    <div key={h} style={{ height: HOUR_H }}
-                      className={`flex flex-col items-end justify-start pr-1.5 pt-1 border-b border-border/30 ${
-                        full ? "bg-red-50/60 dark:bg-red-950/20" :
-                        warn ? "bg-yellow-50/60 dark:bg-yellow-950/20" : ""
-                      }`}>
-                      <span className="text-[11px] text-muted-foreground tabular-nums">
-                        {String(h).padStart(2, "0")}:00
-                      </span>
-                      {used > 0 && (
-                        <span className={`text-[9px] tabular-nums font-medium leading-tight ${
-                          full ? "text-red-600" : warn ? "text-yellow-600" : "text-muted-foreground/60"
-                        }`}>
-                          {used}/{roomCount}
+                    <div
+                      key={t.id}
+                      style={{ width: COL_W, minWidth: COL_W }}
+                      className={`px-2 py-2 text-center border-l border-border ${
+                        !available ? "bg-muted/20" : ""
+                      }`}
+                    >
+                      <p className="text-xs font-semibold truncate">{t.name.split(" ")[0]}
+                        <span className="hidden lg:inline"> {t.name.split(" ").slice(1).join(" ")}</span>
+                      </p>
+                      <div className="flex items-center justify-center gap-1.5 mt-0.5">
+                        <span className="text-[10px] text-muted-foreground">
+                          {count} aula{count !== 1 ? "s" : ""}
                         </span>
+                        {available ? (
+                          <span className="text-[9px] bg-emerald-100 text-emerald-700 px-1 py-0.5 rounded-full font-medium">
+                            disponível
+                          </span>
+                        ) : (
+                          <span className="text-[9px] bg-muted text-muted-foreground px-1 py-0.5 rounded-full">
+                            indisponível
+                          </span>
+                        )}
+                      </div>
+                      {available && (
+                        <div className="flex gap-0.5 justify-center mt-1">
+                          {t.slots.map((s, i) => (
+                            <span key={i} className="text-[8px] text-emerald-600 font-medium">
+                              {String(Math.floor(s.start / 60)).padStart(2, "0")}–{String(Math.floor(s.end / 60)).padStart(2, "0")}
+                            </span>
+                          ))}
+                        </div>
                       )}
                     </div>
                   )
                 })}
               </div>
 
-              {/* Colunas dos professores */}
-              {teachers.map((t, colIdx) => {
-                const hasAvailToday = t.slots.length > 0
-                const canSchedule   = hasAvailToday && !!students?.length
-                return (
-                  <div
-                    key={t.id}
-                    style={{ width: COL_W, minWidth: COL_W, height: TOTAL * HOUR_H }}
-                    className={`relative ${colIdx > 0 ? "border-l border-border/50" : ""} ${
-                      !hasAvailToday ? "bg-muted/25" : ""
-                    } ${canSchedule ? "cursor-cell" : "cursor-default"}`}
-                    onClick={(e) => handleColumnClick(t, e)}
-                  >
-                    {/* Blocos de disponibilidade (fundo verde) */}
-                    {t.slots.map((slot, i) => {
-                      const top    = px(slot.start - START * 60)
-                      const height = px(slot.end - slot.start)
-                      if (top < 0 || height <= 0) return null
-                      return (
-                        <div key={i}
-                          style={{ top, height, left: 0, right: 0 }}
-                          className="absolute bg-emerald-50/70 dark:bg-emerald-950/20 pointer-events-none z-0"
-                        />
-                      )
-                    })}
-
-                    {/* Linhas de hora cheia */}
-                    {hours.map(h => (
-                      <div key={h}
-                        style={{ top: (h - START) * HOUR_H }}
-                        className="absolute inset-x-0 border-t border-border/30 pointer-events-none z-1"
-                      />
-                    ))}
-                    {/* Linhas de meia hora (tracejadas) */}
-                    {hours.map(h => (
-                      <div key={`hh${h}`}
-                        style={{ top: (h - START) * HOUR_H + HOUR_H / 2 }}
-                        className="absolute inset-x-0 border-t border-border/15 border-dashed pointer-events-none z-1"
-                      />
-                    ))}
-
-                    {/* Linha de horário atual */}
-                    {nowTop !== null && (
-                      <div
-                        style={{ top: nowTop }}
-                        className="absolute inset-x-0 border-t-2 border-red-500 z-10 pointer-events-none"
-                      >
-                        <span className="absolute -left-1 -top-1 w-2 h-2 rounded-full bg-red-500" />
+              {/* Corpo: horários + colunas */}
+              <div className="flex">
+                {/* Coluna de horários (sticky left) */}
+                <div
+                  style={{ width: TIME_W, minWidth: TIME_W, height: TOTAL * HOUR_H }}
+                  className="sticky left-0 z-10 bg-background border-r border-border shrink-0"
+                >
+                  {hours.map(h => {
+                    const used = roomUsage(h)
+                    const full = used >= roomCount
+                    const warn = used === roomCount - 1
+                    return (
+                      <div key={h} style={{ height: HOUR_H }}
+                        className={`flex flex-col items-end justify-start pr-1.5 pt-1 border-b border-border/30 ${
+                          full ? "bg-red-50/60 dark:bg-red-950/20" :
+                          warn ? "bg-yellow-50/60 dark:bg-yellow-950/20" : ""
+                        }`}>
+                        <span className="text-[11px] text-muted-foreground tabular-nums">
+                          {String(h).padStart(2, "0")}:00
+                        </span>
+                        {used > 0 && (
+                          <span className={`text-[9px] tabular-nums font-medium leading-tight ${
+                            full ? "text-red-600" : warn ? "text-yellow-600" : "text-muted-foreground/60"
+                          }`}>
+                            {used}/{roomCount}
+                          </span>
+                        )}
                       </div>
-                    )}
+                    )
+                  })}
+                </div>
 
-                    {/* Blocos de aula */}
-                    {byTeacher(t.id).map(lesson => (
-                      <LessonBlock key={lesson.id} lesson={lesson} onSelect={setSelectedLesson} />
-                    ))}
-                  </div>
-                )
-              })}
+                {/* Colunas dos professores */}
+                {teachers.map((t, colIdx) => {
+                  const hasAvailToday = t.slots.length > 0
+                  const canSchedule   = hasAvailToday && !!students?.length
+                  const ghostTime     = hoveredCell?.teacherId === t.id
+                    ? `${String(Math.floor(hoveredCell.timeMin / 60)).padStart(2, "0")}:${String(hoveredCell.timeMin % 60).padStart(2, "0")}`
+                    : null
+
+                  return (
+                    <div
+                      key={t.id}
+                      style={{ width: COL_W, minWidth: COL_W, height: TOTAL * HOUR_H }}
+                      className={`relative ${colIdx > 0 ? "border-l border-border/50" : ""} ${
+                        !hasAvailToday ? "bg-muted/25" : ""
+                      } ${canSchedule ? "cursor-cell" : "cursor-default"}`}
+                      onMouseMove={(e) => handleMouseMove(t, e)}
+                      onMouseLeave={() => setHoveredCell(null)}
+                      onClick={(e) => handleColumnClick(t, e)}
+                    >
+                      {/* Disponibilidade (fundo verde) */}
+                      {t.slots.map((slot, i) => {
+                        const top    = px(slot.start - START * 60)
+                        const height = px(slot.end - slot.start)
+                        if (top < 0 || height <= 0) return null
+                        return (
+                          <div key={i}
+                            style={{ top, height, left: 0, right: 0 }}
+                            className="absolute bg-emerald-50/70 dark:bg-emerald-950/20 pointer-events-none z-0"
+                          />
+                        )
+                      })}
+
+                      {/* Linhas de hora */}
+                      {hours.map(h => (
+                        <div key={h}
+                          style={{ top: (h - START) * HOUR_H }}
+                          className="absolute inset-x-0 border-t border-border/30 pointer-events-none z-[1]"
+                        />
+                      ))}
+                      {hours.map(h => (
+                        <div key={`hh${h}`}
+                          style={{ top: (h - START) * HOUR_H + HOUR_H / 2 }}
+                          className="absolute inset-x-0 border-t border-border/15 border-dashed pointer-events-none z-[1]"
+                        />
+                      ))}
+
+                      {/* Ghost block — preview de horário ao hover */}
+                      {ghostTime && (
+                        <div
+                          style={{
+                            top:    px(hoveredCell!.timeMin - START * 60),
+                            height: px(60),
+                            left:   3,
+                            right:  3,
+                          }}
+                          className="absolute rounded-lg border-2 border-dashed border-primary/70 bg-primary/10 pointer-events-none z-[5] flex flex-col items-center justify-center gap-0.5 select-none"
+                        >
+                          <Plus className="w-3.5 h-3.5 text-primary/60" />
+                          <span className="text-[12px] font-bold text-primary">{ghostTime}</span>
+                          <span className="text-[9px] text-primary/60">clique para agendar</span>
+                        </div>
+                      )}
+
+                      {/* Linha de horário atual */}
+                      {nowTop !== null && (
+                        <div
+                          style={{ top: nowTop }}
+                          className="absolute inset-x-0 border-t-2 border-red-500 z-10 pointer-events-none"
+                        >
+                          <span className="absolute -left-1 -top-1 w-2 h-2 rounded-full bg-red-500" />
+                        </div>
+                      )}
+
+                      {/* Blocos de aula */}
+                      {byTeacher(t.id).map(lesson => (
+                        <LessonBlock key={lesson.id} lesson={lesson} onSelect={setSelectedLesson} />
+                      ))}
+                    </div>
+                  )
+                })}
+              </div>
+
             </div>
-
           </div>
-        </div>
+        )}
 
         {teachers.length === 0 && (
           <div className="flex flex-col items-center justify-center py-16 text-center gap-2">

@@ -1,4 +1,18 @@
 {
+  "permissions": {
+    "allow": [
+      "PowerShell(\\(Get-Content \"c:\\\\Users\\\\licaodecasa_nprata\\\\Documents\\\\LC\\(CRM\\)\\\\src\\\\app\\\\\\(colaborador\\)\\\\colaborador\\\\agenda\\\\page.tsx\" | Measure-Object -Line\\).Lines)",
+      "PowerShell(\\(Get-Content \"c:\\\\Users\\\\licaodecasa_nprata\\\\Documents\\\\LC\\(CRM\\)\\\\src\\\\app\\\\\\(colaborador\\)\\\\colaborador\\\\agenda\\\\agenda-grid.tsx\" | Measure-Object -Line\\).Lines)",
+      "PowerShell(\\(Get-Content \"c:\\\\Users\\\\licaodecasa_nprata\\\\Documents\\\\LC\\(CRM\\)\\\\src\\\\app\\\\\\(colaborador\\)\\\\colaborador\\\\agenda\\\\lesson-actions.tsx\" | Measure-Object -Line\\).Lines)",
+      "PowerShell(\\(Get-Content \"c:\\\\Users\\\\licaodecasa_nprata\\\\Documents\\\\LC\\(CRM\\)\\\\src\\\\app\\\\\\(colaborador\\)\\\\colaborador\\\\agendamentos\\\\page.tsx\" | Measure-Object -Line\\).Lines)",
+      "PowerShell(\\(Get-Content \"c:\\\\Users\\\\licaodecasa_nprata\\\\Documents\\\\LC\\(CRM\\)\\\\src\\\\lib\\\\actions\\\\lesson-request.ts\" | Measure-Object -Line\\).Lines)",
+      "PowerShell(\\(Get-Content \"c:\\\\Users\\\\licaodecasa_nprata\\\\Documents\\\\LC\\(CRM\\)\\\\src\\\\lib\\\\actions\\\\colaborador.ts\" | Measure-Object -Line\\).Lines)",
+      "PowerShell(\\(Get-Content \"c:\\\\Users\\\\licaodecasa_nprata\\\\Documents\\\\LC\\(CRM\\)\\\\src\\\\components\\\\shared\\\\request-card.tsx\" | Measure-Object -Line\\).Lines)"
+    ],
+    "additionalDirectories": [
+      "c:\\Users\\licaodecasa_nprata\\Documents\\LC(CRM)\\src\\app\\(colaborador)\\colaborador\\professores"
+    ]
+  },
   "hooks": {
     "Stop": [
       {
@@ -11,11 +25,6 @@
           }
         ]
       }
-    ]
-  },
-  "permissions": {
-    "additionalDirectories": [
-      "c:\\Users\\licaodecasa_nprata\\Documents\\LC(CRM)\\src\\app\\(colaborador)\\colaborador\\professores"
     ]
   }
 }
