@@ -23,6 +23,7 @@ async function requireCollaboratorOrAdmin() {
 export async function approveRequestAction(
   requestId: string,
   modalityOverride?: "PRESENCIAL" | "ONLINE",
+  teacherOnsiteOverride?: boolean,
 ) {
   const session = await requireCollaboratorOrAdmin()
 
@@ -39,11 +40,6 @@ export async function approveRequestAction(
       subject: true,
     },
   })
-
-  // Professor fisicamente na sede: sempre se for PRESENCIAL, ou se for HYBRID e a aula for presencial
-  const teacherOnsite =
-    request?.teacher.teachingMode === "PRESENCIAL" ||
-    (request?.teacher.teachingMode === "HYBRID" && (modalityOverride ?? request?.modality) === "PRESENCIAL")
   if (!request) throw new Error("Solicitação não encontrada")
 
   const pkg = request.student.packages[0]
@@ -52,26 +48,43 @@ export async function approveRequestAction(
   // Modalidade final: override do colaborador > modality do request > PRESENCIAL
   const finalModality = modalityOverride ?? request.modality ?? "PRESENCIAL"
 
+  // Localização do professor:
+  // - Presencial → sempre na sede
+  // - Online + ONLINE_ONLY → sempre em casa
+  // - Online + PRESENCIAL/HYBRID → usa override do colaborador (padrão: em casa)
+  let teacherOnsite: boolean
+  if (finalModality === "PRESENCIAL") {
+    teacherOnsite = true
+  } else if (request.teacher.teachingMode === "ONLINE_ONLY") {
+    teacherOnsite = false
+  } else {
+    teacherOnsite = teacherOnsiteOverride ?? false
+  }
+
   const isHistorical = request.preferredAt < new Date()
 
-  // ── Verificação de salas (apenas aulas futuras presenciais) ──────────────────
-  if (!isHistorical && finalModality === "PRESENCIAL") {
+  // ── Verificação de salas: presencial OU online com professor na sede ─────────
+  const occupiesRoom = finalModality === "PRESENCIAL" || (finalModality === "ONLINE" && teacherOnsite)
+  if (!isHistorical && occupiesRoom) {
     const roomCount  = await getRoomCount()
     const reqStart   = request.preferredAt.getTime()
     const reqEnd     = reqStart + 60 * 60_000
     const dayStart   = startOfDay(request.preferredAt)
     const dayEnd     = endOfDay(request.preferredAt)
 
-    const presencialLessons = await prisma.lesson.findMany({
+    const roomLessons = await prisma.lesson.findMany({
       where: {
-        modality:    "PRESENCIAL",
+        OR: [
+          { modality: "PRESENCIAL" },
+          { modality: "ONLINE", teacherOnsite: true },
+        ],
         status:      { in: ["CONFIRMED", "SCHEDULED"] },
         scheduledAt: { gte: dayStart, lte: dayEnd },
       },
       select: { scheduledAt: true, duration: true },
     })
 
-    const conflicts = presencialLessons.filter((l) => {
+    const conflicts = roomLessons.filter((l) => {
       const lStart = l.scheduledAt.getTime()
       const lEnd   = lStart + (l.duration ?? 60) * 60_000
       return lStart < reqEnd && lEnd > reqStart
@@ -80,7 +93,7 @@ export async function approveRequestAction(
     if (conflicts.length >= roomCount) {
       throw new Error(
         `Todas as ${roomCount} sala${roomCount !== 1 ? "s" : ""} estão ocupadas neste horário. ` +
-        `Altere para ONLINE para aprovar mesmo assim.`
+        `Altere para ONLINE (em casa) para aprovar mesmo assim.`
       )
     }
   }
@@ -251,13 +264,14 @@ export async function updateLessonStatusAction(
 // ─── Criar aula diretamente (sem solicitação) ─────────────────────────────────
 
 export async function createLessonDirectAction(data: {
-  teacherId:  string
-  studentId:  string
-  subjectId:  string
-  date:       string  // "YYYY-MM-DD"
-  time:       string  // "HH:mm"
-  modality:   "PRESENCIAL" | "ONLINE"
-  duration?:  number
+  teacherId:     string
+  studentId:     string
+  subjectId:     string
+  date:          string  // "YYYY-MM-DD"
+  time:          string  // "HH:mm"
+  modality:      "PRESENCIAL" | "ONLINE"
+  duration?:     number
+  teacherOnsite?: boolean  // override explícito para aulas online
 }) {
   await requireCollaboratorOrAdmin()
 
@@ -285,22 +299,26 @@ export async function createLessonDirectAction(data: {
   const dayEnd   = endOfDay(scheduledAt)
 
   if (!isHistorical) {
-    // Verificação de salas presenciais (apenas para aulas futuras)
-    if (data.modality === "PRESENCIAL") {
+    // Verificação de salas: presencial OU online com professor na sede
+    const occupiesRoom = data.modality === "PRESENCIAL" || (data.modality === "ONLINE" && data.teacherOnsite === true)
+    if (occupiesRoom) {
       const roomCount = await getRoomCount()
       const reqStart  = scheduledAt.getTime()
       const reqEnd    = reqStart + duration * 60_000
 
-      const presencialLessons = await prisma.lesson.findMany({
+      const roomLessons = await prisma.lesson.findMany({
         where:  {
-          modality:    "PRESENCIAL",
+          OR: [
+            { modality: "PRESENCIAL" },
+            { modality: "ONLINE", teacherOnsite: true },
+          ],
           status:      { in: ["CONFIRMED", "SCHEDULED"] },
           scheduledAt: { gte: dayStart, lte: dayEnd },
         },
         select: { scheduledAt: true, duration: true },
       })
 
-      const conflicts = presencialLessons.filter(l => {
+      const conflicts = roomLessons.filter(l => {
         const lStart = l.scheduledAt.getTime()
         const lEnd   = lStart + (l.duration ?? 60) * 60_000
         return lStart < reqEnd && lEnd > reqStart
@@ -309,7 +327,7 @@ export async function createLessonDirectAction(data: {
       if (conflicts.length >= roomCount) {
         throw new Error(
           `Todas as ${roomCount} sala${roomCount !== 1 ? "s" : ""} estão ocupadas neste horário. ` +
-          `Altere para ONLINE para agendar mesmo assim.`
+          `Altere para ONLINE (em casa) para agendar mesmo assim.`
         )
       }
     }
@@ -339,9 +357,14 @@ export async function createLessonDirectAction(data: {
     prisma.subject.findUnique({ where: { id: data.subjectId } }),
   ])
 
-  const teacherOnsiteDirect =
-    teacher?.teachingMode === "PRESENCIAL" ||
-    (teacher?.teachingMode === "HYBRID" && data.modality === "PRESENCIAL")
+  let teacherOnsiteDirect: boolean
+  if (data.modality === "PRESENCIAL") {
+    teacherOnsiteDirect = true
+  } else if (teacher?.teachingMode === "ONLINE_ONLY") {
+    teacherOnsiteDirect = false
+  } else {
+    teacherOnsiteDirect = data.teacherOnsite ?? false
+  }
 
   await prisma.$transaction([
     prisma.lesson.create({

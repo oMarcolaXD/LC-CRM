@@ -11,7 +11,8 @@
       "Bash(mkdir -p \"c:\\\\Users\\\\licaodecasa_nprata\\\\Documents\\\\LC\\(CRM\\)\\\\src\\\\app\\\\api\\\\professor\\\\calendar\\\\[token]\")",
       "Bash(New-Item -ItemType Directory -Force \"c:\\\\Users\\\\licaodecasa_nprata\\\\Documents\\\\LC\\(CRM\\)\\\\src\\\\components\\\\professor\")",
       "Bash(Get-Content package.json)",
-      "Bash(Select-String -Pattern \"next-auth|next\\\\\"|prisma\")"
+      "Bash(Select-String -Pattern \"next-auth|next\\\\\"|prisma\")",
+      "Bash(xargs grep -l \"modality\\\\|TeacherMode\\\\|PRESENCIAL\\\\|ONLINE\")"
     ],
     "additionalDirectories": [
       "c:\\Users\\licaodecasa_nprata\\Documents\\LC(CRM)\\src\\app\\(colaborador)\\colaborador\\professores",

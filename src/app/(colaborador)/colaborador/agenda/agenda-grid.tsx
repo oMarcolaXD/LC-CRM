@@ -62,6 +62,7 @@ export interface SubjectOption { id: string; name: string }
 export interface TeacherCol {
   id:              string
   name:            string
+  teachingMode:    "ONLINE_ONLY" | "PRESENCIAL" | "HYBRID"
   slots:           AvailSlot[]
   rawAvailability: Record<string, { start: string; end: string }[]>
   subjects?:       SubjectOption[]
@@ -297,10 +298,15 @@ function QuickScheduleModal({
   const scheduledAt  = new Date(`${date}T${schedule.time}:00`)
   const isHistorical = scheduledAt < new Date()
 
-  const [studentId, setStudentId] = useState("")
-  const [subjectId, setSubjectId] = useState("")
-  const [modality,  setModality]  = useState<"PRESENCIAL" | "ONLINE">("PRESENCIAL")
+  const isOnlineOnly = teacher?.teachingMode === "ONLINE_ONLY"
+
+  const [studentId,    setStudentId]    = useState("")
+  const [subjectId,    setSubjectId]    = useState("")
+  const [modality,     setModality]     = useState<"PRESENCIAL" | "ONLINE">(isOnlineOnly ? "ONLINE" : "PRESENCIAL")
+  const [teacherOnsite, setTeacherOnsite] = useState(false)
   const [pending, start] = useTransition()
+
+  const showLocationToggle = modality === "ONLINE" && !isOnlineOnly
 
   const submit = () =>
     start(async () => {
@@ -316,6 +322,7 @@ function QuickScheduleModal({
           date,
           time: schedule.time,
           modality,
+          teacherOnsite: modality === "ONLINE" ? teacherOnsite : undefined,
         })
         toast.success(isHistorical ? "Histórico importado" : "Aula agendada com sucesso")
         onClose()
@@ -391,33 +398,75 @@ function QuickScheduleModal({
 
           <div>
             <label className="text-xs font-medium">Modalidade</label>
-            <div className="mt-1 flex rounded-lg border border-input overflow-hidden">
-              <button
-                type="button"
-                onClick={() => setModality("PRESENCIAL")}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-sm transition-colors ${
-                  modality === "PRESENCIAL"
-                    ? "bg-primary text-white"
-                    : "bg-background text-muted-foreground hover:bg-muted/50"
-                }`}
-              >
-                <MapPin className="w-3.5 h-3.5" />
-                Presencial
-              </button>
-              <button
-                type="button"
-                onClick={() => setModality("ONLINE")}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-sm transition-colors ${
-                  modality === "ONLINE"
-                    ? "bg-primary text-white"
-                    : "bg-background text-muted-foreground hover:bg-muted/50"
-                }`}
-              >
-                <Wifi className="w-3.5 h-3.5" />
-                Online
-              </button>
-            </div>
+            {isOnlineOnly ? (
+              <div className="mt-1 flex items-center gap-1.5 px-3 py-2 rounded-lg bg-blue-50 border border-blue-200 text-sm text-blue-700">
+                <Wifi className="w-3.5 h-3.5" /> Online (professor só atende remotamente)
+              </div>
+            ) : (
+              <div className="mt-1 flex rounded-lg border border-input overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setModality("PRESENCIAL")}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-sm transition-colors ${
+                    modality === "PRESENCIAL"
+                      ? "bg-primary text-white"
+                      : "bg-background text-muted-foreground hover:bg-muted/50"
+                  }`}
+                >
+                  <MapPin className="w-3.5 h-3.5" />
+                  Presencial
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setModality("ONLINE")}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-sm transition-colors ${
+                    modality === "ONLINE"
+                      ? "bg-primary text-white"
+                      : "bg-background text-muted-foreground hover:bg-muted/50"
+                  }`}
+                >
+                  <Wifi className="w-3.5 h-3.5" />
+                  Online
+                </button>
+              </div>
+            )}
           </div>
+
+          {/* Localização do professor — apenas para online com professor não-ONLINE_ONLY */}
+          {showLocationToggle && (
+            <div>
+              <label className="text-xs font-medium">Local do professor</label>
+              <div className="mt-1 flex rounded-lg border border-input overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setTeacherOnsite(false)}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-sm transition-colors ${
+                    !teacherOnsite
+                      ? "bg-muted text-foreground font-medium"
+                      : "bg-background text-muted-foreground hover:bg-muted/50"
+                  }`}
+                >
+                  <Home className="w-3.5 h-3.5" />
+                  Em casa
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTeacherOnsite(true)}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-sm transition-colors ${
+                    teacherOnsite
+                      ? "bg-amber-100 text-amber-800 font-medium"
+                      : "bg-background text-muted-foreground hover:bg-muted/50"
+                  }`}
+                >
+                  <Building2 className="w-3.5 h-3.5" />
+                  Na sede
+                </button>
+              </div>
+              {teacherOnsite && (
+                <p className="text-[10px] text-muted-foreground mt-1">Ocupará uma sala na sede.</p>
+              )}
+            </div>
+          )}
         </div>
 
         <DialogFooter>

@@ -334,11 +334,6 @@ export function BookingForm({
               </label>
             ))}
           </div>
-          {selectedTeacher.teachingMode === "PRESENCIAL" && modality === "ONLINE" && (
-            <p className="text-xs text-muted-foreground">
-              Este professor virá à sede e dará a aula online de uma de nossas salas.
-            </p>
-          )}
         </div>
       )}
 
