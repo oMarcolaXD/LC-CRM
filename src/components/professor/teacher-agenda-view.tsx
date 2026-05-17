@@ -70,12 +70,14 @@ export function TeacherAgendaView({ lessons, calendarToken, baseUrl }: Props) {
 
         {/* Sync button */}
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" className="text-xs gap-1.5 h-8" asChild>
-            <a href={icsUrl} download="agenda-licaodecasa.ics">
-              <Download className="w-3.5 h-3.5" />
-              Baixar .ics
-            </a>
-          </Button>
+          <a
+            href={icsUrl}
+            download="agenda-licaodecasa.ics"
+            className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-border bg-background text-xs font-medium hover:bg-muted/50 transition-colors"
+          >
+            <Download className="w-3.5 h-3.5 shrink-0" />
+            Baixar .ics
+          </a>
           <Button
             variant="outline" size="sm"
             className={cn("text-xs gap-1.5 h-8", copied && "text-green-600 border-green-600")}
