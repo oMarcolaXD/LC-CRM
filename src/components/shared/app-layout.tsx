@@ -1,7 +1,8 @@
-import { headers }  from "next/headers"
-import { Sidebar }  from "./sidebar"
-import { Header }   from "./header"
-import type { Role } from "@prisma/client"
+import { headers }        from "next/headers"
+import { Sidebar }        from "./sidebar"
+import { Header }         from "./header"
+import { WhatsAppButton } from "./whatsapp-button"
+import type { Role }      from "@prisma/client"
 
 interface AppLayoutProps {
   children: React.ReactNode
@@ -30,6 +31,7 @@ export async function AppLayout({ children, name, email, role, image, phone }: A
           {children}
         </main>
       </div>
+      <WhatsAppButton />
     </div>
   )
 }
