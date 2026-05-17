@@ -547,7 +547,7 @@ export function AgendaGrid({
     }
     const rect    = e.currentTarget.getBoundingClientRect()
     const y       = e.clientY - rect.top
-    const snapped = Math.round((START * 60 + (y / HOUR_H) * 60) / 30) * 30
+    const snapped = Math.floor((START * 60 + (y / HOUR_H) * 60) / 30) * 30
 
     if (snapped < START * 60 || snapped + 60 > END * 60) {
       setHoveredCell(null)
@@ -568,7 +568,7 @@ export function AgendaGrid({
 
     const rect       = e.currentTarget.getBoundingClientRect()
     const y          = e.clientY - rect.top
-    const totalMin   = Math.round((START * 60 + (y / HOUR_H) * 60) / 30) * 30
+    const totalMin   = Math.floor((START * 60 + (y / HOUR_H) * 60) / 30) * 30
     const isAvailable = t.slots.some(s => totalMin >= s.start && totalMin + 60 <= s.end)
     if (!isAvailable) return
 
