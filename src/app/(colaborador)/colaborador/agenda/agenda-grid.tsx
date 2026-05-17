@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useEffect, useRef } from "react"
 import {
-  addDays, addMonths, format, isToday, parseISO,
+  addDays, addMonths, format, isToday, parseISO, getDay,
   startOfWeek, endOfWeek, startOfMonth, endOfMonth,
   eachDayOfInterval, isSameMonth,
 } from "date-fns"
@@ -60,10 +60,11 @@ export interface StudentOption { id: string; name: string; remainingLessons: num
 export interface SubjectOption { id: string; name: string }
 
 export interface TeacherCol {
-  id:       string
-  name:     string
-  slots:    AvailSlot[]
-  subjects?: SubjectOption[]
+  id:              string
+  name:            string
+  slots:           AvailSlot[]
+  rawAvailability: Record<string, { start: string; end: string }[]>
+  subjects?:       SubjectOption[]
 }
 
 export interface LessonSlot {
@@ -483,6 +484,19 @@ function LessonBlock({
   )
 }
 
+// ─── Recalcula slots de disponibilidade pelo dia da semana ───────────────────
+
+function computeSlots(
+  raw: Record<string, { start: string; end: string }[]>,
+  dow: number,
+): AvailSlot[] {
+  return (raw[String(dow)] ?? []).map(s => {
+    const [sh, sm] = s.start.split(":").map(Number)
+    const [eh, em] = s.end.split(":").map(Number)
+    return { start: sh * 60 + sm, end: eh * 60 + em }
+  })
+}
+
 // ─── Grade principal ──────────────────────────────────────────────────────────
 
 interface AgendaGridProps {
@@ -512,6 +526,12 @@ export function AgendaGrid({
 
   const parsed = parseISO(curDate)
   const today  = isToday(parsed)
+
+  // Recalcula disponibilidade dos professores conforme o dia navegado
+  const effectiveTeachers = teachers.map(t => ({
+    ...t,
+    slots: computeSlots(t.rawAvailability, getDay(parsed)),
+  }))
 
   const [view, setView]                     = useState<ViewMode>(initialView)
   const [selectedLesson, setSelectedLesson] = useState<LessonSlot | null>(null)
@@ -693,7 +713,7 @@ export function AgendaGrid({
   }, {})
   const monthLabel = format(parsed, "MMMM 'de' yyyy", { locale: ptBR })
 
-  const totalW = TIME_W + teachers.length * COL_W
+  const totalW = TIME_W + effectiveTeachers.length * COL_W
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -931,7 +951,7 @@ export function AgendaGrid({
                         </div>
                       ) : (
                         dayLessons.map(lesson => {
-                          const tName = teachers.find(t => t.id === lesson.teacherId)?.name ?? ""
+                          const tName = effectiveTeachers.find(t => t.id === lesson.teacherId)?.name ?? ""
                           const { bg, text: txtCls } = STATUS_STYLE[lesson.status]
                           return (
                             <button
@@ -974,7 +994,7 @@ export function AgendaGrid({
                   <span className="text-[9px] text-muted-foreground leading-tight">Salas</span>
                   <span className="text-[10px] font-bold text-primary">{roomCount}</span>
                 </div>
-                {teachers.map(t => {
+                {effectiveTeachers.map(t => {
                   const count     = byTeacher(t.id).length
                   const available = t.slots.length > 0
                   return (
@@ -1049,7 +1069,7 @@ export function AgendaGrid({
                 </div>
 
                 {/* Colunas dos professores */}
-                {teachers.map((t, colIdx) => {
+                {effectiveTeachers.map((t, colIdx) => {
                   const hasAvailToday = t.slots.length > 0
                   const canSchedule   = hasAvailToday && !!students?.length
                   const ghostTime     = hoveredCell?.teacherId === t.id
@@ -1134,7 +1154,7 @@ export function AgendaGrid({
           </div>
         )}
 
-        {teachers.length === 0 && (
+        {effectiveTeachers.length === 0 && (
           <div className="flex flex-col items-center justify-center py-16 text-center gap-2">
             <CalendarDays className="w-10 h-10 text-muted-foreground/30" />
             <p className="text-sm text-muted-foreground">Nenhum professor cadastrado</p>
@@ -1146,7 +1166,7 @@ export function AgendaGrid({
       {selectedLesson && (
         <LessonDetailModal
           lesson={selectedLesson}
-          teacherName={teachers.find(t => t.id === selectedLesson.teacherId)?.name ?? ""}
+          teacherName={effectiveTeachers.find(t => t.id === selectedLesson.teacherId)?.name ?? ""}
           onClose={() => { setSelectedLesson(null); fetchData(curDate, view) }}
         />
       )}
@@ -1155,7 +1175,7 @@ export function AgendaGrid({
           schedule={quickSchedule}
           date={curDate}
           students={students}
-          teachers={teachers}
+          teachers={effectiveTeachers}
           onClose={() => { setQuickSchedule(null); fetchData(curDate, view) }}
         />
       )}
