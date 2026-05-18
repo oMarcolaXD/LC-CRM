@@ -203,7 +203,7 @@ export async function updateLessonStatusAction(
   // Professor só pode alterar suas próprias aulas
   if (session.user.role === "TEACHER") {
     const teacher = await prisma.teacher.findFirst({
-      where: { user: { email: session.user.email ?? "" } },
+      where: { userId: session.user.id },
     })
     if (!teacher || lesson.teacherId !== teacher.id) {
       throw new Error("Sem permissão para alterar esta aula")

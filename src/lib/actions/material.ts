@@ -22,10 +22,23 @@ export async function createMaterialAction(
   const session = await requireTeacher()
 
   const teacher = await prisma.teacher.findFirst({
-    where:   { user: { email: session.user.email ?? "" } },
+    where:   { userId: session.user.id },
     include: { user: true },
   })
   if (!teacher) throw new Error("Professor não encontrado")
+
+  const ALLOWED_URL_PREFIXES = [
+    "https://drive.google.com",
+    "https://docs.google.com",
+    "https://dropbox.com",
+    "https://www.dropbox.com",
+    "https://storage.googleapis.com",
+    "https://onedrive.live.com",
+    "https://1drv.ms",
+  ]
+  if (!ALLOWED_URL_PREFIXES.some((p) => fileUrl.startsWith(p))) {
+    throw new Error("URL não permitida. Use links do Google Drive, Google Docs, Dropbox ou OneDrive.")
+  }
 
   await prisma.material.create({
     data: {
@@ -68,7 +81,7 @@ export async function deleteMaterialAction(materialId: string) {
   })
   if (!material) throw new Error("Material não encontrado")
 
-  if (session.user.role === "TEACHER" && material.teacher.user.email !== session.user.email) {
+  if (session.user.role === "TEACHER" && material.teacher.userId !== session.user.id) {
     throw new Error("Sem permissão para excluir este material")
   }
 

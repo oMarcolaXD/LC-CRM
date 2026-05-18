@@ -5,7 +5,6 @@ export function generateCalendarToken(teacherId: string): string {
   const sig = createHmac("sha256", secret)
     .update(`calendar:${teacherId}`)
     .digest("hex")
-    .slice(0, 24)
   const id64 = Buffer.from(teacherId).toString("base64url")
   return `${id64}_${sig}`
 }

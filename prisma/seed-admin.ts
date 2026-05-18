@@ -1,6 +1,18 @@
 import { PrismaClient, Role } from "@prisma/client"
 import bcrypt from "bcryptjs"
 
+const PROD_DB_ID = "jdrjbxusfvlqwbzbrqgf"
+if ((process.env.DATABASE_URL ?? "").includes(PROD_DB_ID)) {
+  console.error("❌ BLOQUEADO: seed não pode rodar no banco de PRODUÇÃO.")
+  process.exit(1)
+}
+
+const adminPassword = process.env.SEED_ADMIN_PASSWORD
+if (!adminPassword) {
+  console.error("❌ SEED_ADMIN_PASSWORD não está definida no .env")
+  process.exit(1)
+}
+
 const prisma = new PrismaClient()
 
 async function main() {
@@ -10,7 +22,7 @@ async function main() {
     console.log("   Atualizando senha para garantir...")
     await prisma.user.update({
       where: { email: "espacolicao@gmail.com" },
-      data: { password: await bcrypt.hash("REDACTED", 12), active: true, role: Role.ADMIN },
+      data: { password: await bcrypt.hash(adminPassword, 12), active: true, role: Role.ADMIN },
     })
     console.log("✅ Senha atualizada com sucesso!")
     return
@@ -20,7 +32,7 @@ async function main() {
     data: {
       name:     "Administrador",
       email:    "espacolicao@gmail.com",
-      password: await bcrypt.hash("REDACTED", 12),
+      password: await bcrypt.hash(adminPassword, 12),
       role:     Role.ADMIN,
       active:   true,
     },

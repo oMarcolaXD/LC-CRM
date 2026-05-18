@@ -10,7 +10,7 @@ export async function saveAvailabilityAction(availability: Availability) {
   if (!session?.user) throw new Error("Sem permissão")
 
   const teacher = await prisma.teacher.findFirst({
-    where: { user: { email: session.user.email ?? "" } },
+    where: { userId: session.user.id },
   })
   if (!teacher) throw new Error("Perfil de professor não encontrado")
 
