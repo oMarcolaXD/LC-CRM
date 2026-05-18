@@ -7,11 +7,12 @@ if ((process.env.DATABASE_URL ?? "").includes(PROD_DB_ID)) {
   process.exit(1)
 }
 
-const adminPassword = process.env.SEED_ADMIN_PASSWORD
-if (!adminPassword) {
+const rawAdminPassword = process.env.SEED_ADMIN_PASSWORD
+if (!rawAdminPassword) {
   console.error("❌ SEED_ADMIN_PASSWORD não está definida no .env")
   process.exit(1)
 }
+const adminPassword: string = rawAdminPassword
 
 const prisma = new PrismaClient()
 
