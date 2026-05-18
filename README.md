@@ -9,7 +9,7 @@ Sistema de gestão de aulas particulares para a empresa **Lição de Casa**. Ate
 - **Auth.js v5** com 4 roles: ADMIN, COLLABORATOR, TEACHER, STUDENT (+GUARDIAN)
 - **Tailwind CSS v4** + **shadcn/ui**
 - **Upstash Redis** — rate limiting distribuído (proteção brute force no login)
-- **Resend** (email) + **Z-API** (WhatsApp) + **Mercado Pago** (pagamentos)
+- **Resend** (email) + **Mercado Pago** (pagamentos)
 
 ## Pré-requisitos
 
@@ -17,7 +17,6 @@ Sistema de gestão de aulas particulares para a empresa **Lição de Casa**. Ate
 - Conta no [Supabase](https://supabase.com) (banco PostgreSQL)
 - Conta no [Upstash](https://upstash.com) (Redis — obrigatório em produção)
 - Conta no [Resend](https://resend.com) (opcional — emails)
-- Conta no [Z-API](https://z-api.io) (opcional — WhatsApp)
 
 ## Setup local
 
