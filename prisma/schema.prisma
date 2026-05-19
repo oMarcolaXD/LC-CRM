@@ -103,6 +103,7 @@ model Student {
   id         String    @id @default(cuid())
   userId     String?   @unique
   user       User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name           String
   grade          String
   educationLevel EducationLevel?
   school         String?

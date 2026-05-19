@@ -91,6 +91,7 @@ export async function createStudentWithGuardianAction(formData: FormData) {
     const student = await tx.student.create({
       data: {
         userId:    studentUser.id,
+        name:      studentUser.name,
         grade:     grade ?? "Não informado",
         school,
         guardianId,
@@ -207,6 +208,7 @@ export async function importStudentsAction(rows: unknown[]): Promise<ImportResul
         await tx.student.create({
           data: {
             userId:    studentUser.id,
+            name:      studentUser.name,
             grade:     serie ?? "Não informado",
             school:    escola,
             guardianId,

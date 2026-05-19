@@ -51,6 +51,7 @@ export async function createUserAction(formData: FormData) {
       await tx.student.create({
         data: {
           userId:        user.id,
+          name:          name,
           grade:         grade ?? "Não informado",
           school,
           educationLevel: educationLevel as EducationLevel | undefined,
@@ -117,8 +118,8 @@ export async function updateUserAction(id: string, formData: FormData) {
       const gId = guardianId && guardianId.trim() ? guardianId.trim() : undefined
       await tx.student.upsert({
         where:  { userId: id },
-        update: { grade: grade ?? "Não informado", school, educationLevel: educationLevel as EducationLevel | undefined, guardianId: gId ?? null },
-        create: { userId: id, grade: grade ?? "Não informado", school, educationLevel: educationLevel as EducationLevel | undefined, guardianId: gId },
+        update: { name: name ?? "Aluno", grade: grade ?? "Não informado", school, educationLevel: educationLevel as EducationLevel | undefined, guardianId: gId ?? null },
+        create: { userId: id, name: name ?? "Aluno", grade: grade ?? "Não informado", school, educationLevel: educationLevel as EducationLevel | undefined, guardianId: gId },
       })
     }
     if (role === "TEACHER") {

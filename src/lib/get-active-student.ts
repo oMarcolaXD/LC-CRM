@@ -1,13 +1,18 @@
-import { cookies }        from "next/headers"
-import { prisma }         from "@/lib/prisma"
-import type { Prisma }    from "@prisma/client"
+import { cookies } from "next/headers"
+import { prisma }  from "@/lib/prisma"
+import type { Prisma } from "@prisma/client"
 
 type StudentWithUser = Prisma.StudentGetPayload<{ include: { user: true } }>
 
 export async function getActiveStudent(guardianUserId: string) {
   const guardian = await prisma.guardian.findFirst({
     where:   { userId: guardianUserId },
-    include: { students: { include: { user: true } } },
+    include: {
+      students: {
+        include: { user: true },
+        orderBy: { name: "asc" },
+      },
+    },
   })
 
   if (!guardian) return { student: null as StudentWithUser | null, guardian: null, allStudents: [] as StudentWithUser[] }

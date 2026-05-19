@@ -292,9 +292,8 @@ async function main() {
   for (const s of alunosDefs) {
     await prisma.student.create({
       data: {
-        id: s.id, grade: s.grade, educationLevel: s.educationLevel,
+        id: s.id, name: s.name, grade: s.grade, educationLevel: s.educationLevel,
         guardianId: s.guardianId, school: s.school ?? null,
-        // userId: null — alunos não têm conta própria de login
       },
     })
   }

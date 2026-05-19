@@ -10,9 +10,9 @@ export default async function AlunoLayout({ children }: { children: React.ReactN
 
   const { student, allStudents } = await getActiveStudent(session.user.id)
 
-  const studentOptions = allStudents.map((s: { id: string; user: { name: string } | null; grade: string; notes: string | null }) => ({
+  const studentOptions = allStudents.map((s: { id: string; name: string; user: { name: string } | null; grade: string }) => ({
     id:    s.id,
-    name:  s.user?.name ?? s.notes ?? "Aluno",
+    name:  s.name,
     grade: s.grade,
   }))
 
