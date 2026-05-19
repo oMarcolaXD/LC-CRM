@@ -30,7 +30,7 @@ type RawRequest = Awaited<ReturnType<typeof prisma.lessonRequest.findMany<{ incl
 function mapLesson(l: RawLesson, groupMatesMap: Record<string, string[]> = {}) {
   const d           = l.scheduledAt
   const min         = d.getHours() * 60 + d.getMinutes()
-  const studentName = l.student.user.name
+  const studentName = l.student.user?.name ?? "Aluno"
   return {
     id:            l.id,
     teacherId:     l.teacherId,
@@ -62,7 +62,7 @@ function mapPendingRequest(r: RawRequest) {
     startMin:    min,
     time:        format(d, "HH:mm"),
     date:        format(d, "yyyy-MM-dd"),
-    studentName: r.student.user.name,
+    studentName: r.student.user?.name ?? "Aluno",
     subjectName: r.subject?.name ?? "–",
     modality:    r.modality,
     teacherMode: r.teacher.teachingMode,
@@ -138,7 +138,7 @@ export async function GET(req: NextRequest) {
     : []
   const groupMatesMap = groupSiblings.reduce<Record<string, string[]>>((acc, l) => {
     if (!l.groupId) return acc
-    ;(acc[l.groupId] ??= []).push(l.student.user.name)
+    ;(acc[l.groupId] ??= []).push(l.student.user?.name ?? "Aluno")
     return acc
   }, {})
 

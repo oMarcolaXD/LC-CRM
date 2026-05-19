@@ -123,9 +123,9 @@ export async function approveRequestAction(
   if (!isHistorical) {
     const scheduledAtFmt = format(request.preferredAt, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
     await notifyLessonConfirmed({
-      studentUserId: request.student.userId,
-      studentEmail:  request.student.user.email,
-      studentPhone:  request.student.user.phone,
+      studentUserId: request.student.userId ?? "",
+      studentEmail:  request.student.user?.email ?? null,
+      studentPhone:  request.student.user?.phone ?? null,
       teacherName:   request.teacher.user.name,
       subject:       request.subject?.name ?? "–",
       scheduledAt:   scheduledAtFmt,
@@ -135,9 +135,9 @@ export async function approveRequestAction(
     const remaining = pkg.remainingLessons - 1
     if (remaining <= 2 && remaining > 0) {
       await notifyLowBalance({
-        studentUserId: request.student.userId,
-        studentEmail:  request.student.user.email,
-        studentPhone:  request.student.user.phone,
+        studentUserId: request.student.userId ?? "",
+        studentEmail:  request.student.user?.email ?? null,
+        studentPhone:  request.student.user?.phone ?? null,
         remaining,
       })
     }
@@ -165,12 +165,12 @@ export async function rejectRequestAction(requestId: string, reason?: string) {
   })
 
   await notify({
-    userId:  request.student.userId,
+    userId:  request.student.userId ?? "",
     type:    "LESSON_CANCELLED",
     title:   "Solicitação de aula recusada",
     message: `Sua solicitação de aula de ${request.subject?.name ?? "–"} não pôde ser aprovada.${reason ? ` Motivo: ${reason}` : ""}`,
-    email:   request.student.user.email,
-    phone:   request.student.user.phone ?? undefined,
+    email:   request.student.user?.email ?? undefined,
+    phone:   request.student.user?.phone ?? undefined,
   })
 
   revalidatePath("/colaborador/agendamentos")
@@ -223,12 +223,12 @@ export async function updateLessonStatusAction(
     )
     for (const gl of groupLessons) {
       await notify({
-        userId:  gl.student.userId,
+        userId:  gl.student.userId ?? "",
         type:    "LESSON_CANCELLED",
         title:   "Aula em grupo cancelada",
         message: `Sua aula em grupo de ${gl.subject.name} foi cancelada.`,
-        email:   gl.student.user.email,
-        phone:   gl.student.user.phone ?? undefined,
+        email:   gl.student.user?.email ?? undefined,
+        phone:   gl.student.user?.phone ?? undefined,
       })
     }
     revalidatePath("/professor/agenda")
@@ -279,12 +279,12 @@ export async function updateLessonStatusAction(
   const msg = messages[status]
   if (msg) {
     await notify({
-      userId:  lesson.student.userId,
+      userId:  lesson.student.userId ?? "",
       type:    status === "COMPLETED" ? "LESSON_COMPLETED" : status === "CANCELLED" ? "LESSON_CANCELLED" : "LESSON_MISSED",
       title:   msg.title,
       message: msg.message,
-      email:   lesson.student.user.email,
-      phone:   lesson.student.user.phone ?? undefined,
+      email:   lesson.student.user?.email ?? undefined,
+      phone:   lesson.student.user?.phone ?? undefined,
     })
   }
 
@@ -422,9 +422,9 @@ export async function createLessonDirectAction(data: {
   if (!isHistorical) {
     const scheduledAtFormatted = format(scheduledAt, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
     await notifyLessonConfirmed({
-      studentUserId: student.userId,
-      studentEmail:  student.user.email,
-      studentPhone:  student.user.phone,
+      studentUserId: student.userId ?? "",
+      studentEmail:  student.user?.email ?? null,
+      studentPhone:  student.user?.phone ?? null,
       teacherName:   teacher?.user.name ?? "–",
       subject:       subject?.name ?? "–",
       scheduledAt:   scheduledAtFormatted,
@@ -434,9 +434,9 @@ export async function createLessonDirectAction(data: {
     const remaining = pkg.remainingLessons - 1
     if (remaining <= 2 && remaining > 0) {
       await notifyLowBalance({
-        studentUserId: student.userId,
-        studentEmail:  student.user.email,
-        studentPhone:  student.user.phone,
+        studentUserId: student.userId ?? "",
+        studentEmail:  student.user?.email ?? null,
+        studentPhone:  student.user?.phone ?? null,
         remaining,
       })
     }
@@ -589,9 +589,9 @@ export async function createGroupLessonAction(data: {
   if (!isHistorical) {
     for (const student of students) {
       await notifyLessonConfirmed({
-        studentUserId: student.userId,
-        studentEmail:  student.user.email,
-        studentPhone:  student.user.phone,
+        studentUserId: student.userId ?? "",
+        studentEmail:  student.user?.email ?? null,
+        studentPhone:  student.user?.phone ?? null,
         teacherName:   teacher.user.name,
         subject:       subject.name,
         scheduledAt:   scheduledAtFmt,

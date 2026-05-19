@@ -6,7 +6,7 @@ export const ROLE_HOME: Record<string, string> = {
   ADMIN:        "/admin/dashboard",
   COLLABORATOR: "/colaborador/dashboard",
   TEACHER:      "/professor/dashboard",
-  STUDENT:      "/aluno/dashboard",
+  STUDENT:      "/login",
   GUARDIAN:     "/aluno/dashboard",
 }
 

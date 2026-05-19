@@ -30,11 +30,11 @@ export async function GET(
 
   const vevents = lessons.map((l) => {
     const end   = new Date(l.scheduledAt.getTime() + l.duration * 60_000)
-    const title = `Aula de ${l.subject.name} com ${l.student.user.name}`
+    const title = `Aula de ${l.subject.name} com ${l.student.user?.name ?? "Aluno"}`
     const loc   = l.modality === "ONLINE"
       ? (l.meetingLink ?? "Online")
       : (l.location   ?? "Presencial")
-    const desc  = `Matéria: ${l.subject.name}\\nAluno: ${l.student.user.name}\\nModalidade: ${l.modality === "ONLINE" ? "Online" : "Presencial"}`
+    const desc  = `Matéria: ${l.subject.name}\\nAluno: ${l.student.user?.name ?? "Aluno"}\\nModalidade: ${l.modality === "ONLINE" ? "Online" : "Presencial"}`
 
     return [
       "BEGIN:VEVENT",

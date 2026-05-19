@@ -8,8 +8,8 @@ export const passwordSchema = z
   .regex(/[^A-Za-z0-9]/, "Senha deve conter ao menos um caractere especial")
 
 export const loginSchema = z.object({
-  email:    z.string().email("E-mail inválido"),
-  password: z.string().min(1, "Informe a senha"),
+  emailOrPhone: z.string().min(1, "Informe o e-mail ou telefone"),
+  password:     z.string().min(1, "Informe a senha"),
 })
 
 export type LoginInput = z.infer<typeof loginSchema>

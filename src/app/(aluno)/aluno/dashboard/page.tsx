@@ -1,5 +1,7 @@
-import { auth }   from "@/lib/auth"
-import { prisma } from "@/lib/prisma"
+import { auth }              from "@/lib/auth"
+import { prisma }            from "@/lib/prisma"
+import { redirect }          from "next/navigation"
+import { getActiveStudent }  from "@/lib/get-active-student"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge }  from "@/components/ui/badge"
 import { LinkButton } from "@/components/shared/link-button"
@@ -11,8 +13,13 @@ import { ptBR } from "date-fns/locale"
 
 export default async function AlunoDashboard() {
   const session = await auth()
-  const student = await prisma.student.findFirst({
-    where:   { user: { email: session?.user?.email ?? "" } },
+  if (!session?.user) redirect("/login")
+
+  const { student } = await getActiveStudent(session.user.id)
+  if (!student) redirect("/aluno/sem-aluno")
+
+  const studentWithPackages = await prisma.student.findUnique({
+    where:   { id: student.id },
     include: { packages: { where: { status: "ACTIVE" } } },
   })
 
@@ -23,19 +30,19 @@ export default async function AlunoDashboard() {
   })
 
   const [lessons, homework, materials] = await Promise.all([
-    student ? prisma.lesson.findMany({
+    prisma.lesson.findMany({
       where:   { studentId: student.id },
       include: { subject: true },
       orderBy: { scheduledAt: "desc" },
       take:    100,
-    }) : [],
-    student ? prisma.homework.count({
+    }),
+    prisma.homework.count({
       where: { lesson: { studentId: student.id }, status: "PENDING" },
-    }) : 0,
-    student ? prisma.material.count({ where: { studentId: student.id } }) : 0,
+    }),
+    prisma.material.count({ where: { studentId: student.id } }),
   ])
 
-  const saldo      = student?.packages.reduce((s, p) => s + p.remainingLessons, 0) ?? 0
+  const saldo      = studentWithPackages?.packages.reduce((s, p) => s + p.remainingLessons, 0) ?? 0
   const realizadas = lessons.filter((l) => l.status === "COMPLETED").length
   const proximas   = lessons.filter((l) => ["SCHEDULED","CONFIRMED"].includes(l.status) && l.scheduledAt >= now)
     .sort((a, b) => a.scheduledAt.getTime() - b.scheduledAt.getTime())

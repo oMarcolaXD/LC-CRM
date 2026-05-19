@@ -1,5 +1,7 @@
-import { auth }   from "@/lib/auth"
-import { prisma } from "@/lib/prisma"
+import { auth }             from "@/lib/auth"
+import { prisma }           from "@/lib/prisma"
+import { redirect }         from "next/navigation"
+import { getActiveStudent } from "@/lib/get-active-student"
 import { PageHeader } from "@/components/shared/page-header"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge }             from "@/components/ui/badge"
@@ -20,22 +22,19 @@ const TYPE_COLORS: Record<string, string> = {
 
 export default async function AlunoMateriaisPage() {
   const session = await auth()
+  if (!session?.user) redirect("/login")
 
-  const student = await prisma.student.findFirst({
-    where: { user: { email: session?.user?.email ?? "" } },
+  const { student } = await getActiveStudent(session.user.id)
+  if (!student) redirect("/aluno/sem-aluno")
+
+  const teacherRows = await prisma.lesson.findMany({
+    where:    { studentId: student.id },
+    select:   { teacherId: true },
+    distinct: ["teacherId"],
   })
-
-  const teacherRows = student
-    ? await prisma.lesson.findMany({
-        where:    { studentId: student.id },
-        select:   { teacherId: true },
-        distinct: ["teacherId"],
-      })
-    : []
   const teacherIds = teacherRows.map((r) => r.teacherId)
 
-  const materials = student
-    ? await prisma.material.findMany({
+  const materials = await prisma.material.findMany({
         where: {
           OR: [
             { studentId: student.id },
@@ -48,7 +47,6 @@ export default async function AlunoMateriaisPage() {
         },
         orderBy: { uploadedAt: "desc" },
       })
-    : []
 
   return (
     <div className="space-y-6">

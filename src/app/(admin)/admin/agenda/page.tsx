@@ -94,7 +94,7 @@ export default async function AdminAgendaPage({ searchParams }: AgendaPageProps)
       modality:      l.modality as LessonSlot["modality"],
       teacherOnsite: l.teacherOnsite,
       time:          format(d, "HH:mm"),
-      studentName:   l.student.user.name,
+      studentName:   l.student.user?.name ?? "Aluno",
       subjectName:   l.subject.name,
       guardianName:  l.student.guardian?.user.name ?? null,
       isGroupLesson: l.isGroupLesson,
@@ -106,7 +106,7 @@ export default async function AdminAgendaPage({ searchParams }: AgendaPageProps)
 
   const students: StudentOption[] = studentsRaw.map(s => ({
     id:               s.id,
-    name:             s.user.name,
+    name:             s.user?.name ?? "Aluno",
     remainingLessons: s.packages[0]?.remainingLessons ?? 0,
   }))
 

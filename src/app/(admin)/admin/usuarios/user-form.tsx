@@ -44,7 +44,9 @@ interface UserFormProps {
     name?: string; email?: string; phone?: string; role?: Role
     grade?: string; educationLevel?: EducationLevel; school?: string
     hourlyRate?: number; bio?: string; teachingMode?: TeacherMode
+    guardianId?: string; relationship?: string
   }
+  guardians?: { id: string; name: string }[]
   isEdit?: boolean
 }
 
@@ -58,10 +60,11 @@ function SubmitButton({ label }: { label: string }) {
   )
 }
 
-export function UserForm({ action, error, defaultValues, isEdit }: UserFormProps) {
+export function UserForm({ action, error, defaultValues, guardians = [], isEdit }: UserFormProps) {
   const [role, setRole]             = useState<string>(defaultValues?.role ?? "STUDENT")
   const [teachingMode, setTeachingMode] = useState<string>(defaultValues?.teachingMode ?? "HYBRID")
   const [eduLevel, setEduLevel]     = useState<string>(defaultValues?.educationLevel ?? "")
+  const [selfGuardian, setSelfGuardian] = useState(false)
 
   return (
     <form action={action} className="space-y-6 max-w-2xl">
@@ -80,8 +83,8 @@ export function UserForm({ action, error, defaultValues, isEdit }: UserFormProps
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="email">E-mail *</Label>
-          <Input id="email" name="email" type="email" defaultValue={defaultValues?.email} placeholder="joao@email.com" required />
+          <Label htmlFor="email">E-mail <span className="text-muted-foreground font-normal text-xs">(opcional para alunos)</span></Label>
+          <Input id="email" name="email" type="email" defaultValue={defaultValues?.email} placeholder="joao@email.com" />
         </div>
 
         <div className="space-y-2">
@@ -143,6 +146,56 @@ export function UserForm({ action, error, defaultValues, isEdit }: UserFormProps
                 </label>
               ))}
             </div>
+          </div>
+
+          {/* Responsável */}
+          {!selfGuardian && (
+            <div className="space-y-2 sm:col-span-2">
+              <Label htmlFor="guardianId">Responsável</Label>
+              <input type="hidden" name="guardianId" value={defaultValues?.guardianId ?? ""} id="guardianId-hidden" />
+              <Select defaultValue={defaultValues?.guardianId ?? ""}
+                onValueChange={(v) => { const el = document.getElementById("guardianId-hidden") as HTMLInputElement | null; if (el) el.value = v ?? "" }}>
+                <SelectTrigger><SelectValue placeholder="Selecionar responsável (opcional)" /></SelectTrigger>
+                <SelectContent>
+                  {guardians.map((g) => <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {/* Aluno adulto — é o próprio responsável */}
+          {(eduLevel === "SUPERIOR" || eduLevel === "VESTIBULAR") && !isEdit && (
+            <div className="sm:col-span-2">
+              <input type="hidden" name="selfGuardian" value={selfGuardian ? "on" : ""} />
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={selfGuardian}
+                  onChange={(e) => setSelfGuardian(e.target.checked)} />
+                <span className="text-sm font-medium">
+                  É o próprio responsável (aluno adulto sem tutor)
+                </span>
+              </label>
+              {selfGuardian && (
+                <p className="text-xs text-muted-foreground mt-1 ml-6">
+                  Uma conta de responsável será criada automaticamente vinculada a este aluno.
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Campos de Responsável */}
+      {role === "GUARDIAN" && (
+        <div className="p-4 border rounded-xl bg-muted/30 space-y-3">
+          <p className="text-sm font-medium text-muted-foreground">Dados do Responsável</p>
+          <div className="space-y-2">
+            <Label htmlFor="relationship">Parentesco / Relação</Label>
+            <Input
+              id="relationship"
+              name="relationship"
+              defaultValue={defaultValues?.relationship ?? ""}
+              placeholder="Ex: Mãe, Pai, Avó, Responsável, Próprio..."
+            />
           </div>
         </div>
       )}

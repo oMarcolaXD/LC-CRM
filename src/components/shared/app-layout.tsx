@@ -1,19 +1,29 @@
-import { headers }        from "next/headers"
-import { Sidebar }        from "./sidebar"
-import { Header }         from "./header"
-import { WhatsAppButton } from "./whatsapp-button"
-import type { Role }      from "@prisma/client"
+import { headers }              from "next/headers"
+import { Sidebar }              from "./sidebar"
+import { Header }               from "./header"
+import { WhatsAppButton }       from "./whatsapp-button"
+import { EmailMissingBanner }   from "./email-missing-banner"
+import type { Role }            from "@prisma/client"
 
-interface AppLayoutProps {
-  children: React.ReactNode
-  name:     string
-  email:    string
-  role:     Role
-  image?:   string | null
-  phone?:   string | null
+interface StudentOption {
+  id:    string
+  name:  string
+  grade: string
 }
 
-export async function AppLayout({ children, name, email, role, image, phone }: AppLayoutProps) {
+interface AppLayoutProps {
+  children:         React.ReactNode
+  name:             string
+  email:            string
+  role:             Role
+  image?:           string | null
+  phone?:           string | null
+  missingEmail?:    boolean
+  allStudents?:     StudentOption[]
+  activeStudentId?: string
+}
+
+export async function AppLayout({ children, name, email, role, image, phone, missingEmail, allStudents, activeStudentId }: AppLayoutProps) {
   const headerList = await headers()
   const pathname   = headerList.get("x-pathname") ?? ""
 
@@ -26,7 +36,17 @@ export async function AppLayout({ children, name, email, role, image, phone }: A
 
       {/* Conteúdo principal */}
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-        <Header pathname={pathname} name={name} email={email} role={role} image={image} phone={phone} />
+        <Header
+          pathname={pathname}
+          name={name}
+          email={email}
+          role={role}
+          image={image}
+          phone={phone}
+          allStudents={allStudents}
+          activeStudentId={activeStudentId}
+        />
+        {missingEmail && <EmailMissingBanner role={role} />}
         <main className="flex-1 overflow-y-auto p-4 md:p-6">
           {children}
         </main>

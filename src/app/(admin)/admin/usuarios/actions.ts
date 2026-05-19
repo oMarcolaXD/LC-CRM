@@ -25,22 +25,55 @@ export async function createUserAction(formData: FormData) {
     redirect(`/admin/usuarios/novo?error=${encodeURIComponent(msg)}`)
   }
 
-  const { name, email, password, phone, role, grade, educationLevel, school, hourlyRate, bio, teachingMode } = parsed.data
+  const { name, email, password, phone, role, grade, educationLevel, school, hourlyRate, bio, teachingMode, guardianId, relationship, selfGuardian } = parsed.data
 
-  const exists = await prisma.user.findUnique({ where: { email } })
-  if (exists) redirect("/admin/usuarios/novo?error=E-mail+já+cadastrado")
+  const emailNorm = email && email.trim() ? email.trim() : undefined
+  const phoneNorm = phone ? phone.replace(/\D/g, "") : undefined
+
+  if (emailNorm) {
+    const exists = await prisma.user.findUnique({ where: { email: emailNorm } })
+    if (exists) redirect("/admin/usuarios/novo?error=E-mail+já+cadastrado")
+  }
+  if (phoneNorm) {
+    const existsPhone = await prisma.user.findUnique({ where: { phone: phoneNorm } })
+    if (existsPhone) redirect("/admin/usuarios/novo?error=Telefone+já+cadastrado")
+  }
 
   const hashed = await bcrypt.hash(password, 12)
 
   await prisma.$transaction(async (tx) => {
     const user = await tx.user.create({
-      data: { name, email, password: hashed, phone, role: role as Role },
+      data: { name, email: emailNorm, password: hashed, phone: phoneNorm, role: role as Role },
     })
 
     if (role === "STUDENT") {
+      const gId = guardianId && guardianId.trim() ? guardianId.trim() : undefined
       await tx.student.create({
-        data: { userId: user.id, grade: grade ?? "Não informado", school, educationLevel: educationLevel as EducationLevel | undefined },
+        data: {
+          userId:        user.id,
+          grade:         grade ?? "Não informado",
+          school,
+          educationLevel: educationLevel as EducationLevel | undefined,
+          guardianId:    gId,
+        },
       })
+      // Aluno adulto que é seu próprio responsável
+      if (selfGuardian === "on") {
+        await tx.guardian.create({
+          data: {
+            userId:       user.id,
+            relationship: "Próprio",
+          },
+        })
+        // Atualiza guardianId do student para o guardian recém-criado
+        const newGuardian = await tx.guardian.findUnique({ where: { userId: user.id } })
+        if (newGuardian) {
+          await tx.student.updateMany({
+            where: { userId: user.id },
+            data:  { guardianId: newGuardian.id },
+          })
+        }
+      }
     }
     if (role === "TEACHER") {
       await tx.teacher.create({
@@ -48,7 +81,9 @@ export async function createUserAction(formData: FormData) {
       })
     }
     if (role === "GUARDIAN") {
-      await tx.guardian.create({ data: { userId: user.id } })
+      await tx.guardian.create({
+        data: { userId: user.id, relationship: relationship || null },
+      })
     }
   })
 
@@ -67,19 +102,23 @@ export async function updateUserAction(id: string, formData: FormData) {
     redirect(`/admin/usuarios/${id}?error=${encodeURIComponent(msg)}`)
   }
 
-  const { name, email, password, phone, role, grade, educationLevel, school, hourlyRate, bio, teachingMode } = parsed.data
+  const { name, email, password, phone, role, grade, educationLevel, school, hourlyRate, bio, teachingMode, guardianId, relationship } = parsed.data
 
-  const updateData: Record<string, unknown> = { name, email, phone, role }
+  const emailNorm = email && email.trim() ? email.trim() : null
+  const phoneNorm = phone ? phone.replace(/\D/g, "") : null
+
+  const updateData: Record<string, unknown> = { name, email: emailNorm, phone: phoneNorm, role }
   if (password) updateData.password = await bcrypt.hash(password, 12)
 
   await prisma.$transaction(async (tx) => {
     await tx.user.update({ where: { id }, data: updateData })
 
     if (role === "STUDENT") {
+      const gId = guardianId && guardianId.trim() ? guardianId.trim() : undefined
       await tx.student.upsert({
         where:  { userId: id },
-        update: { grade: grade ?? "Não informado", school, educationLevel: educationLevel as EducationLevel | undefined },
-        create: { userId: id, grade: grade ?? "Não informado", school, educationLevel: educationLevel as EducationLevel | undefined },
+        update: { grade: grade ?? "Não informado", school, educationLevel: educationLevel as EducationLevel | undefined, guardianId: gId ?? null },
+        create: { userId: id, grade: grade ?? "Não informado", school, educationLevel: educationLevel as EducationLevel | undefined, guardianId: gId },
       })
     }
     if (role === "TEACHER") {
@@ -87,6 +126,13 @@ export async function updateUserAction(id: string, formData: FormData) {
         where:  { userId: id },
         update: { hourlyRate: hourlyRate ?? 0, bio, teachingMode: (teachingMode ?? "HYBRID") as TeacherMode },
         create: { userId: id, hourlyRate: hourlyRate ?? 0, bio, teachingMode: (teachingMode ?? "HYBRID") as TeacherMode },
+      })
+    }
+    if (role === "GUARDIAN") {
+      await tx.guardian.upsert({
+        where:  { userId: id },
+        update: { relationship: relationship || null },
+        create: { userId: id, relationship: relationship || null },
       })
     }
   })

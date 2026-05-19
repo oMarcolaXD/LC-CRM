@@ -65,11 +65,12 @@ function SubmitButton({ disabled }: { disabled?: boolean }) {
 }
 
 export function BookingForm({
-  teachers, subjects, studentLevel, error,
+  teachers, subjects, studentLevel, studentId, error,
 }: {
   teachers:     Teacher[]
   subjects:     Subject[]
   studentLevel: EducationLevel | null
+  studentId:    string
   error?:       string
 }) {
   const [subjectId,    setSubjectId]    = useState("")
@@ -156,6 +157,7 @@ export function BookingForm({
       )}
 
       {/* Hidden inputs */}
+      <input type="hidden" name="studentId"      value={studentId} />
       <input type="hidden" name="teacherId"      value={teacherId} />
       <input type="hidden" name="subjectId"      value={subjectId} />
       <input type="hidden" name="preferredAt"    value={preferredAt} />

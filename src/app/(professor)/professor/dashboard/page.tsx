@@ -161,7 +161,7 @@ export default async function ProfessorDashboard() {
                     <p className="text-xs text-muted-foreground">{format(l.scheduledAt, "HH:mm")}</p>
                   </div>
                   <div className="min-w-0">
-                    <p className="text-sm font-medium truncate">{l.student.user.name}</p>
+                    <p className="text-sm font-medium truncate">{l.student.user?.name ?? "Aluno"}</p>
                     <p className="text-xs text-muted-foreground">{l.subject.name}</p>
                   </div>
                 </div>

@@ -10,18 +10,15 @@ const prisma = new PrismaClient()
 const hash   = (pwd: string) => bcrypt.hash(pwd, 12)
 const now    = new Date()
 
-// Preço padrão por aula (R$90) — alinhado com a operação real
 const PRECO_AULA = 90
 
-// Taxa paga ao professor por aula — escola fica com a diferença
-// Ex: R$90 - R$65 = R$25 de margem por aula
 const TAXAS_PROFESSOR: Record<string, number> = {
-  "teacher-1": 65, // Ana Beatriz
-  "teacher-2": 60, // Carlos Eduardo
-  "teacher-3": 70, // Fernanda
-  "teacher-4": 58, // Marcos
-  "teacher-5": 65, // Patricia
-  "teacher-6": 60, // Renato
+  "teacher-1": 65,
+  "teacher-2": 60,
+  "teacher-3": 70,
+  "teacher-4": 58,
+  "teacher-5": 65,
+  "teacher-6": 60,
 }
 
 function pastDate(monthsAgo: number, dayOffset = 0, hour = 10) {
@@ -30,7 +27,6 @@ function pastDate(monthsAgo: number, dayOffset = 0, hour = 10) {
   return setMinutes(setHours(d, hour), 0)
 }
 
-// Gera N aulas distribuídas em um mês, variando hora e dia
 function gerarAulasMes(
   studentId: string,
   teacherId: string,
@@ -50,16 +46,13 @@ function gerarAulasMes(
     const day      = 2 + i * Math.floor(28 / quantidade)
     const hour     = hours[i % hours.length]
     const modality = i % 3 === 0 ? LessonModality.ONLINE : LessonModality.PRESENCIAL
-    // Professor na sede: sempre se for PRESENCIAL, ou se for HYBRID com aula presencial
     const teacherOnsite =
       teacherMode === TeacherMode.PRESENCIAL ||
       (teacherMode === TeacherMode.HYBRID && modality === LessonModality.PRESENCIAL)
     return {
       studentId, teacherId, subjectId,
       scheduledAt: pastDate(monthsAgo, day, hour),
-      modality,
-      teacherOnsite,
-      status,
+      modality, teacherOnsite, status,
       studentRating: rating,
       topicsCovered: status === LessonStatus.COMPLETED
         ? "Revisão do conteúdo + exercícios práticos" : null,
@@ -104,7 +97,7 @@ async function main() {
     data: {
       id: "user-admin", name: "Administrador",
       email: "admin@licaodecasa.com.br", password: await hash("Admin@123"),
-      role: Role.ADMIN, phone: "(15) 99999-0001",
+      role: Role.ADMIN, phone: "15999990001",
     },
   })
 
@@ -113,13 +106,12 @@ async function main() {
     data: {
       id: "user-colab1", name: "Júlia Mendes",
       email: "julia@licaodecasa.com.br", password: await hash("Colab@123"),
-      role: Role.COLLABORATOR, phone: "(15) 99999-0002",
+      role: Role.COLLABORATOR, phone: "15999990002",
     },
   })
   console.log("✅ Admin + Colaborador")
 
   // ─── Professores ───────────────────────────────────────────────────────────
-  // Disponibilidade: seg-sex ampla para absorver ~400 aulas/mês
   const avail5dias = {
     "1": [{ start: "08:00", end: "19:00" }],
     "2": [{ start: "08:00", end: "19:00" }],
@@ -147,7 +139,7 @@ async function main() {
       uid: "user-prof1", tid: "teacher-1", name: "Ana Beatriz Silva",
       email: "ana@licaodecasa.com.br", avail: avail5dias,
       mode: TeacherMode.PRESENCIAL,
-      bio: "Professora de Matemática e Física com 8 anos de experiência em reforço escolar e pré-vestibular. Especialista em tornar o abstrato concreto.",
+      bio: "Professora de Matemática e Física com 8 anos de experiência em reforço escolar e pré-vestibular.",
       subs: [
         { id: "sub-mat", levels: [EducationLevel.EF2, EducationLevel.EM, EducationLevel.VESTIBULAR] },
         { id: "sub-fis", levels: [EducationLevel.EF2, EducationLevel.EM, EducationLevel.VESTIBULAR, EducationLevel.SUPERIOR] },
@@ -157,7 +149,7 @@ async function main() {
       uid: "user-prof2", tid: "teacher-2", name: "Carlos Eduardo Lima",
       email: "carlos@licaodecasa.com.br", avail: availSeg_Qua_Sex,
       mode: TeacherMode.ONLINE_ONLY,
-      bio: "Mestre em Letras com foco em redação dissertativa e literatura. Atende exclusivamente online com metodologia comprovada para ENEM.",
+      bio: "Mestre em Letras com foco em redação dissertativa. Atende exclusivamente online.",
       subs: [
         { id: "sub-por", levels: [EducationLevel.EF2, EducationLevel.EM, EducationLevel.VESTIBULAR, EducationLevel.SUPERIOR] },
         { id: "sub-his", levels: [EducationLevel.EF2, EducationLevel.EM, EducationLevel.VESTIBULAR] },
@@ -167,7 +159,7 @@ async function main() {
       uid: "user-prof3", tid: "teacher-3", name: "Fernanda Rocha",
       email: "fernanda@licaodecasa.com.br", avail: avail5dias,
       mode: TeacherMode.HYBRID,
-      bio: "Bióloga e química formada pela USP. Trabalha tanto presencialmente na sede quanto online, com ótimos resultados em Ciências da Natureza.",
+      bio: "Bióloga e química formada pela USP. Atende presencialmente na sede e online.",
       subs: [
         { id: "sub-qui", levels: [EducationLevel.EF2, EducationLevel.EM, EducationLevel.VESTIBULAR, EducationLevel.SUPERIOR] },
         { id: "sub-bio", levels: [EducationLevel.EF2, EducationLevel.EM, EducationLevel.VESTIBULAR, EducationLevel.SUPERIOR] },
@@ -177,7 +169,7 @@ async function main() {
       uid: "user-prof4", tid: "teacher-4", name: "Marcos Oliveira",
       email: "marcos@licaodecasa.com.br", avail: availTer_Qui_Sab,
       mode: TeacherMode.PRESENCIAL,
-      bio: "Professor de Matemática e Geografia, especialista em Ensino Fundamental. Atende presencialmente na sede com metodologia lúdica e prática.",
+      bio: "Especialista em Ensino Fundamental. Atende presencialmente na sede.",
       subs: [
         { id: "sub-mat", levels: [EducationLevel.EF2, EducationLevel.EM] },
         { id: "sub-geo", levels: [EducationLevel.EF2, EducationLevel.EM] },
@@ -187,7 +179,7 @@ async function main() {
       uid: "user-prof5", tid: "teacher-5", name: "Patricia Santos",
       email: "patricia@licaodecasa.com.br", avail: availSeg_Qua_Sex,
       mode: TeacherMode.ONLINE_ONLY,
-      bio: "Fluente em 4 idiomas, com MBA no exterior. Especialista em inglês para negócios e proficiência. Atende apenas online.",
+      bio: "Fluente em 4 idiomas. Especialista em inglês para negócios. Atende apenas online.",
       subs: [
         { id: "sub-ing", levels: [EducationLevel.EF2, EducationLevel.EM, EducationLevel.SUPERIOR, EducationLevel.VESTIBULAR] },
         { id: "sub-por", levels: [EducationLevel.EM, EducationLevel.SUPERIOR, EducationLevel.VESTIBULAR] },
@@ -197,7 +189,7 @@ async function main() {
       uid: "user-prof6", tid: "teacher-6", name: "Renato Alves",
       email: "renato@licaodecasa.com.br", avail: availTer_Qui_Sab,
       mode: TeacherMode.HYBRID,
-      bio: "Engenheiro de formação convertido ao ensino. Leciona Física e Matemática com foco em resolução de problemas e aplicações do dia a dia.",
+      bio: "Engenheiro convertido ao ensino. Física e Matemática com foco em resolução de problemas.",
       subs: [
         { id: "sub-fis", levels: [EducationLevel.EF2, EducationLevel.EM, EducationLevel.SUPERIOR] },
         { id: "sub-mat", levels: [EducationLevel.EF2, EducationLevel.EM, EducationLevel.VESTIBULAR] },
@@ -206,7 +198,7 @@ async function main() {
   ]
 
   for (const t of professores) {
-    const fone = `(15) 9${Math.floor(Math.random() * 9000 + 1000)}-${Math.floor(Math.random() * 9000 + 1000)}`
+    const fone = `159${Math.floor(Math.random() * 9000 + 1000)}${Math.floor(Math.random() * 9000 + 1000)}`
     await prisma.user.create({
       data: { id: t.uid, name: t.name, email: t.email, password: await hash("Prof@123"), role: Role.TEACHER, phone: fone },
     })
@@ -221,81 +213,133 @@ async function main() {
       },
     })
   }
-  console.log(`✅ ${professores.length} professores (taxa R$${Math.min(...Object.values(TAXAS_PROFESSOR))}–R$${Math.max(...Object.values(TAXAS_PROFESSOR))}/aula)`)
+  console.log(`✅ ${professores.length} professores`)
 
-  // ─── Alunos ────────────────────────────────────────────────────────────────
-  // 12 alunos com perfis variados (4–7 aulas/mês cada)
-  const alunos: { uid: string; sid: string; name: string; email: string; grade: string; educationLevel: EducationLevel }[] = [
-    { uid: "user-stu1",  sid: "student-1",  name: "Lucas Alves",       email: "lucas@email.com",       grade: "9º EF",      educationLevel: EducationLevel.EF2        },
-    { uid: "user-stu2",  sid: "student-2",  name: "Isabela Ferreira",  email: "isabela@email.com",     grade: "1º EM",      educationLevel: EducationLevel.EM         },
-    { uid: "user-stu3",  sid: "student-3",  name: "Gabriel Souza",     email: "gabriel@email.com",     grade: "2º EM",      educationLevel: EducationLevel.EM         },
-    { uid: "user-stu4",  sid: "student-4",  name: "Maria Clara Lima",  email: "mariaclara@email.com",  grade: "3º EM",      educationLevel: EducationLevel.EM         },
-    { uid: "user-stu5",  sid: "student-5",  name: "Pedro Henrique",    email: "pedro@email.com",       grade: "Vestibular", educationLevel: EducationLevel.VESTIBULAR },
-    { uid: "user-stu6",  sid: "student-6",  name: "Larissa Costa",     email: "larissa@email.com",     grade: "8º EF",      educationLevel: EducationLevel.EF2        },
-    { uid: "user-stu7",  sid: "student-7",  name: "Bruno Martins",     email: "bruno@email.com",       grade: "6º EF",      educationLevel: EducationLevel.EF2        },
-    { uid: "user-stu8",  sid: "student-8",  name: "Amanda Ribeiro",    email: "amanda@email.com",      grade: "7º EF",      educationLevel: EducationLevel.EF2        },
-    { uid: "user-stu9",  sid: "student-9",  name: "Thiago Barbosa",    email: "thiago@email.com",      grade: "1º EM",      educationLevel: EducationLevel.EM         },
-    { uid: "user-stu10", sid: "student-10", name: "Camila Pereira",    email: "camila@email.com",      grade: "Superior",   educationLevel: EducationLevel.SUPERIOR   },
-    { uid: "user-stu11", sid: "student-11", name: "Vinícius Rocha",    email: "vinicius@email.com",    grade: "2º EM",      educationLevel: EducationLevel.EM         },
-    { uid: "user-stu12", sid: "student-12", name: "Letícia Gomes",     email: "leticia@email.com",     grade: "3º EM",      educationLevel: EducationLevel.EM         },
+  // ─── Responsáveis (GUARDIAN) — os que fazem login no portal do aluno ────────
+  //
+  // Modelo: somente o RESPONSÁVEL faz login. Alunos não têm conta de usuário
+  // (Student.userId é opcional). Exceção: alunos adultos são próprios responsáveis.
+  //
+  // Cenário especial: Sr. Martins tem 2 filhos (Bruno + Amanda) → testa seletor de aluno.
+  // Camila e Pedro (adultos) são próprios responsáveis.
+
+  // Guardião 1 — Mãe do Lucas (student-1)
+  await prisma.user.create({ data: { id: "user-guard1", name: "Sandra Alves", email: "mae.lucas@email.com", password: await hash("Resp@123"), role: Role.GUARDIAN, phone: "15999991001" } })
+  await prisma.guardian.create({ data: { id: "guardian-1", userId: "user-guard1", relationship: "Mãe" } })
+
+  // Guardião 2 — Mãe da Isabela (student-2)
+  await prisma.user.create({ data: { id: "user-guard2", name: "Rita Ferreira", email: "mae.isabela@email.com", password: await hash("Resp@123"), role: Role.GUARDIAN, phone: "15999991002" } })
+  await prisma.guardian.create({ data: { id: "guardian-2", userId: "user-guard2", relationship: "Mãe" } })
+
+  // Guardião 3 — Pai do Gabriel (student-3)
+  await prisma.user.create({ data: { id: "user-guard3", name: "Roberto Souza", email: "pai.gabriel@email.com", password: await hash("Resp@123"), role: Role.GUARDIAN, phone: "15999991003" } })
+  await prisma.guardian.create({ data: { id: "guardian-3", userId: "user-guard3", relationship: "Pai" } })
+
+  // Guardião 4 — Mãe da Maria Clara (student-4)
+  await prisma.user.create({ data: { id: "user-guard4", name: "Fernanda Lima", email: "mae.mariaclara@email.com", password: await hash("Resp@123"), role: Role.GUARDIAN, phone: "15999991004" } })
+  await prisma.guardian.create({ data: { id: "guardian-4", userId: "user-guard4", relationship: "Mãe" } })
+
+  // Guardião 5 — Pedro (vestibular, adulto, próprio responsável)
+  await prisma.user.create({ data: { id: "user-guard5", name: "Pedro Henrique", email: "pedro@email.com", password: await hash("Resp@123"), role: Role.GUARDIAN, phone: "15999991005" } })
+  await prisma.guardian.create({ data: { id: "guardian-5", userId: "user-guard5", relationship: "Próprio" } })
+
+  // Guardião 6 — Mãe da Larissa (student-6)
+  await prisma.user.create({ data: { id: "user-guard6", name: "Marcia Costa", email: "mae.larissa@email.com", password: await hash("Resp@123"), role: Role.GUARDIAN, phone: "15999991006" } })
+  await prisma.guardian.create({ data: { id: "guardian-6", userId: "user-guard6", relationship: "Mãe" } })
+
+  // Guardião 7 — Pai do Bruno E da Amanda (2 filhos — testa seletor!)
+  await prisma.user.create({ data: { id: "user-guard7", name: "Carlos Martins", email: "pai.martins@email.com", password: await hash("Resp@123"), role: Role.GUARDIAN, phone: "15999991007" } })
+  await prisma.guardian.create({ data: { id: "guardian-7", userId: "user-guard7", relationship: "Pai" } })
+
+  // Guardião 8 — Mãe do Thiago (student-9)
+  await prisma.user.create({ data: { id: "user-guard8", name: "Luciana Barbosa", email: "mae.thiago@email.com", password: await hash("Resp@123"), role: Role.GUARDIAN, phone: "15999991008" } })
+  await prisma.guardian.create({ data: { id: "guardian-8", userId: "user-guard8", relationship: "Mãe" } })
+
+  // Guardião 9 — Camila (Superior, adulta, própria responsável)
+  await prisma.user.create({ data: { id: "user-guard9", name: "Camila Pereira", email: "camila@email.com", password: await hash("Resp@123"), role: Role.GUARDIAN, phone: "15999991009" } })
+  await prisma.guardian.create({ data: { id: "guardian-9", userId: "user-guard9", relationship: "Próprio" } })
+
+  // Guardião 10 — Mãe do Vinícius (student-11)
+  await prisma.user.create({ data: { id: "user-guard10", name: "Patrícia Rocha", email: "mae.vinicius@email.com", password: await hash("Resp@123"), role: Role.GUARDIAN, phone: "15999991010" } })
+  await prisma.guardian.create({ data: { id: "guardian-10", userId: "user-guard10", relationship: "Mãe" } })
+
+  // Guardião 11 — Mãe da Letícia (student-12)
+  await prisma.user.create({ data: { id: "user-guard11", name: "Claudia Gomes", email: "mae.leticia@email.com", password: await hash("Resp@123"), role: Role.GUARDIAN, phone: "15999991011" } })
+  await prisma.guardian.create({ data: { id: "guardian-11", userId: "user-guard11", relationship: "Mãe" } })
+
+  console.log("✅ 11 responsáveis (9 pais/mães + 2 adultos próprios responsáveis)")
+
+  // ─── Alunos (SEM conta de usuário — Student.userId é opcional) ─────────────
+  // Pedro e Camila são seus próprios responsáveis (guardian-5 e guardian-9)
+  const alunosDefs: {
+    id: string; name: string; grade: string
+    educationLevel: EducationLevel; guardianId: string; school?: string
+  }[] = [
+    { id: "student-1",  name: "Lucas Alves",       grade: "9º EF",      educationLevel: EducationLevel.EF2,        guardianId: "guardian-1", school: "E.E. João Paulo II"   },
+    { id: "student-2",  name: "Isabela Ferreira",  grade: "1º EM",      educationLevel: EducationLevel.EM,         guardianId: "guardian-2", school: "Colégio São Paulo"    },
+    { id: "student-3",  name: "Gabriel Souza",     grade: "2º EM",      educationLevel: EducationLevel.EM,         guardianId: "guardian-3", school: "Colégio São Paulo"    },
+    { id: "student-4",  name: "Maria Clara Lima",  grade: "3º EM",      educationLevel: EducationLevel.EM,         guardianId: "guardian-4", school: "E.E. João Paulo II"   },
+    { id: "student-5",  name: "Pedro Henrique",    grade: "Vestibular", educationLevel: EducationLevel.VESTIBULAR, guardianId: "guardian-5"                                  },
+    { id: "student-6",  name: "Larissa Costa",     grade: "8º EF",      educationLevel: EducationLevel.EF2,        guardianId: "guardian-6", school: "Escola Municipal ABC" },
+    { id: "student-7",  name: "Bruno Martins",     grade: "6º EF",      educationLevel: EducationLevel.EF2,        guardianId: "guardian-7", school: "Escola Municipal ABC" },
+    { id: "student-8",  name: "Amanda Martins",    grade: "7º EF",      educationLevel: EducationLevel.EF2,        guardianId: "guardian-7", school: "Escola Municipal ABC" },  // irmã do Bruno
+    { id: "student-9",  name: "Thiago Barbosa",    grade: "1º EM",      educationLevel: EducationLevel.EM,         guardianId: "guardian-8", school: "Colégio São Paulo"    },
+    { id: "student-10", name: "Camila Pereira",    grade: "Superior",   educationLevel: EducationLevel.SUPERIOR,   guardianId: "guardian-9"                                  },
+    { id: "student-11", name: "Vinícius Rocha",    grade: "2º EM",      educationLevel: EducationLevel.EM,         guardianId: "guardian-10", school: "Colégio São Paulo"   },
+    { id: "student-12", name: "Letícia Gomes",     grade: "3º EM",      educationLevel: EducationLevel.EM,         guardianId: "guardian-11", school: "E.E. João Paulo II"  },
   ]
 
-  for (const s of alunos) {
-    await prisma.user.create({
-      data: { id: s.uid, name: s.name, email: s.email, password: await hash("Aluno@123"), role: Role.STUDENT },
+  for (const s of alunosDefs) {
+    await prisma.student.create({
+      data: {
+        id: s.id, grade: s.grade, educationLevel: s.educationLevel,
+        guardianId: s.guardianId, school: s.school ?? null,
+        // userId: null — alunos não têm conta própria de login
+      },
     })
-    await prisma.student.create({ data: { id: s.sid, userId: s.uid, grade: s.grade, educationLevel: s.educationLevel } })
   }
-  console.log(`✅ ${alunos.length} alunos`)
+  console.log(`✅ ${alunosDefs.length} alunos (sem conta de login — login via responsável)`)
 
   // ─── Pacotes de Aulas ──────────────────────────────────────────────────────
-  // Pacotes de 10 ou 20 aulas a R$90/aula
-  // 10 aulas = R$900  → cobre ~1,5–2,5 meses (4–7 aulas/mês)
-  // 20 aulas = R$1.800 → cobre ~3–5 meses
   const pacotes = [
-    // [id, studentId, total, remaining, status]
-    { id: "pkg-1",  sid: "student-1",  total: 20, remaining: 8,  status: PackageStatus.ACTIVE    }, // Lucas: 7 aulas/mês → ~1,1 mês restante
-    { id: "pkg-2",  sid: "student-2",  total: 10, remaining: 3,  status: PackageStatus.ACTIVE    }, // Isabela: 4 aulas/mês
-    { id: "pkg-3",  sid: "student-3",  total: 20, remaining: 12, status: PackageStatus.ACTIVE    }, // Gabriel: 5 aulas/mês
-    { id: "pkg-4",  sid: "student-4",  total: 10, remaining: 0,  status: PackageStatus.EXHAUSTED }, // Maria Clara: esgotado
-    { id: "pkg-4b", sid: "student-4",  total: 20, remaining: 14, status: PackageStatus.ACTIVE    }, // novo pacote ativo
-    { id: "pkg-5",  sid: "student-5",  total: 20, remaining: 6,  status: PackageStatus.ACTIVE    }, // Pedro: 7 aulas/mês (vestibular)
-    { id: "pkg-6",  sid: "student-6",  total: 10, remaining: 5,  status: PackageStatus.ACTIVE    }, // Larissa: 4 aulas/mês
-    { id: "pkg-7",  sid: "student-7",  total: 10, remaining: 7,  status: PackageStatus.ACTIVE    }, // Bruno: 4 aulas/mês (iniciante)
-    { id: "pkg-8",  sid: "student-8",  total: 20, remaining: 10, status: PackageStatus.ACTIVE    }, // Amanda: 5 aulas/mês
-    { id: "pkg-9",  sid: "student-9",  total: 10, remaining: 2,  status: PackageStatus.ACTIVE    }, // Thiago: 4 aulas/mês
-    { id: "pkg-10", sid: "student-10", total: 20, remaining: 11, status: PackageStatus.ACTIVE    }, // Camila: 6 aulas/mês (Superior)
-    { id: "pkg-11", sid: "student-11", total: 10, remaining: 4,  status: PackageStatus.ACTIVE    }, // Vinícius: 5 aulas/mês
-    { id: "pkg-12", sid: "student-12", total: 10, remaining: 1,  status: PackageStatus.ACTIVE    }, // Letícia: 4 aulas/mês
+    { id: "pkg-1",  sid: "student-1",  total: 20, remaining: 8,  status: PackageStatus.ACTIVE    },
+    { id: "pkg-2",  sid: "student-2",  total: 10, remaining: 3,  status: PackageStatus.ACTIVE    },
+    { id: "pkg-3",  sid: "student-3",  total: 20, remaining: 12, status: PackageStatus.ACTIVE    },
+    { id: "pkg-4",  sid: "student-4",  total: 10, remaining: 0,  status: PackageStatus.EXHAUSTED },
+    { id: "pkg-4b", sid: "student-4",  total: 20, remaining: 14, status: PackageStatus.ACTIVE    },
+    { id: "pkg-5",  sid: "student-5",  total: 20, remaining: 6,  status: PackageStatus.ACTIVE    },
+    { id: "pkg-6",  sid: "student-6",  total: 10, remaining: 5,  status: PackageStatus.ACTIVE    },
+    { id: "pkg-7",  sid: "student-7",  total: 10, remaining: 7,  status: PackageStatus.ACTIVE    },
+    { id: "pkg-8",  sid: "student-8",  total: 20, remaining: 10, status: PackageStatus.ACTIVE    },
+    { id: "pkg-9",  sid: "student-9",  total: 10, remaining: 2,  status: PackageStatus.ACTIVE    },
+    { id: "pkg-10", sid: "student-10", total: 20, remaining: 11, status: PackageStatus.ACTIVE    },
+    { id: "pkg-11", sid: "student-11", total: 10, remaining: 4,  status: PackageStatus.ACTIVE    },
+    { id: "pkg-12", sid: "student-12", total: 10, remaining: 1,  status: PackageStatus.ACTIVE    },
   ]
 
   for (const p of pacotes) {
     await prisma.lessonPackage.create({
       data: {
         id: p.id, studentId: p.sid,
-        totalLessons:     p.total,
-        remainingLessons: p.remaining,
-        pricePerLesson:   PRECO_AULA,        // R$90 por aula
-        purchaseDate:     subMonths(now, Math.floor(Math.random() * 4 + 1)),
-        expiresAt:        new Date(now.getFullYear(), now.getMonth() + 6, 1), // expira em 6 meses
-        status:           p.status,
+        totalLessons: p.total, remainingLessons: p.remaining,
+        pricePerLesson: PRECO_AULA,
+        purchaseDate:   subMonths(now, Math.floor(Math.random() * 4 + 1)),
+        expiresAt:      new Date(now.getFullYear(), now.getMonth() + 6, 1),
+        status:         p.status,
       },
     })
   }
-  console.log(`✅ ${pacotes.length} pacotes (R$${PRECO_AULA}/aula · 10 ou 20 aulas)`)
+  console.log(`✅ ${pacotes.length} pacotes (R$${PRECO_AULA}/aula)`)
 
-  // ─── Aulas (6 meses de histórico) ─────────────────────────────────────────
-  // Volume: 4–7 aulas/mês por aluno, refletindo a operação real (~400 aulas/mês)
-  // Modos de ensino por professor (mesma ordem da array professores acima)
-  const T1 = TeacherMode.PRESENCIAL   // Ana
-  const T2 = TeacherMode.ONLINE_ONLY  // Carlos
-  const T3 = TeacherMode.HYBRID       // Fernanda
-  const T4 = TeacherMode.PRESENCIAL   // Marcos
-  const T5 = TeacherMode.ONLINE_ONLY  // Patricia
-  const T6 = TeacherMode.HYBRID       // Renato
+  // ─── Aulas ────────────────────────────────────────────────────────────────
+  const T1 = TeacherMode.PRESENCIAL
+  const T2 = TeacherMode.ONLINE_ONLY
+  const T3 = TeacherMode.HYBRID
+  const T4 = TeacherMode.PRESENCIAL
+  const T5 = TeacherMode.ONLINE_ONLY
+  const T6 = TeacherMode.HYBRID
 
   const todasAulas: ReturnType<typeof gerarAulasMes>[0][] = [
-    // Lucas — 7 aulas/mês com Ana (PRESENCIAL)
     ...gerarAulasMes("student-1","teacher-1","sub-mat",5,7,LessonStatus.COMPLETED,5,T1),
     ...gerarAulasMes("student-1","teacher-1","sub-mat",4,7,LessonStatus.COMPLETED,4,T1),
     ...gerarAulasMes("student-1","teacher-1","sub-fis",3,4,LessonStatus.COMPLETED,5,T1),
@@ -303,7 +347,6 @@ async function main() {
     ...gerarAulasMes("student-1","teacher-1","sub-mat",1,6,LessonStatus.COMPLETED,4,T1),
     ...gerarAulasMes("student-1","teacher-1","sub-mat",0,2,LessonStatus.SCHEDULED,null,T1),
 
-    // Isabela — 4 aulas/mês com Carlos (ONLINE_ONLY)
     ...gerarAulasMes("student-2","teacher-2","sub-por",5,4,LessonStatus.COMPLETED,4,T2),
     ...gerarAulasMes("student-2","teacher-2","sub-por",4,4,LessonStatus.COMPLETED,5,T2),
     ...gerarAulasMes("student-2","teacher-2","sub-his",3,4,LessonStatus.COMPLETED,4,T2),
@@ -311,7 +354,6 @@ async function main() {
     ...gerarAulasMes("student-2","teacher-2","sub-por",1,3,LessonStatus.COMPLETED,4,T2),
     ...gerarAulasMes("student-2","teacher-2","sub-por",0,1,LessonStatus.CONFIRMED,null,T2),
 
-    // Gabriel — 5 aulas/mês com Fernanda (HYBRID)
     ...gerarAulasMes("student-3","teacher-3","sub-qui",5,5,LessonStatus.COMPLETED,5,T3),
     ...gerarAulasMes("student-3","teacher-3","sub-qui",4,5,LessonStatus.COMPLETED,4,T3),
     ...gerarAulasMes("student-3","teacher-3","sub-bio",3,5,LessonStatus.COMPLETED,5,T3),
@@ -319,7 +361,6 @@ async function main() {
     ...gerarAulasMes("student-3","teacher-3","sub-qui",1,4,LessonStatus.COMPLETED,5,T3),
     ...gerarAulasMes("student-3","teacher-3","sub-qui",0,2,LessonStatus.SCHEDULED,null,T3),
 
-    // Maria Clara — 6 aulas/mês com Marcos (PRESENCIAL)
     ...gerarAulasMes("student-4","teacher-4","sub-mat",5,6,LessonStatus.COMPLETED,4,T4),
     ...gerarAulasMes("student-4","teacher-4","sub-geo",4,6,LessonStatus.COMPLETED,4,T4),
     ...gerarAulasMes("student-4","teacher-4","sub-mat",3,6,LessonStatus.COMPLETED,5,T4),
@@ -327,7 +368,6 @@ async function main() {
     ...gerarAulasMes("student-4","teacher-4","sub-mat",1,5,LessonStatus.COMPLETED,5,T4),
     ...gerarAulasMes("student-4","teacher-4","sub-mat",0,2,LessonStatus.CONFIRMED,null,T4),
 
-    // Pedro — 7 aulas/mês com Patricia (ONLINE_ONLY)
     ...gerarAulasMes("student-5","teacher-5","sub-ing",5,7,LessonStatus.COMPLETED,5,T5),
     ...gerarAulasMes("student-5","teacher-5","sub-ing",4,7,LessonStatus.COMPLETED,5,T5),
     ...gerarAulasMes("student-5","teacher-5","sub-por",3,7,LessonStatus.COMPLETED,4,T5),
@@ -335,20 +375,18 @@ async function main() {
     ...gerarAulasMes("student-5","teacher-5","sub-ing",1,6,LessonStatus.COMPLETED,5,T5),
     ...gerarAulasMes("student-5","teacher-5","sub-ing",0,2,LessonStatus.SCHEDULED,null,T5),
 
-    // Larissa — 4 aulas/mês com Renato (HYBRID)
     ...gerarAulasMes("student-6","teacher-6","sub-fis",4,4,LessonStatus.COMPLETED,4,T6),
     ...gerarAulasMes("student-6","teacher-6","sub-fis",3,4,LessonStatus.COMPLETED,4,T6),
     ...gerarAulasMes("student-6","teacher-6","sub-mat",2,4,LessonStatus.COMPLETED,3,T6),
     ...gerarAulasMes("student-6","teacher-6","sub-fis",1,3,LessonStatus.COMPLETED,4,T6),
     ...gerarAulasMes("student-6","teacher-6","sub-fis",0,1,LessonStatus.SCHEDULED,null,T6),
 
-    // Bruno — 4 aulas/mês com Marcos (PRESENCIAL)
     ...gerarAulasMes("student-7","teacher-4","sub-mat",3,4,LessonStatus.COMPLETED,4,T4),
     ...gerarAulasMes("student-7","teacher-4","sub-mat",2,4,LessonStatus.COMPLETED,3,T4),
     ...gerarAulasMes("student-7","teacher-4","sub-mat",1,3,LessonStatus.COMPLETED,4,T4),
     ...gerarAulasMes("student-7","teacher-4","sub-mat",0,1,LessonStatus.SCHEDULED,null,T4),
 
-    // Amanda — 5 aulas/mês com Fernanda (HYBRID)
+    // Amanda (irmã do Bruno — mesmo guardião guardian-7)
     ...gerarAulasMes("student-8","teacher-3","sub-bio",5,5,LessonStatus.COMPLETED,5,T3),
     ...gerarAulasMes("student-8","teacher-3","sub-bio",4,5,LessonStatus.COMPLETED,5,T3),
     ...gerarAulasMes("student-8","teacher-3","sub-qui",3,5,LessonStatus.COMPLETED,4,T3),
@@ -356,14 +394,12 @@ async function main() {
     ...gerarAulasMes("student-8","teacher-3","sub-bio",1,4,LessonStatus.COMPLETED,5,T3),
     ...gerarAulasMes("student-8","teacher-3","sub-bio",0,1,LessonStatus.CONFIRMED,null,T3),
 
-    // Thiago — 4 aulas/mês com Ana (PRESENCIAL)
     ...gerarAulasMes("student-9","teacher-1","sub-fis",4,4,LessonStatus.COMPLETED,4,T1),
     ...gerarAulasMes("student-9","teacher-1","sub-fis",3,4,LessonStatus.COMPLETED,5,T1),
     ...gerarAulasMes("student-9","teacher-1","sub-mat",2,4,LessonStatus.COMPLETED,4,T1),
     ...gerarAulasMes("student-9","teacher-1","sub-fis",1,3,LessonStatus.COMPLETED,4,T1),
     ...gerarAulasMes("student-9","teacher-1","sub-fis",0,1,LessonStatus.SCHEDULED,null,T1),
 
-    // Camila — 6 aulas/mês com Patricia (ONLINE_ONLY)
     ...gerarAulasMes("student-10","teacher-5","sub-ing",5,6,LessonStatus.COMPLETED,5,T5),
     ...gerarAulasMes("student-10","teacher-5","sub-ing",4,6,LessonStatus.COMPLETED,5,T5),
     ...gerarAulasMes("student-10","teacher-5","sub-por",3,6,LessonStatus.COMPLETED,5,T5),
@@ -371,14 +407,12 @@ async function main() {
     ...gerarAulasMes("student-10","teacher-5","sub-ing",1,5,LessonStatus.COMPLETED,4,T5),
     ...gerarAulasMes("student-10","teacher-5","sub-ing",0,2,LessonStatus.CONFIRMED,null,T5),
 
-    // Vinícius — 5 aulas/mês com Fernanda (HYBRID)
     ...gerarAulasMes("student-11","teacher-3","sub-qui",4,5,LessonStatus.COMPLETED,4,T3),
     ...gerarAulasMes("student-11","teacher-3","sub-qui",3,5,LessonStatus.COMPLETED,4,T3),
     ...gerarAulasMes("student-11","teacher-3","sub-qui",2,5,LessonStatus.COMPLETED,3,T3),
     ...gerarAulasMes("student-11","teacher-3","sub-qui",1,4,LessonStatus.COMPLETED,4,T3),
     ...gerarAulasMes("student-11","teacher-3","sub-qui",0,1,LessonStatus.SCHEDULED,null,T3),
 
-    // Letícia — 4 aulas/mês com Carlos (ONLINE_ONLY)
     ...gerarAulasMes("student-12","teacher-2","sub-his",3,4,LessonStatus.COMPLETED,4,T2),
     ...gerarAulasMes("student-12","teacher-2","sub-por",2,4,LessonStatus.COMPLETED,5,T2),
     ...gerarAulasMes("student-12","teacher-2","sub-his",1,4,LessonStatus.COMPLETED,5,T2),
@@ -391,44 +425,30 @@ async function main() {
   console.log(`✅ ${todasAulas.length} aulas criadas`)
 
   // ─── Pagamentos ────────────────────────────────────────────────────────────
-  // Cada pagamento = compra de um pacote
-  // 10 aulas × R$90 = R$900 | 20 aulas × R$90 = R$1.800
   const pagamentoDefs: { sid: string; amount: number; monthsAgo: number; status: PaymentStatus }[] = [
-    // Lucas — pacote de 20 aulas a cada ~3 meses
     { sid: "student-1",  amount: 20 * PRECO_AULA, monthsAgo: 5, status: PaymentStatus.PAID    },
     { sid: "student-1",  amount: 20 * PRECO_AULA, monthsAgo: 2, status: PaymentStatus.PAID    },
-    // Isabela — pacote de 10 aulas a cada ~2,5 meses
     { sid: "student-2",  amount: 10 * PRECO_AULA, monthsAgo: 5, status: PaymentStatus.PAID    },
     { sid: "student-2",  amount: 10 * PRECO_AULA, monthsAgo: 2, status: PaymentStatus.PAID    },
     { sid: "student-2",  amount: 10 * PRECO_AULA, monthsAgo: 0, status: PaymentStatus.PENDING },
-    // Gabriel — pacote de 20 aulas a cada ~4 meses
     { sid: "student-3",  amount: 20 * PRECO_AULA, monthsAgo: 4, status: PaymentStatus.PAID    },
     { sid: "student-3",  amount: 20 * PRECO_AULA, monthsAgo: 0, status: PaymentStatus.PENDING },
-    // Maria Clara — dois pacotes (um esgotado, outro ativo)
     { sid: "student-4",  amount: 10 * PRECO_AULA, monthsAgo: 4, status: PaymentStatus.PAID    },
     { sid: "student-4",  amount: 20 * PRECO_AULA, monthsAgo: 2, status: PaymentStatus.PAID    },
-    // Pedro — pacote de 20 aulas (alta frequência, vestibular)
     { sid: "student-5",  amount: 20 * PRECO_AULA, monthsAgo: 5, status: PaymentStatus.PAID    },
     { sid: "student-5",  amount: 20 * PRECO_AULA, monthsAgo: 2, status: PaymentStatus.PAID    },
     { sid: "student-5",  amount: 20 * PRECO_AULA, monthsAgo: 0, status: PaymentStatus.PENDING },
-    // Larissa — pacote de 10 aulas
     { sid: "student-6",  amount: 10 * PRECO_AULA, monthsAgo: 4, status: PaymentStatus.PAID    },
     { sid: "student-6",  amount: 10 * PRECO_AULA, monthsAgo: 1, status: PaymentStatus.PAID    },
-    // Bruno — pacote de 10 aulas (aluno novo)
     { sid: "student-7",  amount: 10 * PRECO_AULA, monthsAgo: 3, status: PaymentStatus.PAID    },
-    // Amanda — pacote de 20 aulas
     { sid: "student-8",  amount: 20 * PRECO_AULA, monthsAgo: 5, status: PaymentStatus.PAID    },
     { sid: "student-8",  amount: 20 * PRECO_AULA, monthsAgo: 1, status: PaymentStatus.PAID    },
-    // Thiago — pacote de 10 aulas
     { sid: "student-9",  amount: 10 * PRECO_AULA, monthsAgo: 4, status: PaymentStatus.PAID    },
-    { sid: "student-9",  amount: 10 * PRECO_AULA, monthsAgo: 1, status: PaymentStatus.OVERDUE }, // em atraso
-    // Camila — pacote de 20 aulas (Superior, alta frequência)
+    { sid: "student-9",  amount: 10 * PRECO_AULA, monthsAgo: 1, status: PaymentStatus.OVERDUE },
     { sid: "student-10", amount: 20 * PRECO_AULA, monthsAgo: 5, status: PaymentStatus.PAID    },
     { sid: "student-10", amount: 20 * PRECO_AULA, monthsAgo: 2, status: PaymentStatus.PAID    },
-    // Vinícius — pacote de 10 aulas
     { sid: "student-11", amount: 10 * PRECO_AULA, monthsAgo: 4, status: PaymentStatus.PAID    },
-    { sid: "student-11", amount: 10 * PRECO_AULA, monthsAgo: 1, status: PaymentStatus.OVERDUE }, // em atraso
-    // Letícia — pacote de 10 aulas (aluna recente)
+    { sid: "student-11", amount: 10 * PRECO_AULA, monthsAgo: 1, status: PaymentStatus.OVERDUE },
     { sid: "student-12", amount: 10 * PRECO_AULA, monthsAgo: 3, status: PaymentStatus.PAID    },
     { sid: "student-12", amount: 10 * PRECO_AULA, monthsAgo: 0, status: PaymentStatus.PENDING },
   ]
@@ -437,37 +457,29 @@ async function main() {
     const dueDate = startOfMonth(subMonths(now, p.monthsAgo))
     dueDate.setDate(10)
     const paidAt = p.status === PaymentStatus.PAID
-      ? new Date(dueDate.getTime() + Math.random() * 7 * 86_400_000)
-      : null
+      ? new Date(dueDate.getTime() + Math.random() * 7 * 86_400_000) : null
     await prisma.payment.create({
       data: {
-        studentId:   p.sid,
-        amount:      p.amount,
-        dueDate,
-        paidAt,
-        status:      p.status,
-        method:      p.status === PaymentStatus.PAID ? ["PIX","Cartão de Crédito","Boleto"][Math.floor(Math.random() * 3)] : null,
+        studentId: p.sid, amount: p.amount, dueDate, paidAt, status: p.status,
+        method: p.status === PaymentStatus.PAID ? ["PIX","Cartão de Crédito","Boleto"][Math.floor(Math.random() * 3)] : null,
         description: `Pacote de ${p.amount / PRECO_AULA} aulas — R$${PRECO_AULA}/aula`,
       },
     })
   }
-  console.log(`✅ ${pagamentoDefs.length} pagamentos (pacotes a R$${PRECO_AULA}/aula)`)
+  console.log(`✅ ${pagamentoDefs.length} pagamentos`)
 
   // ─── Repasses aos Professores ──────────────────────────────────────────────
-  // Taxa do professor × número de aulas realizadas no mês
-  const mesAtual  = now.getMonth() + 1
+  const mesAtual    = now.getMonth() + 1
   const mesAnterior = mesAtual === 1 ? 12 : mesAtual - 1
-  const anoAtual  = now.getFullYear()
+  const anoAtual    = now.getFullYear()
 
   const repasseDefs = [
-    // Mês anterior — todos pagos
-    { tid: "teacher-1", month: mesAnterior, year: anoAtual, lessons: 28, rate: TAXAS_PROFESSOR["teacher-1"], paid: true  }, // Ana: Lucas + Thiago
-    { tid: "teacher-2", month: mesAnterior, year: anoAtual, lessons: 16, rate: TAXAS_PROFESSOR["teacher-2"], paid: true  }, // Carlos: Isabela + Letícia
-    { tid: "teacher-3", month: mesAnterior, year: anoAtual, lessons: 34, rate: TAXAS_PROFESSOR["teacher-3"], paid: true  }, // Fernanda: Gabriel + Amanda + Vinícius
-    { tid: "teacher-4", month: mesAnterior, year: anoAtual, lessons: 19, rate: TAXAS_PROFESSOR["teacher-4"], paid: true  }, // Marcos: Maria Clara + Bruno
-    { tid: "teacher-5", month: mesAnterior, year: anoAtual, lessons: 26, rate: TAXAS_PROFESSOR["teacher-5"], paid: true  }, // Patricia: Pedro + Camila
-    { tid: "teacher-6", month: mesAnterior, year: anoAtual, lessons: 12, rate: TAXAS_PROFESSOR["teacher-6"], paid: false }, // Renato: Larissa — pendente
-    // Mês atual — todos pendentes
+    { tid: "teacher-1", month: mesAnterior, year: anoAtual, lessons: 28, rate: TAXAS_PROFESSOR["teacher-1"], paid: true  },
+    { tid: "teacher-2", month: mesAnterior, year: anoAtual, lessons: 16, rate: TAXAS_PROFESSOR["teacher-2"], paid: true  },
+    { tid: "teacher-3", month: mesAnterior, year: anoAtual, lessons: 34, rate: TAXAS_PROFESSOR["teacher-3"], paid: true  },
+    { tid: "teacher-4", month: mesAnterior, year: anoAtual, lessons: 19, rate: TAXAS_PROFESSOR["teacher-4"], paid: true  },
+    { tid: "teacher-5", month: mesAnterior, year: anoAtual, lessons: 26, rate: TAXAS_PROFESSOR["teacher-5"], paid: true  },
+    { tid: "teacher-6", month: mesAnterior, year: anoAtual, lessons: 12, rate: TAXAS_PROFESSOR["teacher-6"], paid: false },
     { tid: "teacher-1", month: mesAtual, year: anoAtual, lessons: 6,  rate: TAXAS_PROFESSOR["teacher-1"], paid: false },
     { tid: "teacher-3", month: mesAtual, year: anoAtual, lessons: 5,  rate: TAXAS_PROFESSOR["teacher-3"], paid: false },
     { tid: "teacher-5", month: mesAtual, year: anoAtual, lessons: 4,  rate: TAXAS_PROFESSOR["teacher-5"], paid: false },
@@ -476,146 +488,124 @@ async function main() {
   for (const r of repasseDefs) {
     await prisma.teacherPayout.create({
       data: {
-        teacherId:    r.tid,
-        month:        r.month,
-        year:         r.year,
-        totalLessons: r.lessons,
-        totalAmount:  r.lessons * r.rate,
-        status:       r.paid ? "PAID" : "PENDING",
-        paidAt:       r.paid ? subMonths(now, 1) : null,
+        teacherId: r.tid, month: r.month, year: r.year,
+        totalLessons: r.lessons, totalAmount: r.lessons * r.rate,
+        status: r.paid ? "PAID" : "PENDING",
+        paidAt: r.paid ? subMonths(now, 1) : null,
       },
     })
   }
-  console.log(`✅ ${repasseDefs.length} repasses (taxa R$${Math.min(...Object.values(TAXAS_PROFESSOR))}–R$${Math.max(...Object.values(TAXAS_PROFESSOR))}/aula)`)
+  console.log(`✅ ${repasseDefs.length} repasses`)
 
   // ─── Solicitações Pendentes ────────────────────────────────────────────────
-  // Cenário 1: aluno pede presencial com prof PRESENCIAL (normal)
-  // Cenário 2: aluno pede ONLINE com prof PRESENCIAL → colaborador vê toggle "em casa / na sede"
-  // Cenário 3: aluno pede ONLINE com prof HYBRID → toggle de localização disponível
-  // Cenário 4: aluno pede com prof ONLINE_ONLY → colaborador só pode aprovar como Online
   await prisma.lessonRequest.createMany({
     data: [
       {
         studentId: "student-7",  teacherId: "teacher-4", subjectId: "sub-mat",
-        modality:  LessonModality.PRESENCIAL,
-        preferredAt: addHours(now, 26), status: RequestStatus.PENDING,
+        modality: LessonModality.PRESENCIAL, preferredAt: addHours(now, 26), status: RequestStatus.PENDING,
         reason: "Preciso de reforço urgente para prova de sexta",
       },
       {
         studentId: "student-9",  teacherId: "teacher-1", subjectId: "sub-fis",
-        modality:  LessonModality.ONLINE,
-        preferredAt: addHours(now, 27), status: RequestStatus.PENDING,
-        reason: "Prefiro online hoje, mas o professor pode ficar na sede se quiser",
+        modality: LessonModality.ONLINE, preferredAt: addHours(now, 27), status: RequestStatus.PENDING,
+        reason: "Prefiro online hoje",
       },
       {
         studentId: "student-11", teacherId: "teacher-3", subjectId: "sub-qui",
-        modality:  LessonModality.ONLINE,
-        preferredAt: addHours(now, 50), status: RequestStatus.PENDING,
-        reason: "Dificuldade com reações químicas — quero aula online",
+        modality: LessonModality.ONLINE, preferredAt: addHours(now, 50), status: RequestStatus.PENDING,
+        reason: "Dificuldade com reações químicas",
       },
       {
         studentId: "student-12", teacherId: "teacher-2", subjectId: "sub-his",
-        modality:  LessonModality.ONLINE,
-        preferredAt: addHours(now, 72), status: RequestStatus.PENDING,
-        reason: "Revisão para ENEM — Carlos é só online mesmo",
+        modality: LessonModality.ONLINE, preferredAt: addHours(now, 72), status: RequestStatus.PENDING,
+        reason: "Revisão para ENEM",
       },
     ],
   })
-  console.log("✅ 4 solicitações pendentes (todos os cenários de modalidade)")
+  console.log("✅ 4 solicitações pendentes")
 
   // ─── Aulas em Grupo ───────────────────────────────────────────────────────
-  // Preço de grupo: diferente do individual — nunca é divisão do individual
+  const PRECO_GRUPO_QUIMICA = 70
+  const PRECO_GRUPO_MAT     = 65
 
-  const PRECO_GRUPO_QUIMICA = 70   // individual seria R$90
-  const PRECO_GRUPO_MAT     = 65   // individual seria R$90
-
-  // Grupo 1: Química realizada no mês passado (3 alunos)
   const groupId1 = "group-seed-quimica-1"
   const groupDate1 = pastDate(1, 12, 15)
-
   await prisma.lesson.createMany({
     data: [
-      { studentId: "student-3", teacherId: "teacher-3", subjectId: "sub-qui", scheduledAt: groupDate1, modality: LessonModality.PRESENCIAL, status: LessonStatus.COMPLETED, teacherOnsite: true, isGroupLesson: true, groupId: groupId1, groupSize: 3, priceOverride: PRECO_GRUPO_QUIMICA, topicsCovered: "Ácidos e bases — pH e escala pOH" },
-      { studentId: "student-8", teacherId: "teacher-3", subjectId: "sub-qui", scheduledAt: groupDate1, modality: LessonModality.PRESENCIAL, status: LessonStatus.COMPLETED, teacherOnsite: true, isGroupLesson: true, groupId: groupId1, groupSize: 3, priceOverride: PRECO_GRUPO_QUIMICA, topicsCovered: "Ácidos e bases — pH e escala pOH" },
+      { studentId: "student-3",  teacherId: "teacher-3", subjectId: "sub-qui", scheduledAt: groupDate1, modality: LessonModality.PRESENCIAL, status: LessonStatus.COMPLETED, teacherOnsite: true, isGroupLesson: true, groupId: groupId1, groupSize: 3, priceOverride: PRECO_GRUPO_QUIMICA, topicsCovered: "Ácidos e bases — pH e escala pOH" },
+      { studentId: "student-8",  teacherId: "teacher-3", subjectId: "sub-qui", scheduledAt: groupDate1, modality: LessonModality.PRESENCIAL, status: LessonStatus.COMPLETED, teacherOnsite: true, isGroupLesson: true, groupId: groupId1, groupSize: 3, priceOverride: PRECO_GRUPO_QUIMICA, topicsCovered: "Ácidos e bases — pH e escala pOH" },
       { studentId: "student-11", teacherId: "teacher-3", subjectId: "sub-qui", scheduledAt: groupDate1, modality: LessonModality.PRESENCIAL, status: LessonStatus.COMPLETED, teacherOnsite: true, isGroupLesson: true, groupId: groupId1, groupSize: 3, priceOverride: PRECO_GRUPO_QUIMICA, topicsCovered: "Ácidos e bases — pH e escala pOH" },
     ],
   })
-
   await prisma.payment.createMany({
     data: [
-      { studentId: "student-3",  amount: PRECO_GRUPO_QUIMICA, dueDate: groupDate1, paidAt: groupDate1, status: PaymentStatus.PAID, description: `Aula em grupo – Química (3 alunos)` },
-      { studentId: "student-8",  amount: PRECO_GRUPO_QUIMICA, dueDate: groupDate1, paidAt: groupDate1, status: PaymentStatus.PAID, description: `Aula em grupo – Química (3 alunos)` },
-      { studentId: "student-11", amount: PRECO_GRUPO_QUIMICA, dueDate: groupDate1, paidAt: groupDate1, status: PaymentStatus.PAID, description: `Aula em grupo – Química (3 alunos)` },
+      { studentId: "student-3",  amount: PRECO_GRUPO_QUIMICA, dueDate: groupDate1, paidAt: groupDate1, status: PaymentStatus.PAID, description: "Aula em grupo – Química (3 alunos)" },
+      { studentId: "student-8",  amount: PRECO_GRUPO_QUIMICA, dueDate: groupDate1, paidAt: groupDate1, status: PaymentStatus.PAID, description: "Aula em grupo – Química (3 alunos)" },
+      { studentId: "student-11", amount: PRECO_GRUPO_QUIMICA, dueDate: groupDate1, paidAt: groupDate1, status: PaymentStatus.PAID, description: "Aula em grupo – Química (3 alunos)" },
     ],
   })
 
-  // Grupo 2: Matemática agendada para a próxima semana (2 alunos)
-  const groupId2 = "group-seed-mat-1"
+  const groupId2  = "group-seed-mat-1"
   const groupDate2 = addHours(now, 7 * 24)
-
   await prisma.lesson.createMany({
     data: [
       { studentId: "student-1", teacherId: "teacher-1", subjectId: "sub-mat", scheduledAt: groupDate2, modality: LessonModality.PRESENCIAL, status: LessonStatus.CONFIRMED, teacherOnsite: true, isGroupLesson: true, groupId: groupId2, groupSize: 2, priceOverride: PRECO_GRUPO_MAT },
       { studentId: "student-7", teacherId: "teacher-1", subjectId: "sub-mat", scheduledAt: groupDate2, modality: LessonModality.PRESENCIAL, status: LessonStatus.CONFIRMED, teacherOnsite: true, isGroupLesson: true, groupId: groupId2, groupSize: 2, priceOverride: PRECO_GRUPO_MAT },
     ],
   })
-
   await prisma.payment.createMany({
     data: [
-      { studentId: "student-1", amount: PRECO_GRUPO_MAT, dueDate: groupDate2, status: PaymentStatus.PENDING, description: `Aula em grupo – Matemática (2 alunos)` },
-      { studentId: "student-7", amount: PRECO_GRUPO_MAT, dueDate: groupDate2, status: PaymentStatus.PENDING, description: `Aula em grupo – Matemática (2 alunos)` },
+      { studentId: "student-1", amount: PRECO_GRUPO_MAT, dueDate: groupDate2, status: PaymentStatus.PENDING, description: "Aula em grupo – Matemática (2 alunos)" },
+      { studentId: "student-7", amount: PRECO_GRUPO_MAT, dueDate: groupDate2, status: PaymentStatus.PENDING, description: "Aula em grupo – Matemática (2 alunos)" },
     ],
   })
 
-  // Solicitação de aula em grupo (student-5 quer aula de Física em grupo)
   await prisma.lessonRequest.create({
     data: {
       studentId: "student-5", teacherId: "teacher-1", subjectId: "sub-fis",
-      modality:  LessonModality.PRESENCIAL,
-      preferredAt: addHours(now, 96), status: RequestStatus.PENDING,
+      modality: LessonModality.PRESENCIAL, preferredAt: addHours(now, 96), status: RequestStatus.PENDING,
       reason: "Quero fazer aula em grupo com colegas",
       isGroupRequest: true,
-      groupNote: "Quero aula com Pedro Henrique e talvez a Camila — estamos revisando cinemática juntos",
+      groupNote: "Quero aula com alguém revisando cinemática",
     },
   })
+  console.log("✅ 5 aulas em grupo")
 
-  console.log("✅ 5 aulas em grupo (2 grupos, 1 solicitação de grupo)")
-
-  // ─── Notificações ──────────────────────────────────────────────────────────
+  // ─── Notificações (para admin, colab e guardiões) ─────────────────────────
   await prisma.notification.createMany({
     data: [
-      { userId: "user-admin",  type: "PAYMENT_OVERDUE",  title: "Pagamentos em atraso",    message: "2 alunos com pagamentos vencidos (Thiago e Vinícius).", read: false },
-      { userId: "user-admin",  type: "LESSON_REQUEST",   title: "Novas solicitações",       message: "4 agendamentos aguardando aprovação.", read: false },
-      { userId: "user-colab1", type: "LESSON_REQUEST",   title: "Agendamento pendente",     message: "Bruno Martins solicitou aula de Matemática.", read: false },
-      { userId: "user-stu1",   type: "LESSON_CONFIRMED", title: "Aula confirmada",           message: "Sua próxima aula de Matemática está confirmada.", read: false },
-      { userId: "user-stu5",   type: "PACKAGE_LOW_BALANCE", title: "Saldo baixo",          message: "Você tem apenas 6 aulas restantes no pacote.", read: true },
-      { userId: "user-stu9",   type: "PAYMENT_OVERDUE",  title: "Pagamento vencido",        message: "Seu pacote de aulas venceu. Regularize para continuar.", read: false },
+      { userId: "user-admin",  type: "PAYMENT_OVERDUE",     title: "Pagamentos em atraso",    message: "2 alunos com pagamentos vencidos (Thiago e Vinícius).", read: false },
+      { userId: "user-admin",  type: "LESSON_REQUEST",      title: "Novas solicitações",       message: "4 agendamentos aguardando aprovação.", read: false },
+      { userId: "user-colab1", type: "LESSON_REQUEST",      title: "Agendamento pendente",     message: "Bruno Martins solicitou aula de Matemática.", read: false },
+      { userId: "user-guard1", type: "LESSON_CONFIRMED",    title: "Aula confirmada",           message: "Próxima aula de Matemática do Lucas está confirmada.", read: false },
+      { userId: "user-guard5", type: "PACKAGE_LOW_BALANCE", title: "Saldo baixo",              message: "Pedro tem apenas 6 aulas restantes no pacote.", read: true  },
+      { userId: "user-guard8", type: "PAYMENT_OVERDUE",     title: "Pagamento vencido",        message: "Pagamento do pacote do Thiago venceu. Regularize para continuar.", read: false },
     ],
   })
   console.log("✅ Notificações")
 
-  // ─── Resumo Final ──────────────────────────────────────────────────────────
+  // ─── Resumo ────────────────────────────────────────────────────────────────
   const totalAulasRealizadas = todasAulas.filter((a) => a.status === LessonStatus.COMPLETED).length
   const receitaTotal = pagamentoDefs.filter((p) => p.status === PaymentStatus.PAID).reduce((s, p) => s + p.amount, 0)
 
   console.log("\n🎉 Seed concluído!")
   console.log("═".repeat(60))
-  console.log("  PARÂMETROS DE OPERAÇÃO")
+  console.log("  CREDENCIAIS DE ACESSO")
   console.log("═".repeat(60))
-  console.log(`  Preço por aula:     R$${PRECO_AULA}`)
-  console.log(`  Taxa dos professores: R$${Math.min(...Object.values(TAXAS_PROFESSOR))}–R$${Math.max(...Object.values(TAXAS_PROFESSOR))}/aula`)
-  console.log(`  Margem por aula:    R$${PRECO_AULA - Math.max(...Object.values(TAXAS_PROFESSOR))}–R$${PRECO_AULA - Math.min(...Object.values(TAXAS_PROFESSOR))}`)
+  console.log("  Admin:        admin@licaodecasa.com.br   / Admin@123")
+  console.log("  Colaborador:  julia@licaodecasa.com.br   / Colab@123")
+  console.log("  Professor:    ana@licaodecasa.com.br     / Prof@123")
   console.log("─".repeat(60))
-  console.log(`  Alunos: ${alunos.length}  |  Professores: ${professores.length}  |  Matérias: 8`)
-  console.log(`  Aulas criadas: ${todasAulas.length}  (${totalAulasRealizadas} realizadas)`)
-  console.log(`  Receita histórica: R$${receitaTotal.toLocaleString("pt-BR")}`)
+  console.log("  Responsável (1 filho):   mae.lucas@email.com      / Resp@123  → Lucas")
+  console.log("  Responsável (1 filho):   mae.isabela@email.com    / Resp@123  → Isabela")
+  console.log("  Responsável (2 filhos):  pai.martins@email.com    / Resp@123  → Bruno + Amanda ⭐")
+  console.log("  Resp. adulto (próprio):  pedro@email.com          / Resp@123  → Pedro")
+  console.log("  Resp. adulto (próprio):  camila@email.com         / Resp@123  → Camila")
   console.log("═".repeat(60))
-  console.log("  CREDENCIAIS")
+  console.log(`  Alunos: ${alunosDefs.length} (sem login)  |  Responsáveis: 11  |  Professores: ${professores.length}`)
+  console.log(`  Aulas: ${todasAulas.length} (${totalAulasRealizadas} realizadas)  |  Receita: R$${receitaTotal.toLocaleString("pt-BR")}`)
   console.log("═".repeat(60))
-  console.log("  Admin:       admin@licaodecasa.com.br   / Admin@123")
-  console.log("  Colaborador: julia@licaodecasa.com.br   / Colab@123")
-  console.log("  Professor:   ana@licaodecasa.com.br     / Prof@123")
-  console.log("  Aluno:       lucas@email.com            / Aluno@123")
+  console.log("  ⭐ pai.martins@email.com tem 2 filhos → testa seletor de aluno")
   console.log("═".repeat(60))
 }
 

@@ -73,13 +73,13 @@ export default async function ColaboradorAlunosPage({ searchParams }: AlunosPage
     const remaining   = pkg?.remainingLessons ?? 0
     const nextLesson  = student.lessons[0]
     const lastPayment = student.payments[0]
-    const phone       = student.user.phone?.replace(/\D/g, "")
+    const phone       = student.user?.phone?.replace(/\D/g, "")
     const guardian    = student.guardian
     const guardianPhone = guardian?.user.phone?.replace(/\D/g, "")
 
     return (
       <div className="relative flex flex-col sm:flex-row sm:items-start gap-4 p-4 rounded-xl border border-border bg-card hover:bg-accent/40 transition-colors cursor-pointer">
-        <Link href={`/colaborador/alunos/${student.id}`} className="absolute inset-0 rounded-xl z-0" aria-label={`Ver perfil de ${student.user.name}`} />
+        <Link href={`/colaborador/alunos/${student.id}`} className="absolute inset-0 rounded-xl z-0" aria-label={`Ver perfil de ${student.user?.name ?? "Aluno"}`} />
         {/* Info principal */}
         <div className="flex gap-3 flex-1 min-w-0 relative z-10">
           <div className="w-10 h-10 shrink-0 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -88,7 +88,7 @@ export default async function ColaboradorAlunosPage({ searchParams }: AlunosPage
           <div className="min-w-0 flex-1 space-y-1">
             {/* Nome + saldo */}
             <div className="flex flex-wrap items-center gap-2">
-              <p className="font-medium text-sm">{student.user.name}</p>
+              <p className="font-medium text-sm">{student.user?.name ?? "Aluno"}</p>
               <BalanceBadge remaining={remaining} />
             </div>
 

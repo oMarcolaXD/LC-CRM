@@ -14,7 +14,7 @@ function buildGoogleCalendarUrl(lesson: {
   scheduledAt: Date
   duration:    number
   subject:     { name: string }
-  student:     { user: { name: string } }
+  student:     { user: { name: string } | null }
   modality:    string
   meetingLink: string | null
   location:    string | null
@@ -22,11 +22,11 @@ function buildGoogleCalendarUrl(lesson: {
   const start   = lesson.scheduledAt
   const end     = new Date(start.getTime() + lesson.duration * 60_000)
   const fmt     = (d: Date) => d.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z"
-  const title   = `Aula de ${lesson.subject.name} com ${lesson.student.user.name}`
+  const title   = `Aula de ${lesson.subject.name} com ${lesson.student.user?.name ?? "Aluno"}`
   const loc     = lesson.modality === "ONLINE"
     ? (lesson.meetingLink ?? "Online")
     : (lesson.location   ?? "Presencial")
-  const details = `Matéria: ${lesson.subject.name}\nAluno: ${lesson.student.user.name}\nModalidade: ${lesson.modality === "ONLINE" ? "Online" : "Presencial"}`
+  const details = `Matéria: ${lesson.subject.name}\nAluno: ${lesson.student.user?.name ?? "Aluno"}\nModalidade: ${lesson.modality === "ONLINE" ? "Online" : "Presencial"}`
 
   const p = new URLSearchParams({
     action:  "TEMPLATE",
@@ -80,7 +80,7 @@ export default async function LessonDetailPage({ params }: LessonDetailProps) {
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 gap-4 text-sm">
             {[
-              { icon: User,        label: "Aluno",       value: lesson.student.user.name },
+              { icon: User,        label: "Aluno",       value: lesson.student.user?.name ?? "Aluno" },
               { icon: BookOpen,    label: "Matéria",     value: lesson.subject.name       },
               { icon: CalendarDays,label: "Data/Hora",   value: format(lesson.scheduledAt, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR }) },
               { icon: lesson.modality === "ONLINE" ? Monitor : MapPin, label: "Modalidade", value: lesson.modality === "ONLINE" ? "Online" : "Presencial" },
@@ -105,11 +105,11 @@ export default async function LessonDetailPage({ params }: LessonDetailProps) {
                 </p>
                 <div className="flex flex-wrap gap-1">
                   <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
-                    {lesson.student.user.name}
+                    {lesson.student.user?.name ?? "Aluno"}
                   </span>
                   {groupMates.map((gm, i) => (
                     <span key={i} className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
-                      {gm.student.user.name}
+                      {gm.student.user?.name ?? "Aluno"}
                     </span>
                   ))}
                 </div>

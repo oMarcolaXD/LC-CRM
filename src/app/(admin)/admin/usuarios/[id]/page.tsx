@@ -16,13 +16,20 @@ export default async function EditUserPage({ params, searchParams }: EditUserPag
   const { id }    = await params
   const { error } = await searchParams
 
-  const user = await prisma.user.findUnique({
-    where:   { id },
-    include: {
-      student: true,
-      teacher: { include: { subjects: true } },
-    },
-  })
+  const [user, guardians] = await Promise.all([
+    prisma.user.findUnique({
+      where:   { id },
+      include: {
+        student:  { include: { guardian: true } },
+        guardian: true,
+        teacher:  { include: { subjects: true } },
+      },
+    }),
+    prisma.guardian.findMany({
+      include: { user: { select: { name: true } } },
+      orderBy: { user: { name: "asc" } },
+    }),
+  ])
   if (!user) notFound()
 
   const action = updateUserAction.bind(null, id)
@@ -45,9 +52,10 @@ export default async function EditUserPage({ params, searchParams }: EditUserPag
             action={action}
             error={error}
             isEdit
+            guardians={guardians.map((g) => ({ id: g.id, name: g.user.name }))}
             defaultValues={{
               name:          user.name,
-              email:         user.email,
+              email:         user.email ?? "",
               phone:         user.phone ?? "",
               role:          user.role as Role,
               grade:         user.student?.grade,
@@ -56,6 +64,8 @@ export default async function EditUserPage({ params, searchParams }: EditUserPag
               hourlyRate:    user.teacher?.hourlyRate ? Number(user.teacher.hourlyRate) : undefined,
               bio:           user.teacher?.bio ?? "",
               teachingMode:  user.teacher?.teachingMode as TeacherMode ?? undefined,
+              guardianId:    user.student?.guardianId ?? "",
+              relationship:  user.guardian?.relationship ?? "",
             }}
           />
         </CardContent>

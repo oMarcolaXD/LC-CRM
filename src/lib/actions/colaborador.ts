@@ -38,7 +38,6 @@ const newStudentSchema = z.object({
   phone:         z.string().optional(),
   grade:         z.string().optional(),
   school:        z.string().optional(),
-  birthDate:     z.string().optional(),
   guardianName:  z.string().optional(),
   guardianPhone: z.string().optional(),
   guardianEmail: z.string().email("E-mail do responsável inválido").optional().or(z.literal("")),
@@ -54,7 +53,7 @@ export async function createStudentWithGuardianAction(formData: FormData) {
     redirect(`/colaborador/alunos/novo?error=${encodeURIComponent(msg)}`)
   }
 
-  const { name, email, password, phone, grade, school, birthDate,
+  const { name, email, password, phone, grade, school,
           guardianName, guardianPhone, guardianEmail } = parsed.data
 
   const exists = await prisma.user.findUnique({ where: { email } })
@@ -94,7 +93,6 @@ export async function createStudentWithGuardianAction(formData: FormData) {
         userId:    studentUser.id,
         grade:     grade ?? "Não informado",
         school,
-        birthDate: birthDate ? new Date(birthDate) : undefined,
         guardianId,
       },
     })
@@ -206,21 +204,11 @@ export async function importStudentsAction(rows: unknown[]): Promise<ImportResul
           }
         }
 
-        // Parse DD/MM/YYYY
-        let birthDate: Date | undefined
-        if (dataNascimento) {
-          const parts = dataNascimento.split("/")
-          if (parts.length === 3) {
-            birthDate = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`)
-          }
-        }
-
         await tx.student.create({
           data: {
             userId:    studentUser.id,
             grade:     serie ?? "Não informado",
             school:    escola,
-            birthDate,
             guardianId,
           },
         })
@@ -267,12 +255,12 @@ export async function sendLessonWhatsAppAction(lessonId: string) {
   const scheduledAt = format(lesson.scheduledAt, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
 
   await notify({
-    userId:  lesson.student.userId,
+    userId:  lesson.student.userId ?? "",
     type:    "LESSON_CONFIRMED",
     title:   "Lembrete de aula confirmada",
     message: `Sua aula de ${lesson.subject.name} com ${lesson.teacher.user.name} está confirmada para ${scheduledAt}.`,
-    email:   lesson.student.user.email,
-    phone:   lesson.student.user.phone ?? undefined,
+    email:   lesson.student.user?.email ?? undefined,
+    phone:   lesson.student.user?.phone ?? undefined,
     data: {
       "Matéria":    lesson.subject.name,
       "Professor":  lesson.teacher.user.name,

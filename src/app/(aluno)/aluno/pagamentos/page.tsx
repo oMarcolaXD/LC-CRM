@@ -1,5 +1,7 @@
-import { auth }        from "@/lib/auth"
-import { prisma }      from "@/lib/prisma"
+import { auth }             from "@/lib/auth"
+import { prisma }           from "@/lib/prisma"
+import { redirect }         from "next/navigation"
+import { getActiveStudent } from "@/lib/get-active-student"
 import { PageHeader }  from "@/components/shared/page-header"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge }       from "@/components/ui/badge"
@@ -17,15 +19,20 @@ const STATUS_CFG = {
 
 export default async function AlunoPagamentosPage() {
   const session = await auth()
-  const student = await prisma.student.findFirst({
-    where: { user: { email: session?.user?.email ?? "" } },
+  if (!session?.user) redirect("/login")
+
+  const { student: activeStudent } = await getActiveStudent(session.user.id)
+  if (!activeStudent) redirect("/aluno/sem-aluno")
+
+  const student = await prisma.student.findUnique({
+    where:   { id: activeStudent.id },
     include: { packages: { orderBy: { purchaseDate: "desc" } } },
   })
 
-  const payments = student ? await prisma.payment.findMany({
-    where:   { studentId: student.id },
+  const payments = await prisma.payment.findMany({
+    where:   { studentId: activeStudent.id },
     orderBy: { dueDate:  "asc" },
-  }) : []
+  })
 
   const totalPago    = payments.filter((p) => p.status === "PAID").reduce((s, p) => s + Number(p.amount), 0)
   const pendente     = payments.filter((p) => p.status === "PENDING").reduce((s, p) => s + Number(p.amount), 0)

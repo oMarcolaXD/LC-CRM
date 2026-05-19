@@ -1,11 +1,20 @@
-import { redirect }   from "next/navigation"
-import { auth }       from "@/lib/auth"
-import { AppLayout }  from "@/components/shared/app-layout"
+import { redirect }            from "next/navigation"
+import { auth }               from "@/lib/auth"
+import { AppLayout }          from "@/components/shared/app-layout"
+import { getActiveStudent }   from "@/lib/get-active-student"
 
 export default async function AlunoLayout({ children }: { children: React.ReactNode }) {
   const session = await auth()
-  if (!session?.user)                                                   redirect("/login")
-  if (!["STUDENT", "GUARDIAN"].includes(session.user.role)) redirect("/login")
+  if (!session?.user) redirect("/login")
+  if (!["GUARDIAN", "ADMIN"].includes(session.user.role)) redirect("/login")
+
+  const { student, allStudents } = await getActiveStudent(session.user.id)
+
+  const studentOptions = allStudents.map((s: { id: string; user: { name: string } | null; grade: string; notes: string | null }) => ({
+    id:    s.id,
+    name:  s.user?.name ?? s.notes ?? "Aluno",
+    grade: s.grade,
+  }))
 
   return (
     <AppLayout
@@ -14,6 +23,9 @@ export default async function AlunoLayout({ children }: { children: React.ReactN
       role={session.user.role}
       image={session.user.image}
       phone={session.user.phone}
+      missingEmail={!session.user.email}
+      allStudents={studentOptions}
+      activeStudentId={student?.id}
     >
       {children}
     </AppLayout>

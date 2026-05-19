@@ -1,5 +1,7 @@
-import { auth }           from "@/lib/auth"
-import { prisma }         from "@/lib/prisma"
+import { auth }              from "@/lib/auth"
+import { prisma }            from "@/lib/prisma"
+import { redirect }          from "next/navigation"
+import { getActiveStudent }  from "@/lib/get-active-student"
 import { PageHeader }     from "@/components/shared/page-header"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge }          from "@/components/ui/badge"
@@ -28,24 +30,24 @@ interface AulasPageProps {
 
 export default async function AulasPage({ searchParams }: AulasPageProps) {
   const session = await auth()
+  if (!session?.user) redirect("/login")
   const { success } = await searchParams
 
-  const student = await prisma.student.findFirst({
-    where: { user: { email: session?.user?.email ?? "" } },
-  })
+  const { student } = await getActiveStudent(session.user.id)
+  if (!student) redirect("/aluno/sem-aluno")
 
   const [lessons, requests] = await Promise.all([
-    student ? prisma.lesson.findMany({
+    prisma.lesson.findMany({
       where:   { studentId: student.id },
       include: { teacher: { include: { user: true } }, subject: true },
       orderBy: { scheduledAt: "desc" },
       take:    50,
-    }) : [],
-    student ? prisma.lessonRequest.findMany({
+    }),
+    prisma.lessonRequest.findMany({
       where:   { studentId: student.id, status: "PENDING" },
       include: { teacher: { include: { user: true } }, subject: true },
       orderBy: { requestedAt: "desc" },
-    }) : [],
+    }),
   ])
 
   // Busca colegas de grupo para aulas em grupo
@@ -64,7 +66,7 @@ export default async function AulasPage({ searchParams }: AulasPageProps) {
   // Mapa: groupId → nomes dos outros alunos
   const groupMatesMap = groupSiblings.reduce<Record<string, string[]>>((acc, l) => {
     if (!l.groupId) return acc
-    ;(acc[l.groupId] ??= []).push(l.student.user.name)
+    ;(acc[l.groupId] ??= []).push(l.student.user?.name ?? "Aluno")
     return acc
   }, {})
 

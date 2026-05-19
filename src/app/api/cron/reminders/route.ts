@@ -39,13 +39,13 @@ export async function GET(request: NextRequest) {
     for (const lesson of lessons) {
       const scheduledAt   = fmt(lesson.scheduledAt)
       const teacherName   = lesson.teacher.user.name
-      const studentName   = lesson.student.user.name
+      const studentName   = lesson.student.user?.name ?? "Aluno"
       const subject       = lesson.subject.name
 
       await Promise.allSettled([
         notifyLessonReminder({
-          userId: lesson.student.userId, email: lesson.student.user.email,
-          phone: lesson.student.user.phone, role: "student",
+          userId: lesson.student.userId ?? "", email: lesson.student.user?.email ?? null,
+          phone: lesson.student.user?.phone ?? null, role: "student",
           teacherName, studentName, subject, scheduledAt, type,
         }),
         notifyLessonReminder({

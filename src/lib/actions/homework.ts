@@ -15,7 +15,7 @@ async function requireTeacherOrAdmin() {
 async function requireStudent() {
   const session = await auth()
   if (!session?.user) throw new Error("Sem permissão")
-  if (!["STUDENT", "GUARDIAN"].includes(session.user.role)) throw new Error("Sem permissão")
+  if (!["GUARDIAN", "ADMIN"].includes(session.user.role)) throw new Error("Sem permissão")
   return session
 }
 
@@ -52,21 +52,38 @@ export async function assignHomeworkAction(
     },
   })
 
-  await notify({
-    userId:  lesson.student.userId,
-    type:    "HOMEWORK_ASSIGNED",
-    title:   "Nova lição de casa!",
-    message: `Você recebeu uma nova lição de casa: "${title}".${dueDate ? ` Prazo: ${new Date(dueDate).toLocaleDateString("pt-BR")}.` : ""}`,
-    email:   lesson.student.user.email,
-    phone:   lesson.student.user.phone ?? undefined,
-  })
+  if (lesson.student.user?.id) {
+    await notify({
+      userId:  lesson.student.user?.id,
+      type:    "HOMEWORK_ASSIGNED",
+      title:   "Nova lição de casa!",
+      message: `Você recebeu uma nova lição de casa: "${title}".${dueDate ? ` Prazo: ${new Date(dueDate).toLocaleDateString("pt-BR")}.` : ""}`,
+      email:   lesson.student.user?.email ?? undefined,
+      phone:   lesson.student.user?.phone ?? undefined,
+    })
+  }
 
   revalidatePath("/aluno/licoes")
   revalidatePath(`/professor/agenda/${lessonId}`)
 }
 
 export async function completeHomeworkAction(homeworkId: string) {
-  await requireStudent()
+  const session = await requireStudent()
+
+  const homework = await prisma.homework.findUnique({
+    where:   { id: homeworkId },
+    include: { lesson: { select: { studentId: true } } },
+  })
+  if (!homework) throw new Error("Lição não encontrada")
+
+  if (session.user.role === "GUARDIAN") {
+    const guardian = await prisma.guardian.findFirst({
+      where:   { userId: session.user.id },
+      include: { students: { select: { id: true } } },
+    })
+    const owns = guardian?.students.some((s) => s.id === homework.lesson.studentId)
+    if (!owns) throw new Error("Sem permissão para esta lição")
+  }
 
   await prisma.homework.update({
     where: { id: homeworkId },

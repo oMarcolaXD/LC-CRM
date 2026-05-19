@@ -1,5 +1,7 @@
-import { auth }   from "@/lib/auth"
-import { prisma } from "@/lib/prisma"
+import { auth }             from "@/lib/auth"
+import { prisma }           from "@/lib/prisma"
+import { redirect }         from "next/navigation"
+import { getActiveStudent } from "@/lib/get-active-student"
 import { PageHeader } from "@/components/shared/page-header"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge }             from "@/components/ui/badge"
@@ -10,13 +12,12 @@ import { ptBR }   from "date-fns/locale"
 
 export default async function LicoesPage() {
   const session = await auth()
+  if (!session?.user) redirect("/login")
 
-  const student = await prisma.student.findFirst({
-    where: { user: { email: session?.user?.email ?? "" } },
-  })
+  const { student } = await getActiveStudent(session.user.id)
+  if (!student) redirect("/aluno/sem-aluno")
 
-  const homework = student
-    ? await prisma.homework.findMany({
+  const homework = await prisma.homework.findMany({
         where:   { lesson: { studentId: student.id } },
         include: {
           lesson: {
@@ -28,7 +29,6 @@ export default async function LicoesPage() {
         },
         orderBy: [{ status: "asc" }, { dueDate: "asc" }, { createdAt: "desc" }],
       })
-    : []
 
   const pending   = homework.filter((h) => h.status === "PENDING")
   const completed = homework.filter((h) => h.status === "COMPLETED")

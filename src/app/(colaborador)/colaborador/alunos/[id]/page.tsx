@@ -60,12 +60,11 @@ export default async function StudentDetailPage({ params }: Props) {
 
   if (!student) notFound()
 
-  const phone        = student.user.phone?.replace(/\D/g, "")
+  const phone        = student.user?.phone?.replace(/\D/g, "")
   const guardian     = student.guardian
   const guardianPhone = guardian?.user.phone?.replace(/\D/g, "")
   const activePkg    = student.packages.find((p) => p.status === "ACTIVE")
   const remaining    = activePkg?.remainingLessons ?? 0
-  const age          = student.birthDate ? differenceInYears(new Date(), student.birthDate) : null
   const upcomingLessons = student.lessons.filter(
     (l) => l.scheduledAt >= new Date() && ["SCHEDULED", "CONFIRMED"].includes(l.status)
   )
@@ -76,7 +75,7 @@ export default async function StudentDetailPage({ params }: Props) {
   return (
     <div className="space-y-6">
       <PageHeader
-        title={student.user.name}
+        title={student.user?.name ?? "Aluno"}
         description={`${student.grade}${student.school ? ` · ${student.school}` : ""}`}
         backHref="/colaborador/alunos"
       >
@@ -122,27 +121,18 @@ export default async function StudentDetailPage({ params }: Props) {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
-              {student.user.email && (
+              {student.user?.email && (
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <Mail className="w-4 h-4 shrink-0" />
-                  <a href={`mailto:${student.user.email}`} className="hover:text-foreground transition-colors truncate">
-                    {student.user.email}
+                  <a href={`mailto:${student.user?.email}`} className="hover:text-foreground transition-colors truncate">
+                    {student.user?.email}
                   </a>
                 </div>
               )}
-              {student.user.phone && (
+              {student.user?.phone && (
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <Phone className="w-4 h-4 shrink-0" />
-                  <span>{student.user.phone}</span>
-                </div>
-              )}
-              {student.birthDate && (
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <CalendarDays className="w-4 h-4 shrink-0" />
-                  <span>
-                    {format(student.birthDate, "dd/MM/yyyy", { locale: ptBR })}
-                    {age !== null && <span className="ml-1 text-xs">({age} anos)</span>}
-                  </span>
+                  <span>{student.user?.phone}</span>
                 </div>
               )}
               {student.school && (

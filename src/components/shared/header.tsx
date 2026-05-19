@@ -2,6 +2,7 @@ import { MobileSidebar }       from "./mobile-sidebar"
 import { LogoutButton }        from "./logout-button"
 import { NotificationBell }    from "./notification-bell"
 import { ThemeToggle }         from "./theme-toggle"
+import { StudentSelector }     from "./student-selector"
 import type { Role }           from "@prisma/client"
 
 const PAGE_TITLES: Record<string, string> = {
@@ -30,16 +31,24 @@ const PAGE_TITLES: Record<string, string> = {
   "/aluno/perfil":             "Meu Perfil",
 }
 
-interface HeaderProps {
-  pathname: string
-  name:     string
-  email:    string
-  role:     Role
-  image?:   string | null
-  phone?:   string | null
+interface StudentOption {
+  id:    string
+  name:  string
+  grade: string
 }
 
-export function Header({ pathname, name, email, role, image, phone }: HeaderProps) {
+interface HeaderProps {
+  pathname:         string
+  name:             string
+  email:            string
+  role:             Role
+  image?:           string | null
+  phone?:           string | null
+  allStudents?:     StudentOption[]
+  activeStudentId?: string
+}
+
+export function Header({ pathname, name, email, role, image, phone, allStudents, activeStudentId }: HeaderProps) {
   const title = PAGE_TITLES[pathname] ?? "Lição de Casa"
 
   return (
@@ -49,10 +58,15 @@ export function Header({ pathname, name, email, role, image, phone }: HeaderProp
         <h2 className="font-sub font-semibold text-base text-foreground">{title}</h2>
       </div>
 
-      <div className="flex items-center gap-1">
-        <ThemeToggle />
-        <NotificationBell />
-        <LogoutButton />
+      <div className="flex items-center gap-2">
+        {role === "GUARDIAN" && allStudents && allStudents.length > 0 && activeStudentId && (
+          <StudentSelector students={allStudents} activeStudentId={activeStudentId} />
+        )}
+        <div className="flex items-center gap-1">
+          <ThemeToggle />
+          <NotificationBell />
+          <LogoutButton />
+        </div>
       </div>
     </header>
   )

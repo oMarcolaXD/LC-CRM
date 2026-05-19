@@ -133,7 +133,7 @@ export function TeacherAgendaView({ lessons, calendarToken, baseUrl }: Props) {
                           </p>
                         </div>
                         <div className="min-w-0">
-                          <p className="font-medium text-sm">{lesson.student.user.name}</p>
+                          <p className="font-medium text-sm">{lesson.student.user?.name ?? "Aluno"}</p>
                           <p className="text-xs text-muted-foreground">
                             {lesson.subject.name} · {lesson.modality === "ONLINE" ? "Online" : "Presencial"}
                           </p>
@@ -163,7 +163,7 @@ export function TeacherAgendaView({ lessons, calendarToken, baseUrl }: Props) {
                 {past.slice(0, 10).map((lesson) => (
                   <div key={lesson.id} className="flex items-center justify-between gap-4 p-3 rounded-lg bg-muted/30">
                     <div>
-                      <p className="text-sm font-medium">{lesson.student.user.name}</p>
+                      <p className="text-sm font-medium">{lesson.student.user?.name ?? "Aluno"}</p>
                       <p className="text-xs text-muted-foreground">
                         {lesson.subject.name} · {format(new Date(lesson.scheduledAt), "dd/MM/yyyy", { locale: ptBR })}
                       </p>

@@ -41,14 +41,14 @@ function mapToLessonSlot(
     isGroupLesson: boolean
     groupSize: number | null
     groupId: string | null
-    student: { user: { name: string }; guardian: { user: { name: string } } | null }
+    student: { user: { name: string } | null; guardian: { user: { name: string } } | null }
     subject: { name: string }
   },
   groupMatesMap: Record<string, string[]> = {},
 ): LessonSlot {
   const d   = l.scheduledAt
   const min = d.getHours() * 60 + d.getMinutes()
-  const studentName = l.student.user.name
+  const studentName = l.student.user?.name ?? "Aluno"
   return {
     id:            l.id,
     teacherId:     l.teacherId,
@@ -194,7 +194,7 @@ export default async function ColaboradorAgendaPage({ searchParams }: AgendaPage
     : []
   const groupMatesMap = groupSiblings.reduce<Record<string, string[]>>((acc, l) => {
     if (!l.groupId) return acc
-    ;(acc[l.groupId] ??= []).push(l.student.user.name)
+    ;(acc[l.groupId] ??= []).push(l.student.user?.name ?? "Aluno")
     return acc
   }, {})
 
@@ -226,7 +226,7 @@ export default async function ColaboradorAgendaPage({ searchParams }: AgendaPage
       startMin:    r.preferredAt.getHours() * 60 + r.preferredAt.getMinutes(),
       time:        format(r.preferredAt, "HH:mm"),
       date:        format(r.preferredAt, "yyyy-MM-dd"),
-      studentName: r.student.user.name,
+      studentName: r.student.user?.name ?? "Aluno",
       subjectName: r.subject?.name ?? "–",
       modality:    r.modality as "PRESENCIAL" | "ONLINE",
       teacherMode: r.teacher.teachingMode as "ONLINE_ONLY" | "PRESENCIAL" | "HYBRID",
@@ -239,11 +239,11 @@ export default async function ColaboradorAgendaPage({ searchParams }: AgendaPage
 
   const students: StudentOption[] = studentsRaw.map(s => ({
     id:               s.id,
-    name:             s.user.name,
+    name:             s.user?.name ?? "Aluno",
     remainingLessons: s.packages[0]?.remainingLessons ?? 0,
   }))
 
-  const allStudents = allStudentsRaw.map(s => ({ id: s.id, name: s.user.name }))
+  const allStudents = allStudentsRaw.map(s => ({ id: s.id, name: s.user?.name ?? "Aluno" }))
 
   const weekday = format(dateObj, "EEEE", { locale: ptBR })
 

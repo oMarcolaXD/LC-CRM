@@ -78,7 +78,7 @@ export default async function ReciboPage({ params }: ReciboPageProps) {
 
         {/* Dados */}
         <div className="space-y-3">
-          <Row label="Aluno"       value={payment.student.user.name} />
+          <Row label="Aluno"       value={payment.student.user?.name ?? "Aluno"} />
           <Row label="Descrição"   value={payment.description ?? "Pagamento de aulas"} />
           <Row label="Valor"       value={brl(Number(payment.amount))} bold />
           <Row label="Forma de pagamento"

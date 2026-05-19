@@ -124,7 +124,7 @@ async function getReportData() {
   }))
 
   const topAlunos = topAlunosRaw.map((s) => ({
-    name:  s.user.name,
+    name:  s.user?.name ?? "Aluno",
     aulas: s._count.lessons,
   }))
 
