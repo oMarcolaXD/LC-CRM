@@ -6,8 +6,8 @@ import { ChevronDown, UserRound } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
@@ -47,33 +47,35 @@ export function StudentSelector({ students, activeStudentId }: StudentSelectorPr
           <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-48">
-        <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
+        <p className="px-2 py-1.5 text-xs text-muted-foreground font-normal">
           Selecionar aluno
-        </DropdownMenuLabel>
+        </p>
         <DropdownMenuSeparator />
-        {students.map((s) => (
-          <DropdownMenuItem
-            key={s.id}
-            className="cursor-pointer"
-            onClick={() => {
-              startTransition(async () => {
-                try {
-                  const result = await selectStudentAction(s.id)
-                  if (result.ok) setTimeout(() => router.refresh(), 50)
-                } catch {
-                  // evita propagação para o error boundary
-                }
-              })
-            }}
-          >
-            <div className="flex flex-col">
-              <span className={s.id === activeStudentId ? "font-semibold" : ""}>
-                {s.name}
-              </span>
-              <span className="text-xs text-muted-foreground">{s.grade}</span>
-            </div>
-          </DropdownMenuItem>
-        ))}
+        <DropdownMenuGroup>
+          {students.map((s) => (
+            <DropdownMenuItem
+              key={s.id}
+              className="cursor-pointer"
+              onClick={() => {
+                startTransition(async () => {
+                  try {
+                    const result = await selectStudentAction(s.id)
+                    if (result.ok) setTimeout(() => router.refresh(), 50)
+                  } catch {
+                    // evita propagação para o error boundary
+                  }
+                })
+              }}
+            >
+              <div className="flex flex-col">
+                <span className={s.id === activeStudentId ? "font-semibold" : ""}>
+                  {s.name}
+                </span>
+                <span className="text-xs text-muted-foreground">{s.grade}</span>
+              </div>
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   )
