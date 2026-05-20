@@ -3,8 +3,8 @@ import { passwordSchema } from "./auth"
 
 export const createUserSchema = z.object({
   name:          z.string().min(3, "Nome deve ter no mínimo 3 caracteres"),
-  email:         z.string().email("E-mail inválido"),
-  password:      passwordSchema,
+  email:         z.string().email("E-mail inválido").optional().or(z.literal("")),
+  password:      passwordSchema.optional().or(z.literal("")),
   phone:         z.string().optional(),
   role:          z.enum(["ADMIN", "COLLABORATOR", "TEACHER", "STUDENT", "GUARDIAN"]),
   grade:         z.string().optional(),
@@ -13,6 +13,10 @@ export const createUserSchema = z.object({
   hourlyRate:    z.coerce.number().min(0).optional(),
   bio:           z.string().optional(),
   teachingMode:  z.enum(["ONLINE_ONLY", "PRESENCIAL", "HYBRID"]).optional(),
+  // Guardian ↔ Student linking
+  guardianId:    z.string().optional().or(z.literal("")),
+  relationship:  z.string().optional(),
+  selfGuardian:  z.string().optional(),
 })
 
 export const updateUserSchema = createUserSchema

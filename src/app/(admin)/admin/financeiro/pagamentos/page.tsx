@@ -77,7 +77,7 @@ export default async function PagamentosPage({ searchParams }: PagamentosPagePro
                 <select name="studentId" required
                   className="flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring">
                   <option value="">Selecione o aluno</option>
-                  {students.map((s) => <option key={s.id} value={s.id}>{s.user.name}</option>)}
+                  {students.map((s) => <option key={s.id} value={s.id}>{s.user?.name ?? "Aluno"}</option>)}
                 </select>
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -135,7 +135,7 @@ export default async function PagamentosPage({ searchParams }: PagamentosPagePro
                 {payments.map((p) => (
                   <div key={p.id} className="flex items-center justify-between gap-3 p-3 rounded-lg border border-border">
                     <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">{p.student.user.name}</p>
+                      <p className="text-sm font-medium truncate">{p.student.user?.name ?? "Aluno"}</p>
                       <p className="text-xs text-muted-foreground">
                         {p.description ?? "Cobrança"} · Vence {format(p.dueDate, "dd/MM/yyyy", { locale: ptBR })}
                         {p.method && ` · ${p.method}`}

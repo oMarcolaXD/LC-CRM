@@ -59,7 +59,7 @@ export default async function AgendamentosPage() {
                 <RequestCard
                   key={r.id}
                   id={r.id}
-                  studentName={r.student.user.name}
+                  studentName={r.student.user?.name ?? "Aluno"}
                   teacherName={r.teacher.user.name}
                   subjectName={r.subject?.name ?? "–"}
                   preferredAt={r.preferredAt}
@@ -84,7 +84,7 @@ export default async function AgendamentosPage() {
             {recent.map((r) => (
               <div key={r.id} className="flex items-center justify-between gap-4 p-3 rounded-lg bg-muted/30">
                 <div>
-                  <p className="text-sm font-medium">{r.student.user.name}</p>
+                  <p className="text-sm font-medium">{r.student.user?.name ?? "Aluno"}</p>
                   {r.student.guardian && (
                     <div className="flex items-center gap-1">
                       <UserRound className="w-3 h-3 text-muted-foreground" />

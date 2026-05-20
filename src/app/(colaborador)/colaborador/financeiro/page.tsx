@@ -99,7 +99,7 @@ export default async function ColaboradorFinanceiroPage({ searchParams }: Financ
                   }`}>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <p className="text-sm font-medium">{p.student.user.name}</p>
+                      <p className="text-sm font-medium">{p.student.user?.name ?? "Aluno"}</p>
                       {p.status === "OVERDUE" && (
                         <AlertCircle className="w-3.5 h-3.5 text-destructive" />
                       )}
@@ -141,7 +141,7 @@ export default async function ColaboradorFinanceiroPage({ searchParams }: Financ
                 return (
                   <div key={pkg.id} className="flex items-center gap-4 p-3 rounded-lg border border-border">
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium">{pkg.student.user.name}</p>
+                      <p className="text-sm font-medium">{pkg.student.user?.name ?? "Aluno"}</p>
                       <p className="text-xs text-muted-foreground">
                         {brl(Number(pkg.pricePerLesson))}/aula
                         {pkg.expiresAt && ` · vence ${format(pkg.expiresAt, "dd/MM/yyyy", { locale: ptBR })}`}

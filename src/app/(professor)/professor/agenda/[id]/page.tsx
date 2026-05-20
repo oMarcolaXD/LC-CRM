@@ -11,22 +11,23 @@ import { ptBR }         from "date-fns/locale"
 import { CalendarDays, User, BookOpen, Monitor, MapPin, PenLine, CheckCircle2, Clock, CalendarPlus, Users } from "lucide-react"
 
 function buildGoogleCalendarUrl(lesson: {
-  scheduledAt: Date
-  duration:    number
-  subject:     { name: string }
-  student:     { user: { name: string } }
-  modality:    string
-  meetingLink: string | null
-  location:    string | null
+  scheduledAt:  Date
+  duration:     number
+  subject:      { name: string }
+  participants: { student: { user: { name: string } | null } }[]
+  modality:     string
+  meetingLink:  string | null
+  location:     string | null
 }): string {
-  const start   = lesson.scheduledAt
-  const end     = new Date(start.getTime() + lesson.duration * 60_000)
-  const fmt     = (d: Date) => d.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z"
-  const title   = `Aula de ${lesson.subject.name} com ${lesson.student.user.name}`
-  const loc     = lesson.modality === "ONLINE"
+  const start      = lesson.scheduledAt
+  const end        = new Date(start.getTime() + lesson.duration * 60_000)
+  const fmt        = (d: Date) => d.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z"
+  const firstName  = lesson.participants[0]?.student.user?.name ?? "Aluno"
+  const title      = `Aula de ${lesson.subject.name} com ${firstName}`
+  const loc        = lesson.modality === "ONLINE"
     ? (lesson.meetingLink ?? "Online")
-    : (lesson.location   ?? "Presencial")
-  const details = `Matéria: ${lesson.subject.name}\nAluno: ${lesson.student.user.name}\nModalidade: ${lesson.modality === "ONLINE" ? "Online" : "Presencial"}`
+    : (lesson.location    ?? "Presencial")
+  const details    = `Matéria: ${lesson.subject.name}\nAluno: ${firstName}\nModalidade: ${lesson.modality === "ONLINE" ? "Online" : "Presencial"}`
 
   const p = new URLSearchParams({
     action:  "TEMPLATE",
@@ -49,21 +50,13 @@ export default async function LessonDetailPage({ params }: LessonDetailProps) {
   const lesson = await prisma.lesson.findUnique({
     where:   { id },
     include: {
-      student: { include: { user: true } },
+      participants: { include: { student: { include: { user: true } } } },
       teacher: { include: { user: true } },
       subject: true,
       homework: true,
     },
   })
   if (!lesson) notFound()
-
-  // Busca outros alunos do grupo (se for aula em grupo)
-  const groupMates = lesson.isGroupLesson && lesson.groupId
-    ? await prisma.lesson.findMany({
-        where:  { groupId: lesson.groupId, studentId: { not: lesson.studentId } },
-        select: { student: { select: { user: { select: { name: true } } } } },
-      })
-    : []
 
   const isCompleted = ["COMPLETED", "CANCELLED", "MISSED"].includes(lesson.status)
   const gcUrl       = buildGoogleCalendarUrl(lesson)
@@ -80,7 +73,7 @@ export default async function LessonDetailPage({ params }: LessonDetailProps) {
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 gap-4 text-sm">
             {[
-              { icon: User,        label: "Aluno",       value: lesson.student.user.name },
+              { icon: User,        label: "Aluno",       value: lesson.participants[0]?.student.user?.name ?? "Aluno" },
               { icon: BookOpen,    label: "Matéria",     value: lesson.subject.name       },
               { icon: CalendarDays,label: "Data/Hora",   value: format(lesson.scheduledAt, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR }) },
               { icon: lesson.modality === "ONLINE" ? Monitor : MapPin, label: "Modalidade", value: lesson.modality === "ONLINE" ? "Online" : "Presencial" },
@@ -96,20 +89,17 @@ export default async function LessonDetailPage({ params }: LessonDetailProps) {
           </div>
 
           {/* Seção de alunos do grupo */}
-          {lesson.isGroupLesson && (
+          {lesson.participants.length > 1 && (
             <div className="flex items-start gap-2 rounded-xl bg-primary/5 border border-primary/20 px-4 py-3">
               <Users className="w-4 h-4 text-primary mt-0.5 shrink-0" />
               <div>
                 <p className="text-xs text-muted-foreground font-medium mb-1">
-                  Aula em grupo ({lesson.groupSize ?? groupMates.length + 1} aluno{(lesson.groupSize ?? groupMates.length + 1) !== 1 ? "s" : ""})
+                  Aula em grupo ({lesson.participants.length} aluno{lesson.participants.length !== 1 ? "s" : ""})
                 </p>
                 <div className="flex flex-wrap gap-1">
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
-                    {lesson.student.user.name}
-                  </span>
-                  {groupMates.map((gm, i) => (
-                    <span key={i} className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
-                      {gm.student.user.name}
+                  {lesson.participants.map((p, i) => (
+                    <span key={i} className={`text-xs px-2 py-0.5 rounded-full font-medium ${i === 0 ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>
+                      {p.student.user?.name ?? "Aluno"}
                     </span>
                   ))}
                 </div>

@@ -28,7 +28,7 @@ export default async function ProfessorDashboard() {
   const [lessons, requests, payout] = await Promise.all([
     prisma.lesson.findMany({
       where:   { teacherId: teacher.id },
-      include: { student: { include: { user: true } }, subject: true },
+      include: { participants: { include: { student: { include: { user: true } } } }, subject: true },
       orderBy: { scheduledAt: "desc" },
       take:    100,
     }),
@@ -42,7 +42,8 @@ export default async function ProfessorDashboard() {
 
   const rate          = Number(teacher.hourlyRate)
   const aulasDoMes    = lessons.filter((l) => l.scheduledAt >= startOfMonth(now) && l.status === "COMPLETED").length
-  const totalAlunos   = new Set(lessons.map((l) => l.studentId)).size
+  const allStudentIds = lessons.flatMap((l) => l.participants.map((p) => p.studentId))
+  const totalAlunos   = new Set(allStudentIds).size
   const projecaoMes   = aulasDoMes * rate
   const avgRating     = lessons.filter((l) => l.studentRating).length > 0
     ? (lessons.filter((l) => l.studentRating).reduce((s, l) => s + (l.studentRating ?? 0), 0) / lessons.filter((l) => l.studentRating).length).toFixed(1)
@@ -161,7 +162,7 @@ export default async function ProfessorDashboard() {
                     <p className="text-xs text-muted-foreground">{format(l.scheduledAt, "HH:mm")}</p>
                   </div>
                   <div className="min-w-0">
-                    <p className="text-sm font-medium truncate">{l.student.user.name}</p>
+                    <p className="text-sm font-medium truncate">{l.participants[0]?.student.user?.name ?? "Aluno"}</p>
                     <p className="text-xs text-muted-foreground">{l.subject.name}</p>
                   </div>
                 </div>

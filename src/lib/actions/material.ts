@@ -57,13 +57,14 @@ export async function createMaterialAction(
       include: { user: true },
     })
     if (student) {
+      if (!student.userId) return
       await notify({
         userId:  student.userId,
         type:    "MATERIAL_UPLOADED",
         title:   "Novo material disponível!",
         message: `${teacher.user.name} compartilhou um novo material: "${title}".`,
-        email:   student.user.email,
-        phone:   student.user.phone ?? undefined,
+        email:   student.user?.email ?? undefined,
+        phone:   student.user?.phone ?? undefined,
       })
     }
   }

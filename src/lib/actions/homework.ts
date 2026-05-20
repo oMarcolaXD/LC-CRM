@@ -15,7 +15,7 @@ async function requireTeacherOrAdmin() {
 async function requireStudent() {
   const session = await auth()
   if (!session?.user) throw new Error("Sem permissão")
-  if (!["STUDENT", "GUARDIAN"].includes(session.user.role)) throw new Error("Sem permissão")
+  if (!["GUARDIAN", "ADMIN"].includes(session.user.role)) throw new Error("Sem permissão")
   return session
 }
 
@@ -29,7 +29,7 @@ export async function assignHomeworkAction(
 
   const lesson = await prisma.lesson.findUnique({
     where:   { id: lessonId },
-    include: { student: { include: { user: true } } },
+    include: { participants: { include: { student: { include: { user: true } } } } },
   })
   if (!lesson) throw new Error("Aula não encontrada")
 
@@ -52,21 +52,41 @@ export async function assignHomeworkAction(
     },
   })
 
-  await notify({
-    userId:  lesson.student.userId,
-    type:    "HOMEWORK_ASSIGNED",
-    title:   "Nova lição de casa!",
-    message: `Você recebeu uma nova lição de casa: "${title}".${dueDate ? ` Prazo: ${new Date(dueDate).toLocaleDateString("pt-BR")}.` : ""}`,
-    email:   lesson.student.user.email,
-    phone:   lesson.student.user.phone ?? undefined,
-  })
+  for (const p of lesson.participants) {
+    if (p.student.user?.id) {
+      await notify({
+        userId:  p.student.user.id,
+        type:    "HOMEWORK_ASSIGNED",
+        title:   "Nova lição de casa!",
+        message: `Você recebeu uma nova lição de casa: "${title}".${dueDate ? ` Prazo: ${new Date(dueDate).toLocaleDateString("pt-BR")}.` : ""}`,
+        email:   p.student.user?.email ?? undefined,
+        phone:   p.student.user?.phone ?? undefined,
+      })
+    }
+  }
 
   revalidatePath("/aluno/licoes")
   revalidatePath(`/professor/agenda/${lessonId}`)
 }
 
 export async function completeHomeworkAction(homeworkId: string) {
-  await requireStudent()
+  const session = await requireStudent()
+
+  const homework = await prisma.homework.findUnique({
+    where:   { id: homeworkId },
+    include: { lesson: { include: { participants: { select: { studentId: true } } } } },
+  })
+  if (!homework) throw new Error("Lição não encontrada")
+
+  if (session.user.role === "GUARDIAN") {
+    const guardian = await prisma.guardian.findFirst({
+      where:   { userId: session.user.id },
+      include: { students: { select: { id: true } } },
+    })
+    const participantIds = homework.lesson.participants.map((p) => p.studentId)
+    const owns = guardian?.students.some((s) => participantIds.includes(s.id))
+    if (!owns) throw new Error("Sem permissão para esta lição")
+  }
 
   await prisma.homework.update({
     where: { id: homeworkId },

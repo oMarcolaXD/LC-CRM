@@ -1,14 +1,15 @@
 "use client"
 
-import { useState }   from "react"
-import { useFormStatus } from "react-dom"
-import { Button }     from "@/components/ui/button"
+import { useState }      from "react"
+import { Button }        from "@/components/ui/button"
+import { SubmitButton }  from "@/components/ui/submit-button"
 import { Input }      from "@/components/ui/input"
+import { PhoneInput } from "@/components/ui/phone-input"
 import { Label }      from "@/components/ui/label"
 import { Textarea }   from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { AlertCircle, Loader2 } from "lucide-react"
-import type { Role, TeacherMode, EducationLevel } from "@prisma/client"
+import { AlertCircle } from "lucide-react"
+import type { Role, TeacherMode } from "@prisma/client"
 
 const ROLES = [
   { value: "ADMIN",        label: "Administrador" },
@@ -30,38 +31,30 @@ const TEACHING_MODES: { value: TeacherMode; label: string; description: string }
   { value: "HYBRID",       label: "Presencial e Online", description: "Pode trabalhar de casa (online) e vir à sede" },
 ]
 
-const EDUCATION_LEVELS: { value: EducationLevel; label: string }[] = [
-  { value: "EF2",        label: "Fundamental 2 (6º–9º)" },
-  { value: "EM",         label: "Ensino Médio" },
-  { value: "SUPERIOR",   label: "Superior" },
-  { value: "VESTIBULAR", label: "Vestibular / ENEM" },
-]
-
 interface UserFormProps {
   action:   (formData: FormData) => void | Promise<void>
   error?:   string
   defaultValues?: {
     name?: string; email?: string; phone?: string; role?: Role
-    grade?: string; educationLevel?: EducationLevel; school?: string
+    grade?: string; school?: string
     hourlyRate?: number; bio?: string; teachingMode?: TeacherMode
+    guardianId?: string; relationship?: string
   }
+  guardians?: { id: string; name: string }[]
   isEdit?: boolean
 }
 
-function SubmitButton({ label }: { label: string }) {
-  const { pending } = useFormStatus()
-  return (
-    <Button type="submit" disabled={pending} className="w-full sm:w-auto">
-      {pending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-      {label}
-    </Button>
-  )
-}
 
-export function UserForm({ action, error, defaultValues, isEdit }: UserFormProps) {
+export function UserForm({ action, error, defaultValues, guardians = [], isEdit }: UserFormProps) {
+  const ADULT_GRADES = ["Vestibular", "ENEM", "Concurso", "Superior"]
+
   const [role, setRole]             = useState<string>(defaultValues?.role ?? "STUDENT")
   const [teachingMode, setTeachingMode] = useState<string>(defaultValues?.teachingMode ?? "HYBRID")
-  const [eduLevel, setEduLevel]     = useState<string>(defaultValues?.educationLevel ?? "")
+  const [grade, setGrade]           = useState<string>(defaultValues?.grade ?? GRADES[0])
+  const [selfGuardian, setSelfGuardian] = useState(false)
+  const [hourlyRateDisplay, setHourlyRateDisplay] = useState(
+    defaultValues?.hourlyRate != null ? String(defaultValues.hourlyRate).replace(".", ",") : ""
+  )
 
   return (
     <form action={action} className="space-y-6 max-w-2xl">
@@ -80,19 +73,28 @@ export function UserForm({ action, error, defaultValues, isEdit }: UserFormProps
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="email">E-mail *</Label>
-          <Input id="email" name="email" type="email" defaultValue={defaultValues?.email} placeholder="joao@email.com" required />
+          <Label htmlFor="email">E-mail <span className="text-muted-foreground font-normal text-xs">(opcional para alunos)</span></Label>
+          <Input id="email" name="email" type="email" defaultValue={defaultValues?.email} placeholder="joao@email.com" />
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="phone">Telefone / WhatsApp</Label>
-          <Input id="phone" name="phone" defaultValue={defaultValues?.phone ?? ""} placeholder="(11) 99999-9999" />
+          <Label htmlFor="phone">Telefone / WhatsApp *</Label>
+          <PhoneInput id="phone" name="phone" value={defaultValues?.phone ?? ""} required />
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="password">{isEdit ? "Nova senha (deixe vazio para manter)" : "Senha *"}</Label>
-          <Input id="password" name="password" type="password" placeholder="••••••••" required={!isEdit} />
-        </div>
+        {role !== "STUDENT" && (
+          <div className="space-y-2">
+            <Label htmlFor="password">{isEdit ? "Nova senha (deixe vazio para manter)" : "Senha *"}</Label>
+            <Input id="password" name="password" type="password" placeholder="••••••••" required={!isEdit} />
+          </div>
+        )}
+        {role === "STUDENT" && !isEdit && (
+          <div className="space-y-2 sm:col-span-2">
+            <p className="text-xs text-muted-foreground bg-muted/50 rounded-lg px-3 py-2">
+              Uma senha será gerada automaticamente e enviada por e-mail ao aluno (se tiver e-mail cadastrado).
+            </p>
+          </div>
+        )}
 
         <div className="space-y-2">
           <Label htmlFor="role">Perfil *</Label>
@@ -119,9 +121,8 @@ export function UserForm({ action, error, defaultValues, isEdit }: UserFormProps
           <p className="sm:col-span-2 text-sm font-medium text-muted-foreground">Dados do Aluno</p>
           <div className="space-y-2">
             <Label htmlFor="grade">Série / Nível *</Label>
-            <input type="hidden" name="grade" value={defaultValues?.grade ?? GRADES[0]} id="grade-hidden" />
-            <Select defaultValue={defaultValues?.grade ?? GRADES[0]}
-              onValueChange={(v) => { if (!v) return; const el = document.getElementById("grade-hidden") as HTMLInputElement | null; if (el) el.value = v }}>
+            <input type="hidden" name="grade" value={grade} />
+            <Select value={grade} onValueChange={(v) => v && setGrade(v)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>{GRADES.map((g) => <SelectItem key={g} value={g}>{g}</SelectItem>)}</SelectContent>
             </Select>
@@ -130,19 +131,55 @@ export function UserForm({ action, error, defaultValues, isEdit }: UserFormProps
             <Label htmlFor="school">Escola</Label>
             <Input id="school" name="school" defaultValue={defaultValues?.school ?? ""} placeholder="Nome da escola" />
           </div>
-          <div className="space-y-2 sm:col-span-2">
-            <Label>Nível de Ensino (para filtro de agendamento)</Label>
-            <input type="hidden" name="educationLevel" value={eduLevel} />
-            <div className="flex flex-wrap gap-3">
-              {EDUCATION_LEVELS.map(({ value, label }) => (
-                <label key={value} className="flex items-center gap-2 cursor-pointer">
-                  <input type="radio" name="_educationLevel" value={value}
-                    checked={eduLevel === value}
-                    onChange={() => setEduLevel(value)} />
-                  <span className="text-sm">{label}</span>
-                </label>
-              ))}
+
+          {/* Responsável */}
+          {!selfGuardian && (
+            <div className="space-y-2 sm:col-span-2">
+              <Label htmlFor="guardianId">Responsável</Label>
+              <input type="hidden" name="guardianId" value={defaultValues?.guardianId ?? ""} id="guardianId-hidden" />
+              <Select defaultValue={defaultValues?.guardianId ?? ""}
+                onValueChange={(v) => { const el = document.getElementById("guardianId-hidden") as HTMLInputElement | null; if (el) el.value = v ?? "" }}>
+                <SelectTrigger><SelectValue placeholder="Selecionar responsável (opcional)" /></SelectTrigger>
+                <SelectContent>
+                  {guardians.map((g) => <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
+          )}
+
+          {/* Aluno adulto — é o próprio responsável */}
+          {ADULT_GRADES.includes(grade) && !isEdit && (
+            <div className="sm:col-span-2">
+              <input type="hidden" name="selfGuardian" value={selfGuardian ? "on" : ""} />
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={selfGuardian}
+                  onChange={(e) => setSelfGuardian(e.target.checked)} />
+                <span className="text-sm font-medium">
+                  É o próprio responsável (aluno adulto sem tutor)
+                </span>
+              </label>
+              {selfGuardian && (
+                <p className="text-xs text-muted-foreground mt-1 ml-6">
+                  Uma conta de responsável será criada automaticamente vinculada a este aluno.
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Campos de Responsável */}
+      {role === "GUARDIAN" && (
+        <div className="p-4 border rounded-xl bg-muted/30 space-y-3">
+          <p className="text-sm font-medium text-muted-foreground">Dados do Responsável</p>
+          <div className="space-y-2">
+            <Label htmlFor="relationship">Parentesco / Relação</Label>
+            <Input
+              id="relationship"
+              name="relationship"
+              defaultValue={defaultValues?.relationship ?? ""}
+              placeholder="Ex: Mãe, Pai, Avó, Responsável, Próprio..."
+            />
           </div>
         </div>
       )}
@@ -152,9 +189,25 @@ export function UserForm({ action, error, defaultValues, isEdit }: UserFormProps
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 border rounded-xl bg-muted/30">
           <p className="sm:col-span-2 text-sm font-medium text-muted-foreground">Dados do Professor</p>
           <div className="space-y-2">
-            <Label htmlFor="hourlyRate">Valor por Aula (R$) *</Label>
-            <Input id="hourlyRate" name="hourlyRate" type="number" min="0" step="0.01"
-              defaultValue={defaultValues?.hourlyRate ?? ""} placeholder="80.00" />
+            <Label htmlFor="hourlyRate">Valor por Aula *</Label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground select-none">R$</span>
+              <input type="hidden" name="hourlyRate" value={hourlyRateDisplay.replace(",", ".")} />
+              <Input
+                id="hourlyRate"
+                value={hourlyRateDisplay}
+                onChange={(e) => {
+                  const raw = e.target.value.replace(/[^\d,]/g, "")
+                  setHourlyRateDisplay(raw)
+                }}
+                onBlur={() => {
+                  const num = parseFloat(hourlyRateDisplay.replace(",", "."))
+                  if (!isNaN(num)) setHourlyRateDisplay(num.toFixed(2).replace(".", ","))
+                }}
+                placeholder="0,00"
+                className="pl-9"
+              />
+            </div>
           </div>
           <div className="space-y-2 sm:col-span-2">
             <Label htmlFor="bio">Bio / Apresentação</Label>
@@ -185,7 +238,7 @@ export function UserForm({ action, error, defaultValues, isEdit }: UserFormProps
       )}
 
       <div className="flex gap-3 pt-2">
-        <SubmitButton label={isEdit ? "Salvar Alterações" : "Criar Usuário"} />
+        <SubmitButton className="w-full sm:w-auto">{isEdit ? "Salvar Alterações" : "Criar Usuário"}</SubmitButton>
         <Button type="button" variant="outline" onClick={() => history.back()}>Cancelar</Button>
       </div>
     </form>

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useTransition } from "react"
-import { Bell }    from "lucide-react"
+import { Bell, Loader2 } from "lucide-react"
 import {
   Popover, PopoverContent, PopoverTrigger,
 } from "@/components/ui/popover"
@@ -76,8 +76,11 @@ export function NotificationBell() {
         <div className="flex items-center justify-between px-4 py-3 border-b border-border">
           <h3 className="font-sub font-semibold text-sm">Notificações</h3>
           {unread > 0 && (
-            <button onClick={markRead} className="text-xs text-primary hover:underline" disabled={pending}>
-              Marcar todas como lidas
+            <button onClick={markRead} disabled={pending}
+              className="flex items-center gap-1 text-xs text-primary hover:underline disabled:opacity-50"
+            >
+              {pending && <Loader2 className="w-3 h-3 animate-spin" />}
+              {pending ? "Atualizando..." : "Marcar todas como lidas"}
             </button>
           )}
         </div>

@@ -1,5 +1,7 @@
 import { auth }              from "@/lib/auth"
 import { prisma }            from "@/lib/prisma"
+import { redirect }          from "next/navigation"
+import { getActiveStudent }  from "@/lib/get-active-student"
 import { PageHeader }        from "@/components/shared/page-header"
 import { Card, CardContent } from "@/components/ui/card"
 import { BookOpen }          from "lucide-react"
@@ -11,10 +13,14 @@ interface AgendarPageProps {
 
 export default async function AgendarPage({ searchParams }: AgendarPageProps) {
   const session = await auth()
+  if (!session?.user) redirect("/login")
   const { error } = await searchParams
 
-  const student = await prisma.student.findFirst({
-    where:   { user: { email: session?.user?.email ?? "" } },
+  const { student: activeStudent } = await getActiveStudent(session.user.id)
+  if (!activeStudent) redirect("/aluno/sem-aluno")
+
+  const student = await prisma.student.findUnique({
+    where:   { id: activeStudent.id },
     include: { packages: { where: { status: "ACTIVE", remainingLessons: { gt: 0 } } } },
   })
 
@@ -71,6 +77,7 @@ export default async function AgendarPage({ searchParams }: AgendarPageProps) {
             }))}
             subjects={subjects.map((s) => ({ id: s.id, name: s.name }))}
             studentLevel={student?.educationLevel ?? null}
+            studentId={activeStudent.id}
             error={error}
           />
         </CardContent>

@@ -62,9 +62,9 @@ async function getReportData() {
     prisma.student.findMany({
       select: {
         user:   { select: { name: true } },
-        _count: { select: { lessons: { where: { status: "COMPLETED" } } } },
+        _count: { select: { participations: { where: { lesson: { status: "COMPLETED" } } } } },
       },
-      orderBy: { lessons: { _count: "desc" } },
+      orderBy: { participations: { _count: "desc" } },
       take: 5,
     }),
     // Avaliações
@@ -123,9 +123,9 @@ async function getReportData() {
     value: t._count.lessons,
   }))
 
-  const topAlunos = topAlunosRaw.map((s) => ({
-    name:  s.user.name,
-    aulas: s._count.lessons,
+  const topAlunos = (topAlunosRaw as { user: { name: string } | null; _count: { participations: number } }[]).map((s) => ({
+    name:  s.user?.name ?? "Aluno",
+    aulas: s._count.participations,
   }))
 
   return {

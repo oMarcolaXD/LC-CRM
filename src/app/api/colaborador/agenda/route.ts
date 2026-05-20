@@ -9,10 +9,14 @@ import {
 } from "date-fns"
 
 const lessonInclude = {
-  student: {
+  participants: {
     include: {
-      user:     true,
-      guardian: { include: { user: true } },
+      student: {
+        include: {
+          user:     true,
+          guardian: { include: { user: true } },
+        },
+      },
     },
   },
   subject: true,
@@ -27,10 +31,11 @@ const requestInclude = {
 type RawLesson  = Awaited<ReturnType<typeof prisma.lesson.findMany<{ include: typeof lessonInclude }>>>[number]
 type RawRequest = Awaited<ReturnType<typeof prisma.lessonRequest.findMany<{ include: typeof requestInclude }>>>[number]
 
-function mapLesson(l: RawLesson, groupMatesMap: Record<string, string[]> = {}) {
-  const d           = l.scheduledAt
-  const min         = d.getHours() * 60 + d.getMinutes()
-  const studentName = l.student.user.name
+function mapLesson(l: RawLesson) {
+  const d       = l.scheduledAt
+  const min     = d.getHours() * 60 + d.getMinutes()
+  const first   = l.participants[0]
+  const isGroup = l.participants.length > 1
   return {
     id:            l.id,
     teacherId:     l.teacherId,
@@ -40,16 +45,13 @@ function mapLesson(l: RawLesson, groupMatesMap: Record<string, string[]> = {}) {
     modality:      l.modality,
     teacherOnsite: l.teacherOnsite,
     time:          format(d, "HH:mm"),
-    studentName,
+    studentName:   first?.student.user?.name ?? "Aluno",
     subjectName:   l.subject.name,
-    guardianName:  l.student.guardian?.user.name ?? null,
+    guardianName:  first?.student.guardian?.user.name ?? null,
     date:          format(d, "yyyy-MM-dd"),
-    isGroupLesson: l.isGroupLesson,
-    groupSize:     l.groupSize,
-    groupId:       l.groupId,
-    groupMates:    l.groupId
-      ? (groupMatesMap[l.groupId] ?? []).filter(n => n !== studentName)
-      : [],
+    isGroupLesson: isGroup,
+    groupSize:     isGroup ? l.participants.length : null,
+    groupMates:    l.participants.slice(1).map(p => p.student.user?.name ?? "Aluno"),
   }
 }
 
@@ -62,7 +64,7 @@ function mapPendingRequest(r: RawRequest) {
     startMin:    min,
     time:        format(d, "HH:mm"),
     date:        format(d, "yyyy-MM-dd"),
-    studentName: r.student.user.name,
+    studentName: r.student.user?.name ?? "Aluno",
     subjectName: r.subject?.name ?? "–",
     modality:    r.modality,
     teacherMode: r.teacher.teachingMode,
@@ -127,24 +129,9 @@ export async function GET(req: NextRequest) {
       : Promise.resolve([] as RawRequest[]),
   ])
 
-  // Colegas de turma para aulas em grupo
-  const allLessons = [...lessons, ...extraLessons]
-  const groupIds = [...new Set(allLessons.filter(l => l.isGroupLesson && l.groupId).map(l => l.groupId!))]
-  const groupSiblings = groupIds.length > 0
-    ? await prisma.lesson.findMany({
-        where:  { groupId: { in: groupIds } },
-        select: { groupId: true, student: { select: { user: { select: { name: true } } } } },
-      })
-    : []
-  const groupMatesMap = groupSiblings.reduce<Record<string, string[]>>((acc, l) => {
-    if (!l.groupId) return acc
-    ;(acc[l.groupId] ??= []).push(l.student.user.name)
-    return acc
-  }, {})
-
   return NextResponse.json({
-    lessons:             lessons.map(l => mapLesson(l, groupMatesMap)),
-    extraLessons:        extraLessons.map(l => mapLesson(l, groupMatesMap)),
+    lessons:             lessons.map(mapLesson),
+    extraLessons:        extraLessons.map(mapLesson),
     pendingRequests:     pendingRequests.map(mapPendingRequest),
     weekPendingRequests: weekPendingRequests.map(mapPendingRequest),
   })

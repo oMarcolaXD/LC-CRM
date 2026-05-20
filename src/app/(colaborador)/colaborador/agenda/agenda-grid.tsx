@@ -87,7 +87,6 @@ export interface LessonSlot {
   guardianName:  string | null
   isGroupLesson: boolean
   groupSize:     number | null
-  groupId:       string | null
   groupMates:    string[]
 }
 
@@ -167,7 +166,7 @@ function LessonDetailModal({
             {lesson.isGroupLesson && (
               <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-primary/10 text-primary flex items-center gap-1">
                 <Users className="w-3 h-3" />
-                Grupo · {lesson.groupSize ?? "?"} alunos
+                Grupo · {lesson.groupSize ?? lesson.groupMates.length + 1} alunos
               </span>
             )}
           </div>

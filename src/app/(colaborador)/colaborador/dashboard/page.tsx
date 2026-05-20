@@ -129,7 +129,7 @@ export default async function ColaboradorDashboard() {
                 {requests.map((r) => (
                   <RequestCard
                     key={r.id} id={r.id}
-                    studentName={r.student.user.name}
+                    studentName={r.student.user?.name ?? "Aluno"}
                     teacherName={r.teacher.user.name}
                     subjectName={r.subject?.name ?? "–"}
                     preferredAt={r.preferredAt}

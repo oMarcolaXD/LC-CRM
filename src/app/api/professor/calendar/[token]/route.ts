@@ -22,19 +22,20 @@ export async function GET(
 
   const lessons = await prisma.lesson.findMany({
     where:   { teacherId, status: { in: ["SCHEDULED", "CONFIRMED"] } },
-    include: { student: { include: { user: true } }, subject: true },
+    include: { participants: { include: { student: { include: { user: true } } } }, subject: true },
     orderBy: { scheduledAt: "asc" },
   })
 
   const now = new Date()
 
   const vevents = lessons.map((l) => {
+    const firstStudentName = l.participants[0]?.student.user?.name ?? "Aluno"
     const end   = new Date(l.scheduledAt.getTime() + l.duration * 60_000)
-    const title = `Aula de ${l.subject.name} com ${l.student.user.name}`
+    const title = `Aula de ${l.subject.name} com ${firstStudentName}`
     const loc   = l.modality === "ONLINE"
       ? (l.meetingLink ?? "Online")
-      : (l.location   ?? "Presencial")
-    const desc  = `Matéria: ${l.subject.name}\\nAluno: ${l.student.user.name}\\nModalidade: ${l.modality === "ONLINE" ? "Online" : "Presencial"}`
+      : (l.location    ?? "Presencial")
+    const desc  = `Matéria: ${l.subject.name}\\nAluno: ${firstStudentName}\\nModalidade: ${l.modality === "ONLINE" ? "Online" : "Presencial"}`
 
     return [
       "BEGIN:VEVENT",

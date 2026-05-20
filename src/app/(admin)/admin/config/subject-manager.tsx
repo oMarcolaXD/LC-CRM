@@ -35,10 +35,6 @@ function CreateForm() {
           <Label htmlFor="new-name" className="text-xs">Nome *</Label>
           <Input id="new-name" name="name" placeholder="Ex: Matemática" className="h-8 text-sm" required />
         </div>
-        <div className="flex-1 space-y-1">
-          <Label htmlFor="new-level" className="text-xs">Nível (opcional)</Label>
-          <Input id="new-level" name="level" placeholder="Ex: Todos" className="h-8 text-sm" />
-        </div>
       </div>
       <div className="flex gap-2 justify-end">
         <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)}>
@@ -83,10 +79,6 @@ function SubjectRow({ subject }: { subject: Subject }) {
           <div className="flex-1 space-y-1">
             <Label className="text-xs">Nome *</Label>
             <Input name="name" defaultValue={subject.name} className="h-8 text-sm" required />
-          </div>
-          <div className="flex-1 space-y-1">
-            <Label className="text-xs">Nível</Label>
-            <Input name="level" defaultValue={subject.level ?? ""} placeholder="Ex: Todos" className="h-8 text-sm" />
           </div>
           <div className="flex items-end gap-1">
             <Button type="button" size="icon" variant="ghost" className="h-8 w-8" onClick={() => setEditing(false)}>

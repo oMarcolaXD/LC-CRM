@@ -17,8 +17,8 @@ export async function loginAction(formData: FormData) {
   }
 
   const raw = {
-    email:    formData.get("email"),
-    password: formData.get("password"),
+    emailOrPhone: formData.get("emailOrPhone"),
+    password:     formData.get("password"),
   }
 
   const parsed = loginSchema.safeParse(raw)
@@ -28,12 +28,16 @@ export async function loginAction(formData: FormData) {
 
   try {
     await signIn("credentials", {
-      email:      parsed.data.email,
-      password:   parsed.data.password,
-      redirectTo: "/",
+      emailOrPhone: parsed.data.emailOrPhone,
+      password:     parsed.data.password,
+      redirectTo:   "/",
     })
   } catch (err) {
     if (err instanceof AuthError) {
+      const cause = (err.cause as { err?: Error } | undefined)?.err
+      if (cause?.message === "student_login_disabled") {
+        redirect("/login?error=student_login_disabled")
+      }
       redirect("/login?error=credentials")
     }
     throw err

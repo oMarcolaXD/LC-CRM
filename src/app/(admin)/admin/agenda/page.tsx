@@ -44,10 +44,14 @@ export default async function AdminAgendaPage({ searchParams }: AgendaPageProps)
     prisma.lesson.findMany({
       where:   { scheduledAt: { gte: dayStart, lte: dayEnd } },
       include: {
-        student: {
+        participants: {
           include: {
-            user:     true,
-            guardian: { include: { user: true } },
+            student: {
+              include: {
+                user:     true,
+                guardian: { include: { user: true } },
+              },
+            },
           },
         },
         teacher: { include: { user: true } },
@@ -83,30 +87,31 @@ export default async function AdminAgendaPage({ searchParams }: AgendaPageProps)
   }))
 
   const lessonSlots: LessonSlot[] = lessons.map(l => {
-    const d   = l.scheduledAt
-    const min = d.getHours() * 60 + d.getMinutes()
+    const d       = l.scheduledAt
+    const min     = d.getHours() * 60 + d.getMinutes()
+    const first   = l.participants[0]
+    const isGroup = l.participants.length > 1
     return {
-      id:           l.id,
-      teacherId:    l.teacherId,
-      startMin:     min,
-      duration:     l.duration ?? 60,
+      id:            l.id,
+      teacherId:     l.teacherId,
+      startMin:      min,
+      duration:      l.duration ?? 60,
       status:        l.status as LessonSlot["status"],
       modality:      l.modality as LessonSlot["modality"],
       teacherOnsite: l.teacherOnsite,
       time:          format(d, "HH:mm"),
-      studentName:   l.student.user.name,
+      studentName:   first?.student.user?.name ?? "Aluno",
       subjectName:   l.subject.name,
-      guardianName:  l.student.guardian?.user.name ?? null,
-      isGroupLesson: l.isGroupLesson,
-      groupSize:     l.groupSize,
-      groupId:       l.groupId,
-      groupMates:    [],
+      guardianName:  first?.student.guardian?.user.name ?? null,
+      isGroupLesson: isGroup,
+      groupSize:     isGroup ? l.participants.length : null,
+      groupMates:    l.participants.slice(1).map(p => p.student.user?.name ?? "Aluno"),
     }
   })
 
   const students: StudentOption[] = studentsRaw.map(s => ({
     id:               s.id,
-    name:             s.user.name,
+    name:             s.user?.name ?? "Aluno",
     remainingLessons: s.packages[0]?.remainingLessons ?? 0,
   }))
 

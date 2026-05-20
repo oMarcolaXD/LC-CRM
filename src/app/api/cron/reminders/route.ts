@@ -22,11 +22,11 @@ export async function GET(request: NextRequest) {
   const [lessons24h, lessons1h] = await Promise.all([
     prisma.lesson.findMany({
       where: { status: { in: ["SCHEDULED", "CONFIRMED"] }, scheduledAt: { gte: h24start, lte: h24end } },
-      include: { student: { include: { user: true } }, teacher: { include: { user: true } }, subject: true },
+      include: { participants: { include: { student: { include: { user: true } } } }, teacher: { include: { user: true } }, subject: true },
     }),
     prisma.lesson.findMany({
       where: { status: { in: ["SCHEDULED", "CONFIRMED"] }, scheduledAt: { gte: h1start,  lte: h1end  } },
-      include: { student: { include: { user: true } }, teacher: { include: { user: true } }, subject: true },
+      include: { participants: { include: { student: { include: { user: true } } } }, teacher: { include: { user: true } }, subject: true },
     }),
   ])
 
@@ -37,24 +37,26 @@ export async function GET(request: NextRequest) {
     [lessons1h,  "LESSON_REMINDER_1H" ],
   ] as const) {
     for (const lesson of lessons) {
-      const scheduledAt   = fmt(lesson.scheduledAt)
-      const teacherName   = lesson.teacher.user.name
-      const studentName   = lesson.student.user.name
-      const subject       = lesson.subject.name
+      const scheduledAt = fmt(lesson.scheduledAt)
+      const teacherName = lesson.teacher.user.name
+      const subject     = lesson.subject.name
 
-      await Promise.allSettled([
-        notifyLessonReminder({
-          userId: lesson.student.userId, email: lesson.student.user.email,
-          phone: lesson.student.user.phone, role: "student",
-          teacherName, studentName, subject, scheduledAt, type,
-        }),
-        notifyLessonReminder({
-          userId: lesson.teacher.userId, email: lesson.teacher.user.email,
-          phone: lesson.teacher.user.phone, role: "teacher",
-          teacherName, studentName, subject, scheduledAt, type,
-        }),
-      ])
-      sent += 2
+      for (const p of lesson.participants) {
+        const studentName = p.student.user?.name ?? "Aluno"
+        await Promise.allSettled([
+          notifyLessonReminder({
+            userId: p.student.userId ?? "", email: p.student.user?.email ?? null,
+            phone: p.student.user?.phone ?? null, role: "student",
+            teacherName, studentName, subject, scheduledAt, type,
+          }),
+          notifyLessonReminder({
+            userId: lesson.teacher.userId, email: lesson.teacher.user.email,
+            phone: lesson.teacher.user.phone, role: "teacher",
+            teacherName, studentName, subject, scheduledAt, type,
+          }),
+        ])
+        sent += 2
+      }
     }
   }
 

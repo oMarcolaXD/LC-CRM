@@ -76,16 +76,17 @@ enum EducationLevel {
 // ─── Usuário Base ─────────────────────────────────────────────────────────────
 
 model User {
-  id        String   @id @default(cuid())
-  name      String
-  email     String   @unique
-  password  String
-  phone     String?
-  role      Role     @default(STUDENT)
-  avatar    String?
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id              String   @id @default(cuid())
+  name            String
+  email           String?  @unique
+  password        String
+  phone           String?  @unique
+  role            Role     @default(STUDENT)
+  avatar          String?
+  active          Boolean  @default(true)
+  lastSeenVersion String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   student       Student?
   guardian      Guardian?
@@ -100,28 +101,29 @@ model User {
 
 model Student {
   id         String    @id @default(cuid())
-  userId     String    @unique
-  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     String?   @unique
+  user       User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name           String
   grade          String
   educationLevel EducationLevel?
   school         String?
-  birthDate      DateTime?
   guardianId     String?
   guardian   Guardian? @relation(fields: [guardianId], references: [id])
   notes      String?
 
-  packages LessonPackage[]
-  lessons  Lesson[]
-  requests LessonRequest[]
-  payments Payment[]
+  packages       LessonPackage[]
+  participations LessonParticipant[]
+  requests       LessonRequest[]
+  payments       Payment[]
 
   @@map("students")
 }
 
 model Guardian {
-  id     String @id @default(cuid())
-  userId String @unique
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id           String  @id @default(cuid())
+  userId       String  @unique
+  relationship String?
+  user         User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   students Student[]
 
@@ -192,8 +194,6 @@ model LessonPackage {
 
 model Lesson {
   id              String         @id @default(cuid())
-  studentId       String
-  student         Student        @relation(fields: [studentId], references: [id])
   teacherId       String
   teacher         Teacher        @relation(fields: [teacherId], references: [id])
   subjectId       String
@@ -208,22 +208,30 @@ model Lesson {
   teacherNotes    String?
   studentRating   Int?
   studentFeedback String?
-  isGroupLesson   Boolean        @default(false)
-  groupId         String?
-  groupSize       Int?
   priceOverride   Decimal?       @db.Decimal(10, 2)
   teacherOnsite   Boolean        @default(false)
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 
-  homework Homework[]
+  participants LessonParticipant[]
+  homework     Homework[]
 
-  @@index([studentId])
   @@index([teacherId])
   @@index([status])
   @@index([scheduledAt])
   @@index([teacherId, status, scheduledAt])
   @@map("lessons")
+}
+
+model LessonParticipant {
+  lessonId  String
+  studentId String
+  lesson    Lesson  @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@id([lessonId, studentId])
+  @@index([studentId])
+  @@map("lesson_participants")
 }
 
 model LessonRequest {

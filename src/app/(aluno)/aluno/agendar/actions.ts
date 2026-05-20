@@ -26,11 +26,20 @@ export async function requestLessonAction(formData: FormData) {
 
   const now = new Date()
 
-  const student = await prisma.student.findFirst({
-    where:   { user: { email: session.user.email ?? "" } },
+  const rawStudentId = String(Object.fromEntries(formData).studentId ?? "")
+  const guardian = await prisma.guardian.findFirst({
+    where: { userId: session.user.id },
+    include: { students: { select: { id: true } } },
+  })
+  if (!guardian) redirect("/aluno/agendar?error=Responsável+não+encontrado")
+
+  const owns = guardian.students.some((s) => s.id === rawStudentId)
+  if (!owns) redirect("/aluno/agendar?error=Aluno+não+vinculado+a+este+responsável")
+
+  const student = await prisma.student.findUnique({
+    where:   { id: rawStudentId },
     include: {
       user:     true,
-      // Filtra pacotes ativos E não expirados
       packages: {
         where: {
           status:           "ACTIVE",
@@ -89,9 +98,9 @@ export async function requestLessonAction(formData: FormData) {
   try {
     await notifyLessonRequest({
       teacherId:    teacher.user.id,
-      teacherEmail: teacher.user.email,
+      teacherEmail: teacher.user.email ?? "",
       teacherPhone: teacher.user.phone,
-      studentName:  student.user.name,
+      studentName:  student.user?.name ?? "Aluno",
       subject:      subject?.name ?? "–",
       preferredAt:  format(requestDate, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR }),
     })

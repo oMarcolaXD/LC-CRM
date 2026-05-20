@@ -1,8 +1,8 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { useFormStatus }  from "react-dom"
-import { Button }   from "@/components/ui/button"
+import { Button }        from "@/components/ui/button"
+import { SubmitButton }  from "@/components/ui/submit-button"
 import { Label }    from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge }    from "@/components/ui/badge"
@@ -54,22 +54,14 @@ function initials(name: string) {
   return name.split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase()
 }
 
-function SubmitButton({ disabled }: { disabled?: boolean }) {
-  const { pending } = useFormStatus()
-  return (
-    <Button type="submit" disabled={pending || disabled} className="w-full sm:w-auto">
-      {pending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <CalendarDays className="w-4 h-4 mr-2" />}
-      Enviar Solicitação
-    </Button>
-  )
-}
 
 export function BookingForm({
-  teachers, subjects, studentLevel, error,
+  teachers, subjects, studentLevel, studentId, error,
 }: {
   teachers:     Teacher[]
   subjects:     Subject[]
   studentLevel: EducationLevel | null
+  studentId:    string
   error?:       string
 }) {
   const [subjectId,    setSubjectId]    = useState("")
@@ -156,6 +148,7 @@ export function BookingForm({
       )}
 
       {/* Hidden inputs */}
+      <input type="hidden" name="studentId"      value={studentId} />
       <input type="hidden" name="teacherId"      value={teacherId} />
       <input type="hidden" name="subjectId"      value={subjectId} />
       <input type="hidden" name="preferredAt"    value={preferredAt} />
@@ -388,7 +381,10 @@ export function BookingForm({
       </div>
 
       <div className="flex items-center gap-3 flex-wrap">
-        <SubmitButton disabled={!preferredAt || !subjectId || !teacherId} />
+        <SubmitButton disabled={!preferredAt || !subjectId || !teacherId} className="w-full sm:w-auto">
+          <CalendarDays className="w-4 h-4" />
+          Enviar Solicitação
+        </SubmitButton>
         {preferredAt && (
           <Badge variant="outline" className="text-xs font-normal">
             {format(new Date(`${selectedDate}T${selectedSlot}:00`), "EEEE, dd/MM 'às' HH:mm", { locale: ptBR })}

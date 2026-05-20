@@ -150,13 +150,13 @@ export function TeacherWeekCalendar({ lessons }: { lessons: CalendarLesson[] }) 
                       STATUS_STYLE[lesson.status] ?? "bg-gray-400 text-white border-gray-500",
                     )}
                     style={pos}
-                    title={`${lesson.subject.name} — ${lesson.student.user.name}\n${format(new Date(lesson.scheduledAt), "HH:mm")}`}
+                    title={`${lesson.subject.name} — ${lesson.student.user?.name ?? "Aluno"}\n${format(new Date(lesson.scheduledAt), "HH:mm")}`}
                   >
                     <p className="text-[11px] font-semibold leading-tight truncate">
                       {format(new Date(lesson.scheduledAt), "HH:mm")} {lesson.subject.name}
                     </p>
                     <p className="text-[10px] leading-tight truncate opacity-90">
-                      {lesson.student.user.name}
+                      {lesson.student.user?.name ?? "Aluno"}
                     </p>
                   </a>
                 )

@@ -40,18 +40,18 @@ export async function GET(request: NextRequest) {
   await Promise.allSettled([
     ...dueSoon.map((p) =>
       notifyPaymentDue({
-        studentUserId: p.student.userId,
-        studentEmail:  p.student.user.email,
-        studentPhone:  p.student.user.phone,
+        studentUserId: p.student.userId ?? "",
+        studentEmail:  p.student.user?.email ?? null,
+        studentPhone:  p.student.user?.phone ?? null,
         amount:  brl(Number(p.amount)),
         dueDate: fmt(p.dueDate),
       })
     ),
     ...overdueList.map((p) =>
       notifyPaymentOverdue({
-        studentUserId: p.student.userId,
-        studentEmail:  p.student.user.email,
-        studentPhone:  p.student.user.phone,
+        studentUserId: p.student.userId ?? "",
+        studentEmail:  p.student.user?.email ?? null,
+        studentPhone:  p.student.user?.phone ?? null,
         amount:  brl(Number(p.amount)),
         dueDate: fmt(p.dueDate),
       })

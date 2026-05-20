@@ -34,7 +34,7 @@ export default async function ProfessorMateriaisPage() {
       orderBy: { uploadedAt: "desc" },
     }) : [],
     teacher ? prisma.student.findMany({
-      where:   { lessons: { some: { teacherId: teacher.id } } },
+      where:   { participations: { some: { lesson: { teacherId: teacher.id } } } },
       include: { user: { select: { name: true } } },
       orderBy: { user: { name: "asc" } },
     }) : [],
@@ -44,11 +44,11 @@ export default async function ProfessorMateriaisPage() {
     }) : [],
   ])
 
-  const studentOptions = students.map((s) => ({ id: s.id, name: s.user.name }))
+  const studentOptions = students.map((s) => ({ id: s.id, name: s.user?.name ?? "Aluno" }))
   const subjectOptions = subjectRows.map((ts) => ({ id: ts.subjectId, name: ts.subject.name }))
 
   // Para mostrar nome do aluno nos materiais com studentId
-  const studentMap = Object.fromEntries(students.map((s) => [s.id, s.user.name]))
+  const studentMap = Object.fromEntries(students.map((s) => [s.id, s.user?.name ?? "Aluno"]))
 
   return (
     <div className="space-y-6">

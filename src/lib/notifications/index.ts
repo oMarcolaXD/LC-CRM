@@ -39,7 +39,7 @@ export async function notifyMany(payloads: NotificationPayload[]): Promise<void>
 // ─── Helpers pré-formatados ───────────────────────────────────────────────────
 
 export async function notifyLessonRequest(opts: {
-  teacherId: string; teacherEmail: string; teacherPhone?: string | null
+  teacherId: string; teacherEmail: string | null; teacherPhone?: string | null
   studentName: string; subject: string; preferredAt: string
 }) {
   await notify({
@@ -47,14 +47,14 @@ export async function notifyLessonRequest(opts: {
     type:    "LESSON_REQUEST",
     title:   "Nova solicitação de aula",
     message: `${opts.studentName} solicitou uma aula de ${opts.subject}.`,
-    email:   opts.teacherEmail,
+    email:   opts.teacherEmail ?? undefined,
     phone:   opts.teacherPhone ?? undefined,
     data:    { "Matéria": opts.subject, "Aluno": opts.studentName, "Horário preferido": opts.preferredAt },
   })
 }
 
 export async function notifyLessonConfirmed(opts: {
-  studentUserId: string; studentEmail: string; studentPhone?: string | null
+  studentUserId: string; studentEmail: string | null; studentPhone?: string | null
   teacherName: string; subject: string; scheduledAt: string; modality: string
 }) {
   await notify({
@@ -62,7 +62,7 @@ export async function notifyLessonConfirmed(opts: {
     type:    "LESSON_CONFIRMED",
     title:   "Aula confirmada!",
     message: `Sua aula de ${opts.subject} com ${opts.teacherName} foi confirmada.`,
-    email:   opts.studentEmail,
+    email:   opts.studentEmail ?? undefined,
     phone:   opts.studentPhone ?? undefined,
     data:    {
       "Matéria":    opts.subject,
@@ -74,7 +74,7 @@ export async function notifyLessonConfirmed(opts: {
 }
 
 export async function notifyLowBalance(opts: {
-  studentUserId: string; studentEmail: string; studentPhone?: string | null
+  studentUserId: string; studentEmail: string | null; studentPhone?: string | null
   remaining: number
 }) {
   await notify({
@@ -82,14 +82,14 @@ export async function notifyLowBalance(opts: {
     type:    "PACKAGE_LOW_BALANCE",
     title:   "Saldo de aulas baixo",
     message: `Você tem apenas ${opts.remaining} aula(s) restante(s). Renove seu pacote para não perder continuidade.`,
-    email:   opts.studentEmail,
+    email:   opts.studentEmail ?? undefined,
     phone:   opts.studentPhone ?? undefined,
     data:    { "Aulas restantes": String(opts.remaining) },
   })
 }
 
 export async function notifyPaymentDue(opts: {
-  studentUserId: string; studentEmail: string; studentPhone?: string | null
+  studentUserId: string; studentEmail: string | null; studentPhone?: string | null
   amount: string; dueDate: string
 }) {
   await notify({
@@ -97,14 +97,14 @@ export async function notifyPaymentDue(opts: {
     type:    "PAYMENT_DUE",
     title:   "Pagamento próximo do vencimento",
     message: `Você tem uma cobrança de ${opts.amount} com vencimento em ${opts.dueDate}.`,
-    email:   opts.studentEmail,
+    email:   opts.studentEmail ?? undefined,
     phone:   opts.studentPhone ?? undefined,
     data:    { "Valor": opts.amount, "Vencimento": opts.dueDate },
   })
 }
 
 export async function notifyLessonReminder(opts: {
-  userId: string; email: string; phone?: string | null
+  userId: string; email: string | null; phone?: string | null
   role: "student" | "teacher"
   type: "LESSON_REMINDER_24H" | "LESSON_REMINDER_1H"
   teacherName: string; studentName: string; subject: string; scheduledAt: string
@@ -118,7 +118,7 @@ export async function notifyLessonReminder(opts: {
     type:    opts.type,
     title:   `Lembrete: aula ${timeLabel}`,
     message,
-    email:   opts.email,
+    email:   opts.email ?? undefined,
     phone:   opts.phone ?? undefined,
     data:    {
       "Matéria":   opts.subject,
@@ -129,7 +129,7 @@ export async function notifyLessonReminder(opts: {
 }
 
 export async function notifyPaymentOverdue(opts: {
-  studentUserId: string; studentEmail: string; studentPhone?: string | null
+  studentUserId: string; studentEmail: string | null; studentPhone?: string | null
   amount: string; dueDate: string
 }) {
   await notify({
@@ -137,7 +137,7 @@ export async function notifyPaymentOverdue(opts: {
     type:    "PAYMENT_OVERDUE",
     title:   "Pagamento em atraso",
     message: `Você tem uma cobrança de ${opts.amount} em atraso (venceu em ${opts.dueDate}). Regularize para continuar com suas aulas.`,
-    email:   opts.studentEmail,
+    email:   opts.studentEmail ?? undefined,
     phone:   opts.studentPhone ?? undefined,
     data:    { "Valor": opts.amount, "Vencido em": opts.dueDate },
   })
@@ -152,7 +152,7 @@ export async function notifyPayoutGenerated(opts: {
     type:    "PAYOUT_GENERATED",
     title:   "Repasse calculado",
     message: `Seu repasse de ${opts.amount} referente a ${opts.month} está disponível (${opts.totalLessons} aulas realizadas).`,
-    email:   opts.teacherEmail,
+    email:   opts.teacherEmail ?? undefined,
     phone:   opts.teacherPhone ?? undefined,
     data:    { "Valor": opts.amount, "Referência": opts.month, "Aulas realizadas": String(opts.totalLessons) },
   })

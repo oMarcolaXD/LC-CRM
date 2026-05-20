@@ -8,6 +8,7 @@ import bcrypt             from "bcryptjs"
 
 const updateProfileSchema = z.object({
   name:            z.string().min(2, "Nome deve ter no mínimo 2 caracteres"),
+  email:           z.string().email("E-mail inválido").optional().or(z.literal("")),
   phone:           z.string().optional(),
   avatar:          z.string().optional(),
   currentPassword: z.string().optional(),
@@ -34,7 +35,7 @@ export async function updateProfileAction(
     return { error: parsed.error.issues[0]?.message ?? "Dados inválidos" }
   }
 
-  const { name, phone, avatar, currentPassword, newPassword } = parsed.data
+  const { name, email, phone, avatar, currentPassword, newPassword } = parsed.data
 
   if (newPassword) {
     if (!currentPassword) return { error: "Informe a senha atual para alterá-la" }
@@ -46,7 +47,8 @@ export async function updateProfileAction(
 
   const data: Record<string, unknown> = {
     name,
-    phone: phone || null,
+    email: email && email.trim() ? email.trim() : null,
+    phone: phone ? phone.replace(/\D/g, "") : null,
   }
   if (avatar) data.avatar = avatar
   if (newPassword) data.password = await bcrypt.hash(newPassword, 12)

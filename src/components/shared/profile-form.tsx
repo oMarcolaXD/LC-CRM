@@ -8,6 +8,7 @@ import { Button }       from "@/components/ui/button"
 import { Input }        from "@/components/ui/input"
 import { Label }        from "@/components/ui/label"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { PhoneInput } from "@/components/ui/phone-input"
 import { Badge }        from "@/components/ui/badge"
 import { Camera, User, Phone, Lock, CheckCircle, AlertCircle, Mail, CalendarDays } from "lucide-react"
 import { format }       from "date-fns"
@@ -24,7 +25,7 @@ const ROLE_LABEL: Record<string, string> = {
 interface ProfileUser {
   id:        string
   name:      string
-  email:     string
+  email:     string | null
   phone:     string | null
   avatar:    string | null
   role:      string
@@ -35,6 +36,7 @@ export function ProfileForm({ user }: { user: ProfileUser }) {
   const { update: updateSession } = useSession()
 
   const [name,            setName]            = useState(user.name)
+  const [emailValue,      setEmailValue]      = useState(user.email ?? "")
   const [phone,           setPhone]           = useState(user.phone ?? "")
   const [avatarPreview,   setAvatarPreview]   = useState<string | null>(user.avatar)
   const [avatarBase64,    setAvatarBase64]    = useState<string | null>(null)
@@ -82,6 +84,7 @@ export function ProfileForm({ user }: { user: ProfileUser }) {
 
     const formData = new FormData()
     formData.set("name",  name)
+    formData.set("email", emailValue)
     formData.set("phone", phone)
     if (avatarBase64)    formData.set("avatar",          avatarBase64)
     if (currentPassword) formData.set("currentPassword", currentPassword)
@@ -185,8 +188,16 @@ export function ProfileForm({ user }: { user: ProfileUser }) {
               <Mail className="w-3.5 h-3.5 text-muted-foreground" />
               E-mail
             </Label>
-            <Input id="email" value={user.email} disabled className="opacity-60 cursor-not-allowed" />
-            <p className="text-xs text-muted-foreground">O e-mail só pode ser alterado pelo administrador.</p>
+            <Input
+              id="email"
+              type="email"
+              value={emailValue}
+              onChange={(e) => setEmailValue(e.target.value)}
+              placeholder="seu@email.com"
+            />
+            {!user.email && (
+              <p className="text-xs text-[#FB8500]">Cadastre um e-mail para facilitar o login e confirmar sua conta.</p>
+            )}
           </div>
 
           <div className="space-y-1.5">
@@ -194,11 +205,10 @@ export function ProfileForm({ user }: { user: ProfileUser }) {
               <Phone className="w-3.5 h-3.5 text-muted-foreground" />
               Telefone / WhatsApp
             </Label>
-            <Input
+            <PhoneInput
               id="phone"
               value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder="(11) 99999-9999"
+              onChange={(raw) => setPhone(raw)}
             />
           </div>
         </CardContent>

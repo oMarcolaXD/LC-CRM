@@ -101,13 +101,13 @@ export async function approveRequestAction(
   await prisma.$transaction([
     prisma.lesson.create({
       data: {
-        studentId:    request.studentId,
         teacherId:    request.teacherId,
         subjectId:    request.subjectId ?? "",
         scheduledAt:  request.preferredAt,
         modality:     finalModality,
         status:       isHistorical ? "COMPLETED" : "CONFIRMED",
         teacherOnsite,
+        participants: { create: { studentId: request.studentId } },
       },
     }),
     prisma.lessonPackage.update({
@@ -123,9 +123,9 @@ export async function approveRequestAction(
   if (!isHistorical) {
     const scheduledAtFmt = format(request.preferredAt, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
     await notifyLessonConfirmed({
-      studentUserId: request.student.userId,
-      studentEmail:  request.student.user.email,
-      studentPhone:  request.student.user.phone,
+      studentUserId: request.student.userId ?? "",
+      studentEmail:  request.student.user?.email ?? null,
+      studentPhone:  request.student.user?.phone ?? null,
       teacherName:   request.teacher.user.name,
       subject:       request.subject?.name ?? "–",
       scheduledAt:   scheduledAtFmt,
@@ -135,9 +135,9 @@ export async function approveRequestAction(
     const remaining = pkg.remainingLessons - 1
     if (remaining <= 2 && remaining > 0) {
       await notifyLowBalance({
-        studentUserId: request.student.userId,
-        studentEmail:  request.student.user.email,
-        studentPhone:  request.student.user.phone,
+        studentUserId: request.student.userId ?? "",
+        studentEmail:  request.student.user?.email ?? null,
+        studentPhone:  request.student.user?.phone ?? null,
         remaining,
       })
     }
@@ -165,12 +165,12 @@ export async function rejectRequestAction(requestId: string, reason?: string) {
   })
 
   await notify({
-    userId:  request.student.userId,
+    userId:  request.student.userId ?? "",
     type:    "LESSON_CANCELLED",
     title:   "Solicitação de aula recusada",
     message: `Sua solicitação de aula de ${request.subject?.name ?? "–"} não pôde ser aprovada.${reason ? ` Motivo: ${reason}` : ""}`,
-    email:   request.student.user.email,
-    phone:   request.student.user.phone ?? undefined,
+    email:   request.student.user?.email ?? undefined,
+    phone:   request.student.user?.phone ?? undefined,
   })
 
   revalidatePath("/colaborador/agendamentos")
@@ -193,7 +193,7 @@ export async function updateLessonStatusAction(
   const lesson = await prisma.lesson.findUnique({
     where:   { id: lessonId },
     include: {
-      student: { include: { user: true } },
+      participants: { include: { student: { include: { user: true } } } },
       teacher: { include: { user: true } },
       subject: true,
     },
@@ -210,25 +210,19 @@ export async function updateLessonStatusAction(
     }
   }
 
-    // Aula em grupo: cancelar todas as aulas vinculadas pelo groupId
-  if (status === "CANCELLED" && lesson.isGroupLesson && lesson.groupId) {
-    const groupLessons = await prisma.lesson.findMany({
-      where:   { groupId: lesson.groupId, status: { in: ["CONFIRMED", "SCHEDULED"] } },
-      include: { student: { include: { user: true } }, subject: true },
-    })
-    await prisma.$transaction(
-      groupLessons.map((gl) =>
-        prisma.lesson.update({ where: { id: gl.id }, data: { status: "CANCELLED", topicsCovered, teacherNotes } })
-      )
-    )
-    for (const gl of groupLessons) {
+  const isGroup = lesson.participants.length > 1
+
+  // Aula em grupo cancelada: cancela esta aula (já contém todos os alunos)
+  if (status === "CANCELLED" && isGroup) {
+    await prisma.lesson.update({ where: { id: lessonId }, data: { status: "CANCELLED", topicsCovered, teacherNotes } })
+    for (const p of lesson.participants) {
       await notify({
-        userId:  gl.student.userId,
+        userId:  p.student.userId ?? "",
         type:    "LESSON_CANCELLED",
         title:   "Aula em grupo cancelada",
-        message: `Sua aula em grupo de ${gl.subject.name} foi cancelada.`,
-        email:   gl.student.user.email,
-        phone:   gl.student.user.phone ?? undefined,
+        message: `Sua aula em grupo de ${lesson.subject.name} foi cancelada.`,
+        email:   p.student.user?.email ?? undefined,
+        phone:   p.student.user?.phone ?? undefined,
       })
     }
     revalidatePath("/professor/agenda")
@@ -238,11 +232,14 @@ export async function updateLessonStatusAction(
   }
 
   // Cancelamento de aula individual: devolve a aula ao pacote do aluno
-  if (status === "CANCELLED" && !lesson.isGroupLesson) {
-    const activePkg = await prisma.lessonPackage.findFirst({
-      where:   { studentId: lesson.studentId, status: { in: ["ACTIVE", "EXHAUSTED"] } },
-      orderBy: { purchaseDate: "desc" },
-    })
+  if (status === "CANCELLED" && !isGroup) {
+    const studentId = lesson.participants[0]?.studentId
+    const activePkg = studentId
+      ? await prisma.lessonPackage.findFirst({
+          where:   { studentId, status: { in: ["ACTIVE", "EXHAUSTED"] } },
+          orderBy: { purchaseDate: "desc" },
+        })
+      : null
     if (activePkg) {
       await prisma.$transaction([
         prisma.lesson.update({ where: { id: lessonId }, data: { status, topicsCovered, teacherNotes } }),
@@ -258,7 +255,7 @@ export async function updateLessonStatusAction(
     await prisma.lesson.update({ where: { id: lessonId }, data: { status, topicsCovered, teacherNotes } })
   }
 
-  const cancelMsg = lesson.isGroupLesson
+  const cancelMsg = isGroup
     ? `Sua aula em grupo de ${lesson.subject.name} foi cancelada.`
     : `Sua aula de ${lesson.subject.name} foi cancelada. O saldo foi devolvido ao seu pacote.`
 
@@ -278,14 +275,16 @@ export async function updateLessonStatusAction(
   }
   const msg = messages[status]
   if (msg) {
-    await notify({
-      userId:  lesson.student.userId,
-      type:    status === "COMPLETED" ? "LESSON_COMPLETED" : status === "CANCELLED" ? "LESSON_CANCELLED" : "LESSON_MISSED",
-      title:   msg.title,
-      message: msg.message,
-      email:   lesson.student.user.email,
-      phone:   lesson.student.user.phone ?? undefined,
-    })
+    for (const p of lesson.participants) {
+      await notify({
+        userId:  p.student.userId ?? "",
+        type:    status === "COMPLETED" ? "LESSON_COMPLETED" : status === "CANCELLED" ? "LESSON_CANCELLED" : "LESSON_MISSED",
+        title:   msg.title,
+        message: msg.message,
+        email:   p.student.user?.email ?? undefined,
+        phone:   p.student.user?.phone ?? undefined,
+      })
+    }
   }
 
   revalidatePath("/professor/agenda")
@@ -400,7 +399,6 @@ export async function createLessonDirectAction(data: {
   await prisma.$transaction([
     prisma.lesson.create({
       data: {
-        studentId:    data.studentId,
         teacherId:    data.teacherId,
         subjectId:    data.subjectId,
         scheduledAt,
@@ -408,6 +406,7 @@ export async function createLessonDirectAction(data: {
         modality:     data.modality,
         status:        isHistorical ? "COMPLETED" : "CONFIRMED",
         teacherOnsite: teacherOnsiteDirect,
+        participants: { create: { studentId: data.studentId } },
       },
     }),
     prisma.lessonPackage.update({
@@ -422,9 +421,9 @@ export async function createLessonDirectAction(data: {
   if (!isHistorical) {
     const scheduledAtFormatted = format(scheduledAt, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
     await notifyLessonConfirmed({
-      studentUserId: student.userId,
-      studentEmail:  student.user.email,
-      studentPhone:  student.user.phone,
+      studentUserId: student.userId ?? "",
+      studentEmail:  student.user?.email ?? null,
+      studentPhone:  student.user?.phone ?? null,
       teacherName:   teacher?.user.name ?? "–",
       subject:       subject?.name ?? "–",
       scheduledAt:   scheduledAtFormatted,
@@ -434,9 +433,9 @@ export async function createLessonDirectAction(data: {
     const remaining = pkg.remainingLessons - 1
     if (remaining <= 2 && remaining > 0) {
       await notifyLowBalance({
-        studentUserId: student.userId,
-        studentEmail:  student.user.email,
-        studentPhone:  student.user.phone,
+        studentUserId: student.userId ?? "",
+        studentEmail:  student.user?.email ?? null,
+        studentPhone:  student.user?.phone ?? null,
         remaining,
       })
     }
@@ -470,7 +469,6 @@ export async function createGroupLessonAction(data: {
   const duration    = data.duration ?? 60
   const scheduledAt = new Date(`${data.date}T${data.time}:00`)
   const isHistorical = scheduledAt < new Date()
-  const groupSize   = data.studentIds.length
 
   const [teacher, subject] = await Promise.all([
     prisma.teacher.findUnique({ where: { id: data.teacherId }, include: { user: true } }),
@@ -547,31 +545,25 @@ export async function createGroupLessonAction(data: {
     where:   { id: { in: data.studentIds } },
     include: { user: true },
   })
-  if (students.length !== groupSize) throw new Error("Um ou mais alunos não encontrados")
+  if (students.length !== data.studentIds.length) throw new Error("Um ou mais alunos não encontrados")
 
-  const groupId = crypto.randomUUID()
   const scheduledAtFmt = format(scheduledAt, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
 
   await prisma.$transaction([
-    // Criar uma aula por aluno, todas vinculadas pelo groupId
-    ...students.map((student) =>
-      prisma.lesson.create({
-        data: {
-          studentId:     student.id,
-          teacherId:     data.teacherId,
-          subjectId:     data.subjectId,
-          scheduledAt,
-          duration,
-          modality:      data.modality,
-          status:        isHistorical ? "COMPLETED" : "CONFIRMED",
-          teacherOnsite,
-          isGroupLesson: true,
-          groupId,
-          groupSize,
-          priceOverride: data.pricePerStudent,
-        },
-      })
-    ),
+    // Uma única aula com todos os participantes
+    prisma.lesson.create({
+      data: {
+        teacherId:     data.teacherId,
+        subjectId:     data.subjectId,
+        scheduledAt,
+        duration,
+        modality:      data.modality,
+        status:        isHistorical ? "COMPLETED" : "CONFIRMED",
+        teacherOnsite,
+        priceOverride: data.pricePerStudent,
+        participants: { create: students.map((s) => ({ studentId: s.id })) },
+      },
+    }),
     // Criar um pagamento por aluno (evento avulso, fora do pacote)
     ...students.map((student) =>
       prisma.payment.create({
@@ -589,9 +581,9 @@ export async function createGroupLessonAction(data: {
   if (!isHistorical) {
     for (const student of students) {
       await notifyLessonConfirmed({
-        studentUserId: student.userId,
-        studentEmail:  student.user.email,
-        studentPhone:  student.user.phone,
+        studentUserId: student.userId ?? "",
+        studentEmail:  student.user?.email ?? null,
+        studentPhone:  student.user?.phone ?? null,
         teacherName:   teacher.user.name,
         subject:       subject.name,
         scheduledAt:   scheduledAtFmt,

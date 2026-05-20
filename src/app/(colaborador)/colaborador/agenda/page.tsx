@@ -38,17 +38,21 @@ function mapToLessonSlot(
     status: string
     modality: string
     teacherOnsite: boolean
-    isGroupLesson: boolean
-    groupSize: number | null
-    groupId: string | null
-    student: { user: { name: string }; guardian: { user: { name: string } } | null }
+    participants: {
+      studentId: string
+      student: {
+        user: { name: string } | null
+        guardian: { user: { name: string } } | null
+      }
+    }[]
     subject: { name: string }
   },
-  groupMatesMap: Record<string, string[]> = {},
 ): LessonSlot {
-  const d   = l.scheduledAt
-  const min = d.getHours() * 60 + d.getMinutes()
-  const studentName = l.student.user.name
+  const d           = l.scheduledAt
+  const min         = d.getHours() * 60 + d.getMinutes()
+  const first       = l.participants[0]
+  const studentName = first?.student.user?.name ?? "Aluno"
+  const isGroup     = l.participants.length > 1
   return {
     id:            l.id,
     teacherId:     l.teacherId,
@@ -60,13 +64,10 @@ function mapToLessonSlot(
     time:          format(d, "HH:mm"),
     studentName,
     subjectName:   l.subject.name,
-    guardianName:  l.student.guardian?.user.name ?? null,
-    isGroupLesson: l.isGroupLesson,
-    groupSize:     l.groupSize,
-    groupId:       l.groupId,
-    groupMates:    l.groupId
-      ? (groupMatesMap[l.groupId] ?? []).filter(n => n !== studentName)
-      : [],
+    guardianName:  first?.student.guardian?.user.name ?? null,
+    isGroupLesson: isGroup,
+    groupSize:     isGroup ? l.participants.length : null,
+    groupMates:    l.participants.slice(1).map(p => p.student.user?.name ?? "Aluno"),
   }
 }
 
@@ -84,10 +85,14 @@ export default async function ColaboradorAgendaPage({ searchParams }: AgendaPage
     rawView === "month" ? "month" : "day"
 
   const lessonInclude = {
-    student: {
+    participants: {
       include: {
-        user:     true,
-        guardian: { include: { user: true } },
+        student: {
+          include: {
+            user:     true,
+            guardian: { include: { user: true } },
+          },
+        },
       },
     },
     teacher: { include: { user: true } },
@@ -183,21 +188,6 @@ export default async function ColaboradorAgendaPage({ searchParams }: AgendaPage
       : Promise.resolve([]),
   ])
 
-  // Busca colegas de turma para aulas em grupo
-  const allRawLessons = [...lessons, ...weekLessonsRaw, ...monthLessonsRaw]
-  const groupIds = [...new Set(allRawLessons.filter(l => l.isGroupLesson && l.groupId).map(l => l.groupId!))]
-  const groupSiblings = groupIds.length > 0
-    ? await prisma.lesson.findMany({
-        where:  { groupId: { in: groupIds } },
-        select: { groupId: true, student: { select: { user: { select: { name: true } } } } },
-      })
-    : []
-  const groupMatesMap = groupSiblings.reduce<Record<string, string[]>>((acc, l) => {
-    if (!l.groupId) return acc
-    ;(acc[l.groupId] ??= []).push(l.student.user.name)
-    return acc
-  }, {})
-
   const teacherCols: TeacherCol[] = teachers.map(t => ({
     id:              t.id,
     name:            t.user.name,
@@ -207,15 +197,15 @@ export default async function ColaboradorAgendaPage({ searchParams }: AgendaPage
     subjects:        t.subjects.map(ts => ({ id: ts.subject.id, name: ts.subject.name })),
   }))
 
-  const lessonSlots: LessonSlot[] = lessons.map(l => mapToLessonSlot(l, groupMatesMap))
+  const lessonSlots: LessonSlot[] = lessons.map(l => mapToLessonSlot(l))
 
   const weekLessons: WeekLessonSlot[] = weekLessonsRaw.map(l => ({
-    ...mapToLessonSlot(l, groupMatesMap),
+    ...mapToLessonSlot(l),
     date: format(l.scheduledAt, "yyyy-MM-dd"),
   }))
 
   const monthLessons: WeekLessonSlot[] = monthLessonsRaw.map(l => ({
-    ...mapToLessonSlot(l, groupMatesMap),
+    ...mapToLessonSlot(l),
     date: format(l.scheduledAt, "yyyy-MM-dd"),
   }))
 
@@ -226,7 +216,7 @@ export default async function ColaboradorAgendaPage({ searchParams }: AgendaPage
       startMin:    r.preferredAt.getHours() * 60 + r.preferredAt.getMinutes(),
       time:        format(r.preferredAt, "HH:mm"),
       date:        format(r.preferredAt, "yyyy-MM-dd"),
-      studentName: r.student.user.name,
+      studentName: r.student.user?.name ?? "Aluno",
       subjectName: r.subject?.name ?? "–",
       modality:    r.modality as "PRESENCIAL" | "ONLINE",
       teacherMode: r.teacher.teachingMode as "ONLINE_ONLY" | "PRESENCIAL" | "HYBRID",
@@ -239,11 +229,11 @@ export default async function ColaboradorAgendaPage({ searchParams }: AgendaPage
 
   const students: StudentOption[] = studentsRaw.map(s => ({
     id:               s.id,
-    name:             s.user.name,
+    name:             s.user?.name ?? "Aluno",
     remainingLessons: s.packages[0]?.remainingLessons ?? 0,
   }))
 
-  const allStudents = allStudentsRaw.map(s => ({ id: s.id, name: s.user.name }))
+  const allStudents = allStudentsRaw.map(s => ({ id: s.id, name: s.user?.name ?? "Aluno" }))
 
   const weekday = format(dateObj, "EEEE", { locale: ptBR })
 

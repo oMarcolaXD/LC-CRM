@@ -38,7 +38,6 @@ const newStudentSchema = z.object({
   phone:         z.string().optional(),
   grade:         z.string().optional(),
   school:        z.string().optional(),
-  birthDate:     z.string().optional(),
   guardianName:  z.string().optional(),
   guardianPhone: z.string().optional(),
   guardianEmail: z.string().email("E-mail do responsável inválido").optional().or(z.literal("")),
@@ -54,7 +53,7 @@ export async function createStudentWithGuardianAction(formData: FormData) {
     redirect(`/colaborador/alunos/novo?error=${encodeURIComponent(msg)}`)
   }
 
-  const { name, email, password, phone, grade, school, birthDate,
+  const { name, email, password, phone, grade, school,
           guardianName, guardianPhone, guardianEmail } = parsed.data
 
   const exists = await prisma.user.findUnique({ where: { email } })
@@ -92,9 +91,9 @@ export async function createStudentWithGuardianAction(formData: FormData) {
     const student = await tx.student.create({
       data: {
         userId:    studentUser.id,
+        name:      studentUser.name,
         grade:     grade ?? "Não informado",
         school,
-        birthDate: birthDate ? new Date(birthDate) : undefined,
         guardianId,
       },
     })
@@ -111,7 +110,6 @@ export async function createStudentWithGuardianAction(formData: FormData) {
           const scheduledAt = new Date(`${row.date}T${row.time}:00`)
           await tx.lesson.create({
             data: {
-              studentId:    student.id,
               teacherId:    row.teacherId,
               subjectId:    row.subjectId,
               scheduledAt,
@@ -119,6 +117,7 @@ export async function createStudentWithGuardianAction(formData: FormData) {
               modality:     row.modality,
               status:       "COMPLETED",
               topicsCovered: row.topics || null,
+              participants: { create: { studentId: student.id } },
             },
           })
         }
@@ -206,21 +205,12 @@ export async function importStudentsAction(rows: unknown[]): Promise<ImportResul
           }
         }
 
-        // Parse DD/MM/YYYY
-        let birthDate: Date | undefined
-        if (dataNascimento) {
-          const parts = dataNascimento.split("/")
-          if (parts.length === 3) {
-            birthDate = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`)
-          }
-        }
-
         await tx.student.create({
           data: {
             userId:    studentUser.id,
+            name:      studentUser.name,
             grade:     serie ?? "Não informado",
             school:    escola,
-            birthDate,
             guardianId,
           },
         })
@@ -257,7 +247,7 @@ export async function sendLessonWhatsAppAction(lessonId: string) {
   const lesson = await prisma.lesson.findUnique({
     where:   { id: lessonId },
     include: {
-      student: { include: { user: true } },
+      participants: { include: { student: { include: { user: true } } } },
       teacher: { include: { user: true } },
       subject: true,
     },
@@ -266,18 +256,20 @@ export async function sendLessonWhatsAppAction(lessonId: string) {
 
   const scheduledAt = format(lesson.scheduledAt, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
 
-  await notify({
-    userId:  lesson.student.userId,
-    type:    "LESSON_CONFIRMED",
-    title:   "Lembrete de aula confirmada",
-    message: `Sua aula de ${lesson.subject.name} com ${lesson.teacher.user.name} está confirmada para ${scheduledAt}.`,
-    email:   lesson.student.user.email,
-    phone:   lesson.student.user.phone ?? undefined,
-    data: {
-      "Matéria":    lesson.subject.name,
-      "Professor":  lesson.teacher.user.name,
-      "Data/Hora":  scheduledAt,
-      "Modalidade": lesson.modality === "ONLINE" ? "Online" : "Presencial",
-    },
-  })
+  for (const p of lesson.participants) {
+    await notify({
+      userId:  p.student.userId ?? "",
+      type:    "LESSON_CONFIRMED",
+      title:   "Lembrete de aula confirmada",
+      message: `Sua aula de ${lesson.subject.name} com ${lesson.teacher.user.name} está confirmada para ${scheduledAt}.`,
+      email:   p.student.user?.email ?? undefined,
+      phone:   p.student.user?.phone ?? undefined,
+      data: {
+        "Matéria":    lesson.subject.name,
+        "Professor":  lesson.teacher.user.name,
+        "Data/Hora":  scheduledAt,
+        "Modalidade": lesson.modality === "ONLINE" ? "Online" : "Presencial",
+      },
+    })
+  }
 }
