@@ -9,7 +9,7 @@ import { LinkButton }    from "@/components/shared/link-button"
 import { ToggleActiveButton } from "@/components/shared/toggle-active-button"
 import { DeleteUserButton }   from "./delete-user-button"
 import { UserRoleTabs }       from "./user-role-tabs"
-import { UserPlus, Pencil, Search, ShieldAlert } from "lucide-react"
+import { UserPlus, Pencil, Search, ShieldAlert, ChevronLeft, ChevronRight } from "lucide-react"
 import { format }        from "date-fns"
 import { ptBR }          from "date-fns/locale"
 import { Suspense }      from "react"
@@ -20,35 +20,52 @@ const ROLE_FILTER: Record<string, Role | undefined> = {
   TEACHER: "TEACHER", STUDENT: "STUDENT", GUARDIAN: "GUARDIAN",
 }
 
+const PAGE_SIZE = 20
+
 interface UsuariosPageProps {
-  searchParams: Promise<{ q?: string; role?: string; success?: string; error?: string }>
+  searchParams: Promise<{ q?: string; role?: string; page?: string; success?: string; error?: string }>
+}
+
+function buildQuery(opts: { q?: string; role?: string; page?: number }) {
+  const p = new URLSearchParams()
+  if (opts.role) p.set("role", opts.role)
+  if (opts.q)   p.set("q", opts.q)
+  if (opts.page && opts.page > 1) p.set("page", String(opts.page))
+  return p.toString()
 }
 
 export default async function UsuariosPage({ searchParams }: UsuariosPageProps) {
-  const { q, role, success, error } = await searchParams
+  const { q, role, page: pageParam, success, error } = await searchParams
   const session    = await auth()
   const currentId  = session?.user?.id ?? ""
   const roleFilter = role ? ROLE_FILTER[role] : undefined
+  const page       = Math.max(1, parseInt(pageParam ?? "1", 10))
+  const skip       = (page - 1) * PAGE_SIZE
 
-  const [users, counts] = await Promise.all([
+  const where = {
+    ...(roleFilter && { role: roleFilter }),
+    ...(q && {
+      OR: [
+        { name:  { contains: q, mode: "insensitive" as const } },
+        { email: { contains: q, mode: "insensitive" as const } },
+      ],
+    }),
+  }
+
+  const [users, counts, filteredCount] = await Promise.all([
     prisma.user.findMany({
-      where: {
-        ...(roleFilter && { role: roleFilter }),
-        ...(q && {
-          OR: [
-            { name:  { contains: q, mode: "insensitive" } },
-            { email: { contains: q, mode: "insensitive" } },
-          ],
-        }),
-      },
+      where,
       orderBy: { createdAt: "desc" },
-      take: 100,
+      take: PAGE_SIZE,
+      skip,
     }),
     prisma.user.groupBy({ by: ["role"], _count: true }),
+    prisma.user.count({ where }),
   ])
 
-  const countMap  = Object.fromEntries(counts.map((c) => [c.role, c._count]))
-  const total     = counts.reduce((sum, c) => sum + c._count, 0)
+  const countMap   = Object.fromEntries(counts.map((c) => [c.role, c._count]))
+  const total      = counts.reduce((sum, c) => sum + c._count, 0)
+  const totalPages = Math.ceil(filteredCount / PAGE_SIZE)
 
   return (
     <div>
@@ -149,6 +166,46 @@ export default async function UsuariosPage({ searchParams }: UsuariosPageProps) 
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Paginação */}
+        <div className="flex items-center justify-between px-4 py-3 border-t border-border text-sm text-muted-foreground">
+          <span>
+            {filteredCount === 0
+              ? "Nenhum usuário"
+              : `${skip + 1}–${Math.min(skip + PAGE_SIZE, filteredCount)} de ${filteredCount} usuário${filteredCount !== 1 ? "s" : ""}`}
+          </span>
+          {totalPages > 1 && (
+            <div className="flex items-center gap-1">
+              {page > 1 ? (
+                <LinkButton
+                  href={`/admin/usuarios?${buildQuery({ q, role, page: page - 1 })}`}
+                  variant="outline" size="icon" className="h-8 w-8"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </LinkButton>
+              ) : (
+                <Button variant="outline" size="icon" className="h-8 w-8" disabled>
+                  <ChevronLeft className="w-4 h-4" />
+                </Button>
+              )}
+              <span className="px-3 text-xs">
+                {page} / {totalPages}
+              </span>
+              {page < totalPages ? (
+                <LinkButton
+                  href={`/admin/usuarios?${buildQuery({ q, role, page: page + 1 })}`}
+                  variant="outline" size="icon" className="h-8 w-8"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </LinkButton>
+              ) : (
+                <Button variant="outline" size="icon" className="h-8 w-8" disabled>
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+              )}
+            </div>
+          )}
         </div>
       </Card>
     </div>
