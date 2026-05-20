@@ -49,9 +49,10 @@ export const NAV_ITEMS: Record<Role, NavItem[]> = {
     { label: "Meu Perfil",   href: "/aluno/perfil",     icon: UserCircle      },
   ],
   GUARDIAN: [
-    { label: "Dashboard",  href: "/aluno/dashboard",  icon: LayoutDashboard },
-    { label: "Agenda",     href: "/aluno/aulas",      icon: CalendarDays    },
-    { label: "Pagamentos", href: "/aluno/pagamentos", icon: Wallet          },
-    { label: "Meu Perfil", href: "/aluno/perfil",     icon: UserCircle      },
+    { label: "Dashboard",    href: "/aluno/dashboard",  icon: LayoutDashboard },
+    { label: "Meus Alunos",  href: "/aluno/alunos",     icon: GraduationCap   },
+    { label: "Agenda",       href: "/aluno/aulas",      icon: CalendarDays    },
+    { label: "Pagamentos",   href: "/aluno/pagamentos", icon: Wallet          },
+    { label: "Meu Perfil",   href: "/aluno/perfil",     icon: UserCircle      },
   ],
 }
