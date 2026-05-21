@@ -199,7 +199,7 @@ export default async function AlunoDashboard() {
       {/* ── Greeting ─────────────────────────────────────────────────────── */}
       <div className="flex items-end justify-between">
         <div>
-          <div style={{ fontSize: 11, color: "var(--muted)", letterSpacing: "0.04em", textTransform: "uppercase", marginBottom: 4, fontWeight: 500 }}>
+          <div style={{ fontSize: 11, color: "var(--subtle)", letterSpacing: "0.04em", textTransform: "uppercase", marginBottom: 4, fontWeight: 500 }}>
             {format(now, "EEEE · dd 'de' MMMM · HH:mm", { locale: ptBR })}
           </div>
           <h1 style={{ fontSize: 28, fontWeight: 600, margin: 0, letterSpacing: "-0.025em", color: "var(--text)" }}>
@@ -221,15 +221,9 @@ export default async function AlunoDashboard() {
       </div>
 
       {/* ── FilhoHero ────────────────────────────────────────────────────── */}
-      <div style={{
-        display: "grid",
-        gridTemplateColumns: otherStudent ? "1.3fr 1fr 1fr" : "1.3fr 1fr",
-        gap: 1,
-        background: "var(--border)",
-        border: "1px solid var(--border)",
-        borderRadius: 14,
-        overflow: "hidden",
-      }}>
+      <div
+        className={`grid gap-px overflow-hidden rounded-[14px] border border-border bg-border grid-cols-1 ${otherStudent ? "sm:grid-cols-[1.3fr_1fr_1fr]" : "sm:grid-cols-[1.3fr_1fr]"}`}
+      >
 
         {/* Col 1 — Próxima aula */}
         <div style={{ background: "var(--card)", padding: "22px 24px", display: "flex", flexDirection: "column", gap: 14, position: "relative" }}>
@@ -249,7 +243,7 @@ export default async function AlunoDashboard() {
                     <div style={{ fontSize: 19, fontWeight: 600, letterSpacing: "-0.02em" }}>{heroLesson.subject.name}</div>
                     <ModoBadge modo={heroLesson.modality === "ONLINE" ? "online" : "sede"} size="md" />
                   </div>
-                  <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 2 }}>
+                  <div style={{ fontSize: 13, color: "var(--subtle)", marginTop: 2 }}>
                     com <span style={{ color: "var(--text-2)", fontWeight: 500 }}>{heroLesson.teacher.user.name}</span> · {heroLesson.duration} min
                   </div>
                 </div>
@@ -257,7 +251,7 @@ export default async function AlunoDashboard() {
 
               {heroLesson.topicsCovered && (
                 <div style={{ padding: 12, background: "var(--card-2)", borderRadius: 9, fontSize: 12.5, lineHeight: 1.5 }}>
-                  <div style={{ fontSize: 10.5, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 500, marginBottom: 3 }}>O que vão estudar</div>
+                  <div style={{ fontSize: 10.5, color: "var(--subtle)", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 500, marginBottom: 3 }}>O que vão estudar</div>
                   <span style={{ color: "var(--text-2)" }}>{heroLesson.topicsCovered}</span>
                 </div>
               )}
@@ -269,7 +263,7 @@ export default async function AlunoDashboard() {
                     Entrar na sala →
                   </a>
                 ) : (
-                  <span style={{ padding: "9px 14px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--card)", fontSize: 13, flex: 1, textAlign: "center", color: "var(--muted)" }}>
+                  <span style={{ padding: "9px 14px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--card)", fontSize: 13, flex: 1, textAlign: "center", color: "var(--subtle)" }}>
                     {heroLesson.modality === "PRESENCIAL" ? "Aula presencial" : "Link em breve"}
                   </span>
                 )}
@@ -280,7 +274,7 @@ export default async function AlunoDashboard() {
               </div>
             </>
           ) : (
-            <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, marginTop: 8, color: "var(--muted)", fontSize: 13, textAlign: "center" }}>
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, marginTop: 8, color: "var(--subtle)", fontSize: 13, textAlign: "center" }}>
               <div style={{ fontSize: 32 }}>📅</div>
               <div>Nenhuma aula agendada</div>
               <Link href="/aluno/agendar"
@@ -293,7 +287,7 @@ export default async function AlunoDashboard() {
 
         {/* Col 2 — Pacote */}
         <div style={{ background: "var(--card)", padding: "22px 24px" }}>
-          <div style={{ fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 500, marginBottom: 12 }}>
+          <div style={{ fontSize: 11, color: "var(--subtle)", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 500, marginBottom: 12 }}>
             Pacote de {activeStudent.name.split(" ")[0]}
           </div>
 
@@ -303,7 +297,7 @@ export default async function AlunoDashboard() {
                 <span style={{ fontSize: 36, fontWeight: 600, letterSpacing: "-0.025em", fontFamily: "ui-monospace, monospace", color: "var(--primary)" }}>
                   {activePackage.remainingLessons}
                 </span>
-                <span style={{ fontSize: 14, color: "var(--muted)" }}>
+                <span style={{ fontSize: 14, color: "var(--subtle)" }}>
                   aulas restantes <span style={{ color: "var(--subtle)" }}>· de {activePackage.totalLessons}</span>
                 </span>
               </div>
@@ -314,7 +308,7 @@ export default async function AlunoDashboard() {
                 ))}
               </div>
 
-              <div style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.5, marginBottom: 14 }}>
+              <div style={{ fontSize: 12, color: "var(--subtle)", lineHeight: 1.5, marginBottom: 14 }}>
                 {paceStr
                   ? <>Estimativa: pacote acaba em <b style={{ color: "var(--text)", fontFamily: "ui-monospace, monospace" }}>{paceStr}</b>.</>
                   : <>{activePackage.remainingLessons} aulas restantes no pacote atual.</>
@@ -327,7 +321,7 @@ export default async function AlunoDashboard() {
               </Link>
             </>
           ) : (
-            <div style={{ color: "var(--muted)", fontSize: 13 }}>
+            <div style={{ color: "var(--subtle)", fontSize: 13 }}>
               Nenhum pacote ativo.{" "}
               <Link href="/aluno/pagamentos" style={{ color: "var(--primary)", textDecoration: "none", fontWeight: 500 }}>Contratar →</Link>
             </div>
@@ -338,7 +332,7 @@ export default async function AlunoDashboard() {
         {otherStudent && (
           <div style={{ background: "var(--card)", padding: "22px 24px" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-              <span style={{ fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 500 }}>
+              <span style={{ fontSize: 11, color: "var(--subtle)", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 500 }}>
                 Resumo de {otherStudent.name.split(" ")[0]}
               </span>
               <span style={{ fontSize: 10.5, color: "var(--info)", fontFamily: "ui-monospace, monospace" }}>{otherStudent.grade}</span>
@@ -349,7 +343,7 @@ export default async function AlunoDashboard() {
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <div>
                   <div style={{ fontSize: 12, color: "var(--text-2)" }}>Próxima aula</div>
-                  <div style={{ fontSize: 10.5, color: "var(--muted)" }}>
+                  <div style={{ fontSize: 10.5, color: "var(--subtle)" }}>
                     {otherNextLesson ? `${otherNextLesson.subject.name} · ${otherNextLesson.teacher.user.name}` : "—"}
                   </div>
                 </div>
@@ -362,7 +356,7 @@ export default async function AlunoDashboard() {
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <div>
                   <div style={{ fontSize: 12, color: "var(--text-2)" }}>Pacote</div>
-                  <div style={{ fontSize: 10.5, color: "var(--muted)" }}>
+                  <div style={{ fontSize: 10.5, color: "var(--subtle)" }}>
                     {otherPackage ? `${otherPackage.remainingLessons} restantes` : "sem pacote ativo"}
                   </div>
                 </div>
@@ -375,7 +369,7 @@ export default async function AlunoDashboard() {
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <div>
                   <div style={{ fontSize: 12, color: "var(--text-2)" }}>Este mês</div>
-                  <div style={{ fontSize: 10.5, color: "var(--muted)" }}>aulas realizadas</div>
+                  <div style={{ fontSize: 10.5, color: "var(--subtle)" }}>aulas realizadas</div>
                 </div>
                 <div style={{ fontSize: 14, fontWeight: 600, fontFamily: "ui-monospace, monospace" }}>
                   {completedByStudent[otherStudent.id] ?? 0}
@@ -387,7 +381,7 @@ export default async function AlunoDashboard() {
       </div>
 
       {/* ── Two-column body ───────────────────────────────────────────────── */}
-      <div style={{ display: "grid", gridTemplateColumns: "1.45fr 1fr", gap: 20 }}>
+      <div className="grid gap-5 grid-cols-1 lg:grid-cols-[1.45fr_1fr]">
 
         {/* Left ── Próximas aulas + Solicitações */}
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -397,7 +391,7 @@ export default async function AlunoDashboard() {
             <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", padding: "14px 18px 10px", gap: 12 }}>
               <div>
                 <div style={{ fontSize: 14, fontWeight: 600, letterSpacing: "-0.01em" }}>Próximas aulas</div>
-                <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>
+                <div style={{ fontSize: 12, color: "var(--subtle)", marginTop: 2 }}>
                   {proximasAulas.length} aula{proximasAulas.length !== 1 ? "s" : ""} agendada{proximasAulas.length !== 1 ? "s" : ""}
                   {solicitacoes.length > 0 ? ` · ${solicitacoes.length} aguardando confirmação` : ""}
                 </div>
@@ -409,7 +403,7 @@ export default async function AlunoDashboard() {
 
             <div className="overflow-auto">
               {proximasAulas.length === 0 ? (
-                <div style={{ padding: "32px 14px", textAlign: "center", color: "var(--muted)", fontSize: 13 }}>
+                <div style={{ padding: "32px 14px", textAlign: "center", color: "var(--subtle)", fontSize: 13 }}>
                   Nenhuma aula agendada nos próximos dias
                 </div>
               ) : (
@@ -431,7 +425,7 @@ export default async function AlunoDashboard() {
                         <div style={{ fontSize: 13.5, fontWeight: 500 }}>
                           {studentName.split(" ")[0]} · <span style={{ color: "var(--text-2)" }}>{l.subject.name}</span>
                         </div>
-                        <div style={{ fontSize: 11.5, color: "var(--muted)" }}>com {l.teacher.user.name}</div>
+                        <div style={{ fontSize: 11.5, color: "var(--subtle)" }}>com {l.teacher.user.name}</div>
                       </div>
                       <span style={{ display: "inline-flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
                         <ModoBadge modo={l.modality === "ONLINE" ? "online" : "sede"} size="sm" />
@@ -451,7 +445,7 @@ export default async function AlunoDashboard() {
             <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", padding: "14px 18px 10px", gap: 12 }}>
               <div>
                 <div style={{ fontSize: 14, fontWeight: 600, letterSpacing: "-0.01em" }}>Suas solicitações</div>
-                <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>
+                <div style={{ fontSize: 12, color: "var(--subtle)", marginTop: 2 }}>
                   {solicitacoes.length > 0 ? `${solicitacoes.length} aguardando · respostas em até 24h` : "Nenhuma solicitação pendente"}
                 </div>
               </div>
@@ -463,7 +457,7 @@ export default async function AlunoDashboard() {
 
             <div style={{ padding: "0 16px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
               {solicitacoes.length === 0 ? (
-                <div style={{ textAlign: "center", color: "var(--muted)", fontSize: 13, padding: "12px 0" }}>
+                <div style={{ textAlign: "center", color: "var(--subtle)", fontSize: 13, padding: "12px 0" }}>
                   Nenhuma solicitação em aberto
                 </div>
               ) : (
@@ -479,7 +473,7 @@ export default async function AlunoDashboard() {
                         <div style={{ fontSize: 13, fontWeight: 500 }}>
                           {r.student.name.split(" ")[0]} · <span style={{ color: "var(--text-2)", fontWeight: 400 }}>{r.subject?.name ?? "Aula"}</span>
                         </div>
-                        <div style={{ fontSize: 11, color: "var(--muted)" }}>
+                        <div style={{ fontSize: 11, color: "var(--subtle)" }}>
                           {timeLabel} · {format(r.preferredAt, "dd/MM HH:mm")}
                         </div>
                       </div>
@@ -502,7 +496,7 @@ export default async function AlunoDashboard() {
             <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", padding: "14px 18px 10px", gap: 12 }}>
               <div>
                 <div style={{ fontSize: 14, fontWeight: 600, letterSpacing: "-0.01em" }}>Recados dos professores</div>
-                <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>
+                <div style={{ fontSize: 12, color: "var(--subtle)", marginTop: 2 }}>
                   {mensagens.length > 0 ? `${mensagens.length} nota${mensagens.length !== 1 ? "s" : ""} recente${mensagens.length !== 1 ? "s" : ""}` : "Nenhum recado ainda"}
                 </div>
               </div>
@@ -510,7 +504,7 @@ export default async function AlunoDashboard() {
 
             <div style={{ padding: "0 14px 14px", display: "flex", flexDirection: "column" }}>
               {mensagens.length === 0 ? (
-                <div style={{ textAlign: "center", color: "var(--muted)", fontSize: 13, padding: "12px 0 4px" }}>
+                <div style={{ textAlign: "center", color: "var(--subtle)", fontSize: 13, padding: "12px 0 4px" }}>
                   Os professores postarão recados após as aulas
                 </div>
               ) : (
@@ -528,8 +522,8 @@ export default async function AlunoDashboard() {
                       <div style={{ flex: 1, minWidth: 0, lineHeight: 1.4 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3, flexWrap: "wrap" }}>
                           <span style={{ fontSize: 13, fontWeight: isFirst ? 600 : 500 }}>{l.teacher.user.name}</span>
-                          <span style={{ fontSize: 10.5, color: "var(--muted)" }}>· {l.subject.name} · {studentFirstName}</span>
-                          <span style={{ fontSize: 10.5, color: "var(--muted)", marginLeft: "auto" }}>
+                          <span style={{ fontSize: 10.5, color: "var(--subtle)" }}>· {l.subject.name} · {studentFirstName}</span>
+                          <span style={{ fontSize: 10.5, color: "var(--subtle)", marginLeft: "auto" }}>
                             {format(l.scheduledAt, "dd/MM", { locale: ptBR })}
                           </span>
                         </div>
@@ -549,7 +543,7 @@ export default async function AlunoDashboard() {
             <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", padding: "14px 18px 10px", gap: 12 }}>
               <div>
                 <div style={{ fontSize: 14, fontWeight: 600, letterSpacing: "-0.01em" }}>Pagamentos</div>
-                <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>
+                <div style={{ fontSize: 12, color: "var(--subtle)", marginTop: 2 }}>
                   {nextPayment ? `Próximo vencimento · ${format(nextPayment.dueDate, "dd/MM/yyyy")}` : "Sem cobranças pendentes"}
                 </div>
               </div>
@@ -585,14 +579,14 @@ export default async function AlunoDashboard() {
 
               {paidHistory.length > 0 && (
                 <div>
-                  <div style={{ fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.04em", fontWeight: 500, marginBottom: 8 }}>Histórico recente</div>
+                  <div style={{ fontSize: 11, color: "var(--subtle)", textTransform: "uppercase", letterSpacing: "0.04em", fontWeight: 500, marginBottom: 8 }}>Histórico recente</div>
                   {paidHistory.map((p, i) => (
                     <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderTop: i ? "1px solid var(--border)" : "none" }}>
                       <div style={{ flex: 1, lineHeight: 1.3 }}>
                         <div style={{ fontSize: 12.5, fontWeight: 500 }}>
                           {p.description ?? `Pacote · ${p.student.name.split(" ")[0]}`}
                         </div>
-                        <div style={{ fontSize: 10.5, color: "var(--muted)", fontFamily: "ui-monospace, monospace" }}>
+                        <div style={{ fontSize: 10.5, color: "var(--subtle)", fontFamily: "ui-monospace, monospace" }}>
                           {p.paidAt ? format(p.paidAt, "dd/MM/yy") : format(p.dueDate, "dd/MM/yy")}
                         </div>
                       </div>
@@ -604,7 +598,7 @@ export default async function AlunoDashboard() {
               )}
 
               {!nextPayment && paidHistory.length === 0 && (
-                <div style={{ textAlign: "center", color: "var(--muted)", fontSize: 13, padding: "12px 0" }}>
+                <div style={{ textAlign: "center", color: "var(--subtle)", fontSize: 13, padding: "12px 0" }}>
                   Nenhum histórico de pagamento
                 </div>
               )}
