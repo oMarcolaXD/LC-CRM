@@ -33,6 +33,7 @@ export async function approveRequestAction(
       student: {
         include: {
           user:     true,
+          guardian: { include: { user: true } },
           packages: { where: { status: "ACTIVE", remainingLessons: { gt: 0 } } },
         },
       },
@@ -121,25 +122,32 @@ export async function approveRequestAction(
   ])
 
   if (!isHistorical) {
-    const scheduledAtFmt = format(request.preferredAt, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
-    await notifyLessonConfirmed({
-      studentUserId: request.student.userId ?? "",
-      studentEmail:  request.student.user?.email ?? null,
-      studentPhone:  request.student.user?.phone ?? null,
-      teacherName:   request.teacher.user.name,
-      subject:       request.subject?.name ?? "–",
-      scheduledAt:   scheduledAtFmt,
-      modality:      "Presencial",
-    })
+    // Destinatário: aluno (se tiver login próprio) ou o responsável
+    const recipientId    = request.student.userId ?? request.student.guardian?.userId
+    const recipientEmail = request.student.user?.email ?? request.student.guardian?.user?.email ?? null
+    const recipientPhone = request.student.user?.phone ?? request.student.guardian?.user?.phone ?? null
 
-    const remaining = pkg.remainingLessons - 1
-    if (remaining <= 2 && remaining > 0) {
-      await notifyLowBalance({
-        studentUserId: request.student.userId ?? "",
-        studentEmail:  request.student.user?.email ?? null,
-        studentPhone:  request.student.user?.phone ?? null,
-        remaining,
+    if (recipientId) {
+      const scheduledAtFmt = format(request.preferredAt, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
+      await notifyLessonConfirmed({
+        studentUserId: recipientId,
+        studentEmail:  recipientEmail,
+        studentPhone:  recipientPhone,
+        teacherName:   request.teacher.user.name,
+        subject:       request.subject?.name ?? "–",
+        scheduledAt:   scheduledAtFmt,
+        modality:      finalModality === "PRESENCIAL" ? "Presencial" : "Online",
       })
+
+      const remaining = pkg.remainingLessons - 1
+      if (remaining <= 2 && remaining > 0) {
+        await notifyLowBalance({
+          studentUserId: recipientId,
+          studentEmail:  recipientEmail,
+          studentPhone:  recipientPhone,
+          remaining,
+        })
+      }
     }
   }
 
@@ -156,7 +164,7 @@ export async function rejectRequestAction(requestId: string, reason?: string) {
 
   const request = await prisma.lessonRequest.findUnique({
     where:   { id: requestId },
-    include: { student: { include: { user: true } }, subject: true },
+    include: { student: { include: { user: true, guardian: { include: { user: true } } } }, subject: true },
   })
   if (!request) throw new Error("Solicitação não encontrada")
 
@@ -165,14 +173,20 @@ export async function rejectRequestAction(requestId: string, reason?: string) {
     data:  { status: "REJECTED", reason, approvedBy: session.user.id },
   })
 
-  await notify({
-    userId:  request.student.userId ?? "",
-    type:    "LESSON_CANCELLED",
-    title:   "Solicitação de aula recusada",
-    message: `Sua solicitação de aula de ${request.subject?.name ?? "–"} não pôde ser aprovada.${reason ? ` Motivo: ${reason}` : ""}`,
-    email:   request.student.user?.email ?? undefined,
-    phone:   request.student.user?.phone ?? undefined,
-  })
+  const recipientId    = request.student.userId ?? request.student.guardian?.userId
+  const recipientEmail = request.student.user?.email ?? request.student.guardian?.user?.email ?? undefined
+  const recipientPhone = request.student.user?.phone ?? request.student.guardian?.user?.phone ?? undefined
+
+  if (recipientId) {
+    await notify({
+      userId:  recipientId,
+      type:    "LESSON_CANCELLED",
+      title:   "Solicitação de aula recusada",
+      message: `Sua solicitação de aula de ${request.subject?.name ?? "–"} não pôde ser aprovada.${reason ? ` Motivo: ${reason}` : ""}`,
+      email:   recipientEmail,
+      phone:   recipientPhone,
+    })
+  }
 
   revalidatePath("/colaborador/dashboard")
   revalidatePath("/colaborador/agendamentos")
@@ -195,7 +209,7 @@ export async function updateLessonStatusAction(
   const lesson = await prisma.lesson.findUnique({
     where:   { id: lessonId },
     include: {
-      participants: { include: { student: { include: { user: true } } } },
+      participants: { include: { student: { include: { user: true, guardian: { include: { user: true } } } } } },
       teacher: { include: { user: true } },
       subject: true,
     },
@@ -218,13 +232,17 @@ export async function updateLessonStatusAction(
   if (status === "CANCELLED" && isGroup) {
     await prisma.lesson.update({ where: { id: lessonId }, data: { status: "CANCELLED", topicsCovered, teacherNotes } })
     for (const p of lesson.participants) {
+      const rid   = p.student.userId ?? p.student.guardian?.userId
+      const email = p.student.user?.email ?? p.student.guardian?.user?.email ?? undefined
+      const phone = p.student.user?.phone ?? p.student.guardian?.user?.phone ?? undefined
+      if (!rid) continue
       await notify({
-        userId:  p.student.userId ?? "",
+        userId:  rid,
         type:    "LESSON_CANCELLED",
         title:   "Aula em grupo cancelada",
         message: `Sua aula em grupo de ${lesson.subject.name} foi cancelada.`,
-        email:   p.student.user?.email ?? undefined,
-        phone:   p.student.user?.phone ?? undefined,
+        email,
+        phone,
       })
     }
     revalidatePath("/professor/agenda")
@@ -278,13 +296,17 @@ export async function updateLessonStatusAction(
   const msg = messages[status]
   if (msg) {
     for (const p of lesson.participants) {
+      const rid   = p.student.userId ?? p.student.guardian?.userId
+      const email = p.student.user?.email ?? p.student.guardian?.user?.email ?? undefined
+      const phone = p.student.user?.phone ?? p.student.guardian?.user?.phone ?? undefined
+      if (!rid) continue
       await notify({
-        userId:  p.student.userId ?? "",
+        userId:  rid,
         type:    status === "COMPLETED" ? "LESSON_COMPLETED" : status === "CANCELLED" ? "LESSON_CANCELLED" : "LESSON_MISSED",
         title:   msg.title,
         message: msg.message,
-        email:   p.student.user?.email ?? undefined,
-        phone:   p.student.user?.phone ?? undefined,
+        email,
+        phone,
       })
     }
   }
