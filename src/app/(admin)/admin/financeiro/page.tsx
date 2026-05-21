@@ -35,7 +35,6 @@ export default async function FinanceiroPage() {
   const aReceber       = pagamentos.filter((p) => p.status === "PENDING").reduce((s, p) => s + Number(p.amount), 0)
   const inadimplente   = pagamentos.filter((p) => p.status === "OVERDUE").reduce((s, p) => s + Number(p.amount), 0)
   const totalRepasses  = repasses.reduce((s, r) => s + Number(r.totalAmount), 0)
-  const repassesPagos  = repasses.filter((r) => r.status === "PAID").reduce((s, r) => s + Number(r.totalAmount), 0)
 
   const kpis = [
     { title: "Receita do Mês",    value: brl(receitaMes),   icon: TrendingUp,  color: "text-green-600",  bg: "bg-green-50"    },

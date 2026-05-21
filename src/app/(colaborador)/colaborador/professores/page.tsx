@@ -49,6 +49,7 @@ export default async function ProfessoresPage() {
                   <div className="flex items-start gap-3">
                     <div className="shrink-0 w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden">
                       {t.user.avatar ? (
+                        // eslint-disable-next-line @next/next/no-img-element
                         <img src={t.user.avatar} alt={t.user.name} className="w-full h-full object-cover" />
                       ) : (
                         <UserCircle className="w-7 h-7 text-primary/60" />

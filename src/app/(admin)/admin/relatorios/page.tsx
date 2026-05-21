@@ -11,6 +11,8 @@ import {
 import { format, subMonths, startOfMonth, endOfMonth } from "date-fns"
 import { ptBR } from "date-fns/locale"
 
+export const dynamic = "force-dynamic"
+
 function brl(v: number) { return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) }
 
 async function getReportData() {
@@ -22,34 +24,20 @@ async function getReportData() {
 
   const COLORS = ["#FB8500","#219EBC","#8b5cf6","#ef4444","#f97316","#10b981","#3b82f6","#ec4899"]
 
-  // Queries agregadas — sem carregar todos os registros em memória
+  // Batch 1: groupBy reduz 11 queries individuais para 2 + demais lookups
   const [
-    receitaTotal, aReceber, inadimplencia, totalPagamentos, totalPagos,
-    aulasRealizadas, aulasCanceladas, aulasFaltou, aulasConfirmadas, aulasAgendadas, totalLessons,
+    paymentGroups,
+    lessonGroups,
     totalStudents, totalTeachers,
     subjects, teachers, topAlunosRaw, ratingData,
   ] = await Promise.all([
-    // Financeiro
-    prisma.payment.aggregate({ where: { status: "PAID" },     _sum: { amount: true } }),
-    prisma.payment.aggregate({ where: { status: "PENDING" },  _sum: { amount: true } }),
-    prisma.payment.aggregate({ where: { status: "OVERDUE" },  _sum: { amount: true } }),
-    prisma.payment.count(),
-    prisma.payment.count({ where: { status: "PAID" } }),
-    // Aulas por status
-    prisma.lesson.count({ where: { status: "COMPLETED" } }),
-    prisma.lesson.count({ where: { status: "CANCELLED" } }),
-    prisma.lesson.count({ where: { status: "MISSED" } }),
-    prisma.lesson.count({ where: { status: "CONFIRMED" } }),
-    prisma.lesson.count({ where: { status: "SCHEDULED" } }),
-    prisma.lesson.count(),
-    // Totais
+    prisma.payment.groupBy({ by: ["status"], _sum: { amount: true }, _count: { _all: true } }),
+    prisma.lesson.groupBy({ by: ["status"], _count: { _all: true } }),
     prisma.student.count(),
     prisma.teacher.count(),
-    // Matérias
     prisma.subject.findMany({
       select: { name: true, _count: { select: { lessons: { where: { status: "COMPLETED" } } } } },
     }),
-    // Top professores
     prisma.teacher.findMany({
       select: {
         user:   { select: { name: true } },
@@ -58,7 +46,6 @@ async function getReportData() {
       orderBy: { lessons: { _count: "desc" } },
       take: 6,
     }),
-    // Top alunos
     prisma.student.findMany({
       select: {
         name:   true,
@@ -67,38 +54,76 @@ async function getReportData() {
       orderBy: { participations: { _count: "desc" } },
       take: 5,
     }),
-    // Avaliações
     prisma.lesson.aggregate({
       where: { studentRating: { not: null } },
       _avg:  { studentRating: true },
     }),
   ])
 
-  // Receita e aulas por mês (queries paralelas por mês)
-  const [receitaMeses, aulasMeses] = await Promise.all([
-    Promise.all(months.map(({ start, end, label }) =>
-      prisma.payment.aggregate({
-        where: { status: "PAID", paidAt: { gte: start, lte: end } },
-        _sum:  { amount: true },
-      }).then((r) => ({ label, value: Number(r._sum.amount ?? 0) }))
-    )),
-    Promise.all(months.map(({ start, end, label }) =>
-      prisma.lesson.count({ where: { scheduledAt: { gte: start, lte: end } } })
-        .then((value) => ({ label, value }))
-    )),
+  // Extrai stats de pagamento do groupBy
+  const receitaTotal    = Number(paymentGroups.find(g => g.status === "PAID")?._sum.amount ?? 0)
+  const aReceber        = Number(paymentGroups.find(g => g.status === "PENDING")?._sum.amount ?? 0)
+  const inadimplencia   = Number(paymentGroups.find(g => g.status === "OVERDUE")?._sum.amount ?? 0)
+  const totalPagamentos = paymentGroups.reduce((acc, g) => acc + g._count._all, 0)
+  const totalPagos      = paymentGroups.find(g => g.status === "PAID")?._count._all ?? 0
+
+  // Extrai counts de aulas do groupBy
+  const aulasRealizadas  = lessonGroups.find(g => g.status === "COMPLETED")?._count._all ?? 0
+  const aulasCanceladas  = lessonGroups.find(g => g.status === "CANCELLED")?._count._all ?? 0
+  const aulasFaltou      = lessonGroups.find(g => g.status === "MISSED")?._count._all    ?? 0
+  const aulasConfirmadas = lessonGroups.find(g => g.status === "CONFIRMED")?._count._all ?? 0
+  const aulasAgendadas   = lessonGroups.find(g => g.status === "SCHEDULED")?._count._all ?? 0
+  const totalLessons     = lessonGroups.reduce((acc, g) => acc + g._count._all, 0)
+
+  // Batch 2: dados mensais — 2 queries SQL em vez de 24 (12 meses × 2 tabelas)
+  const startDate = months[0].start
+  const endDate   = months[11].end
+
+  const [paymentMonthly, lessonMonthly] = await Promise.all([
+    prisma.$queryRaw<{ month: Date; total: number }[]>`
+      SELECT DATE_TRUNC('month', "paidAt") AS month,
+             COALESCE(SUM(amount), 0)::float8 AS total
+      FROM payments
+      WHERE status = 'PAID'
+        AND "paidAt" >= ${startDate} AND "paidAt" <= ${endDate}
+      GROUP BY DATE_TRUNC('month', "paidAt")
+    `,
+    prisma.$queryRaw<{ month: Date; total: bigint }[]>`
+      SELECT DATE_TRUNC('month', "scheduledAt") AS month,
+             COUNT(*)::bigint AS total
+      FROM lessons
+      WHERE "scheduledAt" >= ${startDate} AND "scheduledAt" <= ${endDate}
+      GROUP BY DATE_TRUNC('month', "scheduledAt")
+    `,
   ])
 
-  // Distribuição de notas por estrela
-  const ratingDist = await Promise.all(
-    [1,2,3,4,5].map((star) =>
-      prisma.lesson.count({ where: { studentRating: star } })
-        .then((value) => ({
-          label: `${star}★`,
-          value,
-          color: star >= 4 ? "#FB8500" : star === 3 ? "#f97316" : "#ef4444",
-        }))
-    )
-  )
+  const receitaMeses = months.map(({ start, label }) => ({
+    label,
+    value: paymentMonthly.find(r => {
+      const d = new Date(r.month)
+      return d.getFullYear() === start.getFullYear() && d.getMonth() === start.getMonth()
+    })?.total ?? 0,
+  }))
+
+  const aulasMeses = months.map(({ start, label }) => ({
+    label,
+    value: Number(lessonMonthly.find(r => {
+      const d = new Date(r.month)
+      return d.getFullYear() === start.getFullYear() && d.getMonth() === start.getMonth()
+    })?.total ?? 0),
+  }))
+
+  // Batch 3: distribuição de notas — 1 groupBy em vez de 5 counts
+  const ratingGroupsRaw = await prisma.lesson.groupBy({
+    by: ["studentRating"],
+    _count: { _all: true },
+    where: { studentRating: { not: null } },
+  })
+  const ratingDist = [1, 2, 3, 4, 5].map((star) => ({
+    label: `${star}★`,
+    value: ratingGroupsRaw.find(g => g.studentRating === star)?._count._all ?? 0,
+    color: star >= 4 ? "#FB8500" : star === 3 ? "#f97316" : "#ef4444",
+  }))
 
   const taxaAdimplencia = totalPagamentos > 0 ? Math.round(totalPagos / totalPagamentos * 100) : 0
   const taxaConclusao   = totalLessons > 0 ? Math.round(aulasRealizadas / totalLessons * 100) : 0
@@ -129,9 +154,9 @@ async function getReportData() {
 
   return {
     receitaMeses,
-    receitaTotal:  Number(receitaTotal._sum.amount ?? 0),
-    aReceber:      Number(aReceber._sum.amount ?? 0),
-    inadimplencia: Number(inadimplencia._sum.amount ?? 0),
+    receitaTotal,
+    aReceber,
+    inadimplencia,
     taxaAdimplencia,
     aulasMeses, aulasRealizadas, aulasCanceladas, aulasFaltou, taxaConclusao, statusAulas,
     materiaData, topProfessores, avgRating, ratingDist, topAlunos,

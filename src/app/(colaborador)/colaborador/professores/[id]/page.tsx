@@ -65,6 +65,7 @@ export default async function ColabProfessorPage({ params }: Props) {
           <div className="flex items-start gap-4">
             <div className="shrink-0 w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden">
               {teacher.user.avatar ? (
+                // eslint-disable-next-line @next/next/no-img-element
                 <img src={teacher.user.avatar} alt={teacher.user.name} className="w-full h-full object-cover" />
               ) : (
                 <UserCircle className="w-8 h-8 text-primary/60" />

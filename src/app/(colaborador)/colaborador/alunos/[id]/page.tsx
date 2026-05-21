@@ -9,7 +9,7 @@ import {
   BookOpen, MessageCircle, AlertCircle, School, FileText,
   CreditCard, Clock,
 } from "lucide-react"
-import { format, differenceInYears } from "date-fns"
+import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 
 function brl(v: number) {

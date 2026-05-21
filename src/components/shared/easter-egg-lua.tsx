@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 
 const KONAMI = [
   "ArrowUp","ArrowUp","ArrowDown","ArrowDown",
@@ -12,7 +12,7 @@ export function EasterEggLua() {
   const [visible, setVisible] = useState(false)
   const [message, setMessage] = useState("A guardiã secreta do sistema.")
   const [walking, setWalking] = useState(false)
-  const [sequence, setSequence] = useState<string[]>([])
+  const sequenceRef = useRef<string[]>([])
 
   // Console easter egg — roda uma vez
   useEffect(() => {
@@ -34,14 +34,13 @@ export function EasterEggLua() {
   // Konami Code
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      setSequence(prev => {
-        const next = [...prev, e.key].slice(-KONAMI.length)
-        if (next.join(",") === KONAMI.join(",")) {
-          show("A guardiã secreta do sistema.")
-          return []
-        }
-        return next
-      })
+      const next = [...sequenceRef.current, e.key].slice(-KONAMI.length)
+      if (next.join(",") === KONAMI.join(",")) {
+        show("A guardiã secreta do sistema.")
+        sequenceRef.current = []
+      } else {
+        sequenceRef.current = next
+      }
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)

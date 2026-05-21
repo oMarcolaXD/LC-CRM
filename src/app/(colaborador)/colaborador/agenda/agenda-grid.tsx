@@ -547,68 +547,6 @@ function ConfirmPill({ label, state }: { label: string; state: PillState }) {
   )
 }
 
-// ─── Checklist row no painel lateral ─────────────────────────────────────────
-
-function SidePanelCheckRow({
-  label, state, detail, action,
-}: {
-  label:   string
-  state:   "ok" | "pend" | "err"
-  detail:  string
-  action?: string
-}) {
-  const cfg = {
-    ok:   { bg: "var(--success-soft)", color: "var(--success)", ch: "✓" },
-    pend: { bg: "var(--warn-soft)",    color: "var(--warn)",    ch: "?" },
-    err:  { bg: "var(--danger-soft)",  color: "var(--danger)",  ch: "!" },
-  }[state]
-  return (
-    <div className="flex items-start gap-2.5">
-      <span
-        className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[5px] text-[11px] font-bold mt-0.5"
-        style={{ background: cfg.bg, color: cfg.color }}
-      >
-        {cfg.ch}
-      </span>
-      <div className="flex-1 min-w-0 leading-[1.35]">
-        <p className="text-[12.5px] font-medium">{label}</p>
-        <p className="text-[11px] text-muted-foreground truncate">{detail}</p>
-      </div>
-      {action && (
-        <span className="text-[11px] font-medium shrink-0" style={{ color: "var(--primary)" }}>
-          {action}
-        </span>
-      )}
-    </div>
-  )
-}
-
-// ─── Botão de ação rápida no painel lateral ───────────────────────────────────
-
-function ActionQuickBtn({
-  icon, label, onClick, disabled, danger,
-}: {
-  icon:      React.ReactNode
-  label:     string
-  onClick:   () => void
-  disabled?: boolean
-  danger?:   boolean
-}) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className={`flex items-center gap-2 rounded-[7px] border px-2.5 py-2 text-left text-[11.5px] font-medium transition-colors disabled:opacity-50 ${
-        danger
-          ? "border-destructive/30 text-destructive hover:bg-destructive/10"
-          : "border-border text-muted-foreground hover:bg-[var(--hover)]"
-      }`}
-    >
-      <span className={danger ? "text-destructive" : "text-muted-foreground shrink-0"}>{icon}</span>
-      <span className="flex-1 leading-tight">{label}</span>
-    </button>
-  )
-}
 
 // Helper lazy para evitar import circular — ModoBadge usa CSS vars da Fase 0
 function ModoBadgeDynamic({ modo }: { modo: "online" | "sede" }) {
@@ -932,7 +870,7 @@ export function AgendaGrid({
   date, teachers, lessons: initialLessons, roomCount = 3, students, allStudents,
   weekLessons: initialWeekLessons, monthLessons: initialMonthLessons, initialView = "day",
   pendingRequests: initialPending, weekPendingRequests: initialWeekPending,
-  scheduledCount = 0,
+  scheduledCount: _scheduledCount = 0,
 }: AgendaGridProps) {
   // ── Data state (managed client-side after initial SSR) ────────────────────
 
@@ -996,7 +934,6 @@ export function AgendaGrid({
   useEffect(() => {
     if (!hasMounted.current) { hasMounted.current = true; return }
     fetchData(curDate, view)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [curDate, view])
 
   // Sync state when browser back/forward buttons are used

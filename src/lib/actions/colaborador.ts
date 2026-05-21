@@ -167,7 +167,7 @@ export async function importStudentsAction(rows: unknown[]): Promise<ImportResul
     }
 
     const {
-      nome, email, senha, telefone, dataNascimento, serie, escola,
+      nome, email, senha, telefone, serie, escola,
       nomeResponsavel, telefoneResponsavel, emailResponsavel,
     } = parsed.data
 

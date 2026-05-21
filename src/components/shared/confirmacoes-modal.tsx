@@ -316,9 +316,9 @@ export function ConfirmacoesModal({
   const [pending, start] = useTransition()
 
   const toggleItem    = (key: string) =>
-    setSelected(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n })
+    setSelected(prev => { const n = new Set(prev); if (n.has(key)) n.delete(key); else n.add(key); return n })
   const toggleSection = (tipo: string) =>
-    setExpanded(prev => { const n = new Set(prev); n.has(tipo) ? n.delete(tipo) : n.add(tipo); return n })
+    setExpanded(prev => { const n = new Set(prev); if (n.has(tipo)) n.delete(tipo); else n.add(tipo); return n })
   const selectAll     = (grupo: ConfirmacaoItem[]) =>
     setSelected(prev => { const n = new Set(prev); grupo.forEach(i => n.add(i.key)); return n })
   const setPreview    = (key: string, val: string) =>

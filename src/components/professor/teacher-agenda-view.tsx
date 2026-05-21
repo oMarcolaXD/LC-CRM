@@ -210,7 +210,7 @@ const APP_STEPS: Record<App, { text: React.ReactNode }[]> = {
   ],
 }
 
-function SyncHint({ webcalUrl, icsUrl }: { webcalUrl: string; icsUrl: string }) {
+function SyncHint({ webcalUrl, icsUrl: _icsUrl }: { webcalUrl: string; icsUrl: string }) {
   const [open,       setOpen]       = useState(false)
   const [activeApp,  setActiveApp]  = useState<App>("google")
 

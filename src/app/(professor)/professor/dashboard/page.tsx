@@ -315,8 +315,6 @@ export default async function ProfessorDashboard() {
     )
   }
 
-  const dateCapitalized = d.dateLabel.charAt(0).toUpperCase() + d.dateLabel.slice(1)
-
   return (
     <div className="flex flex-col gap-[18px]">
 

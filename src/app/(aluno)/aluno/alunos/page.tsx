@@ -6,8 +6,8 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge }             from "@/components/ui/badge"
 import { LinkButton }        from "@/components/shared/link-button"
 import {
-  GraduationCap, BookOpen, CalendarDays, Wallet, School,
-  CheckCircle2, Clock,
+  GraduationCap, CalendarDays, Wallet, School,
+  CheckCircle2,
 } from "lucide-react"
 
 const EDUCATION_LABEL: Record<string, string> = {

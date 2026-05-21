@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { Button }        from "@/components/ui/button"
 import { SubmitButton }  from "@/components/ui/submit-button"
 import { Label }    from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -195,6 +194,7 @@ export function BookingForm({
                       {/* Avatar */}
                       <div className="shrink-0 w-12 h-12 rounded-full overflow-hidden bg-primary/10 flex items-center justify-center">
                         {t.avatar ? (
+                          // eslint-disable-next-line @next/next/no-img-element
                           <img src={t.avatar} alt={t.name} className="w-full h-full object-cover" />
                         ) : (
                           <span className="text-sm font-bold text-primary">{initials(t.name)}</span>

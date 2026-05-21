@@ -10,7 +10,7 @@ import { Label }        from "@/components/ui/label"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { PhoneInput } from "@/components/ui/phone-input"
 import { Badge }        from "@/components/ui/badge"
-import { Camera, User, Phone, Lock, CheckCircle, AlertCircle, Mail, CalendarDays } from "lucide-react"
+import { Camera, User, Phone, Lock, CheckCircle, AlertCircle, Mail } from "lucide-react"
 import { format }       from "date-fns"
 import { ptBR }         from "date-fns/locale"
 

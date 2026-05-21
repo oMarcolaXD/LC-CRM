@@ -27,7 +27,7 @@ export function PedidoRow({
   subjectName, preferredAt, modality, notes, horasAtras, tag,
 }: PedidoRowProps) {
   const [pending, startTransition] = useTransition()
-  const [mod, setMod] = useState<"PRESENCIAL" | "ONLINE">(
+  const [mod] = useState<"PRESENCIAL" | "ONLINE">(
     teacherMode === "ONLINE_ONLY" ? "ONLINE" : modality
   )
 
