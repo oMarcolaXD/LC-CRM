@@ -89,9 +89,12 @@ export async function createUserAction(formData: FormData) {
 
   const hashed = await bcrypt.hash(passwordToHash, 12)
 
+  // Aluno adulto (próprio responsável) precisa de role GUARDIAN para conseguir fazer login
+  const userRole: Role = (role === "STUDENT" && guardianMode === "self") ? "GUARDIAN" : role as Role
+
   await prisma.$transaction(async (tx) => {
     const user = await tx.user.create({
-      data: { name, email: emailNorm, password: hashed, phone: phoneNorm, role: role as Role },
+      data: { name, email: emailNorm, password: hashed, phone: phoneNorm, role: userRole },
     })
 
     if (role === "STUDENT") {
