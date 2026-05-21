@@ -61,7 +61,7 @@ async function getReportData() {
     // Top alunos
     prisma.student.findMany({
       select: {
-        user:   { select: { name: true } },
+        name:   true,
         _count: { select: { participations: { where: { lesson: { status: "COMPLETED" } } } } },
       },
       orderBy: { participations: { _count: "desc" } },
@@ -71,7 +71,6 @@ async function getReportData() {
     prisma.lesson.aggregate({
       where: { studentRating: { not: null } },
       _avg:  { studentRating: true },
-      _count: { studentRating: true },
     }),
   ])
 
@@ -119,12 +118,12 @@ async function getReportData() {
     .sort((a, b) => b.value - a.value)
 
   const topProfessores = teachers.map((t) => ({
-    label: t.user.name.split(" ")[0],
+    label: (t.user.name ?? "Prof").split(" ")[0],
     value: t._count.lessons,
   }))
 
-  const topAlunos = (topAlunosRaw as { user: { name: string } | null; _count: { participations: number } }[]).map((s) => ({
-    name:  s.user?.name ?? "Aluno",
+  const topAlunos = (topAlunosRaw as { name: string; _count: { participations: number } }[]).map((s) => ({
+    name:  s.name ?? "Aluno",
     aulas: s._count.participations,
   }))
 
@@ -141,7 +140,10 @@ async function getReportData() {
 }
 
 export default async function RelatoriosPage() {
-  const d = await getReportData()
+  const d = await getReportData().catch((err) => {
+    console.error("[relatorios] getReportData error:", err)
+    throw err
+  })
 
   return (
     <div className="space-y-8">
@@ -299,7 +301,7 @@ export default async function RelatoriosPage() {
               {d.topAlunos.some((a) => a.aulas > 0) ? (
                 <div className="space-y-3">
                   {d.topAlunos.map((a, i) => (
-                    <div key={a.name} className="flex items-center gap-3">
+                    <div key={i} className="flex items-center gap-3">
                       <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
                         <span className="text-xs font-bold text-primary">{i + 1}</span>
                       </div>
