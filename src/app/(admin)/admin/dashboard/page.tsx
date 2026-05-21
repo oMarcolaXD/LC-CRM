@@ -8,7 +8,7 @@ import Link            from "next/link"
 import { cn }          from "@/lib/utils"
 import {
   format, subMonths, startOfMonth, endOfMonth, startOfDay, endOfDay,
-  differenceInDays,
+  differenceInDays, startOfYear, endOfYear, subYears,
 } from "date-fns"
 import { ptBR } from "date-fns/locale"
 
@@ -19,20 +19,117 @@ function pct(v: number) {
   return `${Math.round(Math.min(v, 9.99) * 100)}%`
 }
 
+// ─── Período ──────────────────────────────────────────────────────────────────
+
+type Periodo = "mes" | "mes-anterior" | "3meses" | "6meses" | "ano"
+
+const VALID_PERIODOS: Periodo[] = ["mes", "mes-anterior", "3meses", "6meses", "ano"]
+
+const PERIODOS: { id: Periodo; label: string }[] = [
+  { id: "mes",          label: "Este mês"    },
+  { id: "mes-anterior", label: "Mês anterior" },
+  { id: "3meses",       label: "3 meses"     },
+  { id: "6meses",       label: "6 meses"     },
+  { id: "ano",          label: "Este ano"    },
+]
+
+type ChartPoint = { start: Date; end: Date; label: string }
+
+function getPeriodBounds(periodo: Periodo, now: Date): {
+  start:       Date
+  end:         Date
+  prevStart:   Date
+  prevEnd:     Date
+  periodLabel: string
+  chartPoints: ChartPoint[]
+  isMonthly:   boolean   // true → receitaGoal já é mensal
+} {
+  switch (periodo) {
+    case "mes-anterior": {
+      const ref = subMonths(now, 1)
+      return {
+        start:       startOfMonth(ref),
+        end:         endOfMonth(ref),
+        prevStart:   startOfMonth(subMonths(now, 2)),
+        prevEnd:     endOfMonth(subMonths(now, 2)),
+        periodLabel: format(ref, "MMMM · yyyy", { locale: ptBR }),
+        chartPoints: Array.from({ length: 6 }, (_, i) => {
+          const d = subMonths(ref, 5 - i)
+          return { start: startOfMonth(d), end: endOfMonth(d), label: format(d, "MMM", { locale: ptBR }) }
+        }),
+        isMonthly: true,
+      }
+    }
+    case "3meses": {
+      const s = startOfMonth(subMonths(now, 2))
+      return {
+        start:       s,
+        end:         endOfMonth(now),
+        prevStart:   startOfMonth(subMonths(now, 5)),
+        prevEnd:     endOfMonth(subMonths(now, 3)),
+        periodLabel: `${format(s, "MMM", { locale: ptBR })} – ${format(now, "MMM yyyy", { locale: ptBR })}`,
+        chartPoints: Array.from({ length: 3 }, (_, i) => {
+          const d = subMonths(now, 2 - i)
+          return { start: startOfMonth(d), end: endOfMonth(d), label: format(d, "MMM", { locale: ptBR }) }
+        }),
+        isMonthly: false,
+      }
+    }
+    case "6meses": {
+      const s = startOfMonth(subMonths(now, 5))
+      return {
+        start:       s,
+        end:         endOfMonth(now),
+        prevStart:   startOfMonth(subMonths(now, 11)),
+        prevEnd:     endOfMonth(subMonths(now, 6)),
+        periodLabel: `${format(s, "MMM", { locale: ptBR })} – ${format(now, "MMM yyyy", { locale: ptBR })}`,
+        chartPoints: Array.from({ length: 6 }, (_, i) => {
+          const d = subMonths(now, 5 - i)
+          return { start: startOfMonth(d), end: endOfMonth(d), label: format(d, "MMM", { locale: ptBR }) }
+        }),
+        isMonthly: false,
+      }
+    }
+    case "ano": {
+      const monthsElapsed = now.getMonth() + 1
+      return {
+        start:       startOfYear(now),
+        end:         endOfMonth(now),
+        prevStart:   startOfYear(subYears(now, 1)),
+        prevEnd:     endOfYear(subYears(now, 1)),
+        periodLabel: format(now, "yyyy"),
+        chartPoints: Array.from({ length: monthsElapsed }, (_, i) => {
+          const d = new Date(now.getFullYear(), i, 1)
+          return { start: startOfMonth(d), end: endOfMonth(d), label: format(d, "MMM", { locale: ptBR }) }
+        }),
+        isMonthly: false,
+      }
+    }
+    default: { // "mes"
+      return {
+        start:       startOfMonth(now),
+        end:         endOfMonth(now),
+        prevStart:   startOfMonth(subMonths(now, 1)),
+        prevEnd:     endOfMonth(subMonths(now, 1)),
+        periodLabel: format(now, "MMMM · yyyy", { locale: ptBR }),
+        chartPoints: Array.from({ length: 6 }, (_, i) => {
+          const d = subMonths(now, 5 - i)
+          return { start: startOfMonth(d), end: endOfMonth(d), label: format(d, "MMM", { locale: ptBR }) }
+        }),
+        isMonthly: true,
+      }
+    }
+  }
+}
+
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
-async function getOpsData() {
-  const now = new Date()
+async function getOpsData(periodo: Periodo) {
+  const now    = new Date()
+  const bounds = getPeriodBounds(periodo, now)
+  const { start, end, prevStart, prevEnd, periodLabel, chartPoints, isMonthly } = bounds
 
-  const months = Array.from({ length: 6 }, (_, i) => {
-    const d = subMonths(now, 5 - i)
-    return { start: startOfMonth(d), end: endOfMonth(d), label: format(d, "MMM", { locale: ptBR }) }
-  })
-
-  const thisStart = startOfMonth(now)
-  const thisEnd   = endOfMonth(now)
-  const prevStart = startOfMonth(subMonths(now, 1))
-  const prevEnd   = endOfMonth(subMonths(now, 1))
+  const fetchFrom = chartPoints[0].start < prevStart ? chartPoints[0].start : prevStart
 
   const [
     paidPayments,
@@ -44,7 +141,7 @@ async function getOpsData() {
     lowPackages,
   ] = await Promise.all([
     prisma.payment.findMany({
-      where:  { status: "PAID", paidAt: { gte: months[0].start } },
+      where:  { status: "PAID", paidAt: { gte: fetchFrom } },
       select: { amount: true, paidAt: true },
     }),
     prisma.payment.findMany({
@@ -54,7 +151,7 @@ async function getOpsData() {
       take:    50,
     }),
     prisma.lesson.findMany({
-      where:  { scheduledAt: { gte: months[0].start } },
+      where:  { scheduledAt: { gte: fetchFrom } },
       select: { status: true, scheduledAt: true },
     }),
     prisma.student.count({
@@ -85,30 +182,33 @@ async function getOpsData() {
       .filter((p) => p.paidAt! >= s && p.paidAt! <= e)
       .reduce((acc, p) => acc + Number(p.amount), 0)
 
-  const receitaMes     = sumPaid(thisStart, thisEnd)
+  const receitaMes     = sumPaid(start, end)
   const receitaPrevMes = sumPaid(prevStart, prevEnd)
   const receitaGoal    = receitaPrevMes > 0
     ? Math.round(receitaPrevMes * 1.1)
     : Math.max(Math.round(receitaMes * 1.2), 1000)
-  const receitaSpark   = months.map((m) => sumPaid(m.start, m.end))
+  const receitaSpark   = chartPoints.map((m) => sumPaid(m.start, m.end))
   const receitaDeltaNum = receitaPrevMes > 0
     ? Math.round(((receitaMes - receitaPrevMes) / receitaPrevMes) * 100)
     : null
+
+  // meta por barra do gráfico: se isMonthly, a meta já é mensal; caso contrário, divide pelo nº de pontos
+  const chartMeta = isMonthly ? receitaGoal : Math.round(receitaGoal / chartPoints.length)
 
   // ── Lessons ─────────────────────────────────────────────────────────────────
   const countLessons = (status: string, s: Date, e: Date) =>
     allLessons.filter((l) => l.status === status && l.scheduledAt >= s && l.scheduledAt <= e).length
 
-  const aulasMes     = countLessons("COMPLETED", thisStart, thisEnd)
+  const aulasMes     = countLessons("COMPLETED", start, end)
   const aulasPrevMes = countLessons("COMPLETED", prevStart, prevEnd)
   const aulasGoal    = aulasPrevMes > 0 ? Math.round(aulasPrevMes * 1.1) : Math.max(Math.round(aulasMes * 1.2), 10)
-  const aulasSpark   = months.map((m) => countLessons("COMPLETED", m.start, m.end))
+  const aulasSpark   = chartPoints.map((m) => countLessons("COMPLETED", m.start, m.end))
   const aulasDeltaNum = aulasPrevMes > 0
     ? Math.round(((aulasMes - aulasPrevMes) / aulasPrevMes) * 100)
     : null
 
   // ── Students ─────────────────────────────────────────────────────────────────
-  const alunosSpark = months.map((m) =>
+  const alunosSpark = chartPoints.map((m) =>
     allLessons.filter(
       (l) => l.scheduledAt >= m.start && l.scheduledAt <= m.end && l.status !== "CANCELLED"
     ).length
@@ -117,14 +217,14 @@ async function getOpsData() {
   // ── Overdue ─────────────────────────────────────────────────────────────────
   const inadimplenciaTotal  = overduePayments.reduce((s, p) => s + Number(p.amount), 0)
   const inadimplenciaAlunos = new Set(overduePayments.map((p) => p.studentId)).size
-  const inadimplenciaSpark  = months.map((m) =>
+  const inadimplenciaSpark  = chartPoints.map((m) =>
     overduePayments
       .filter((p) => p.dueDate >= m.start && p.dueDate <= m.end)
       .reduce((s, p) => s + Number(p.amount), 0)
   )
 
   // ── Chart data ───────────────────────────────────────────────────────────────
-  const chartData = months.map((m) => ({ m: m.label, v: sumPaid(m.start, m.end), meta: receitaGoal }))
+  const chartData = chartPoints.map((m) => ({ m: m.label, v: sumPaid(m.start, m.end), meta: chartMeta }))
 
   // ── Atrasados ────────────────────────────────────────────────────────────────
   const atrasados = overduePayments.map((p) => ({
@@ -174,8 +274,7 @@ async function getOpsData() {
     confirmada: l.status === "CONFIRMED",
   }))
 
-  const raw = format(now, "MMMM · yyyy", { locale: ptBR })
-
+  const raw = periodLabel
   return {
     receitaMes, receitaGoal, receitaSpark, receitaDeltaNum,
     aulasMes, aulasGoal, aulasSpark, aulasDeltaNum,
@@ -273,8 +372,15 @@ function getGreeting(hour: number) {
   return "Boa noite"
 }
 
-export default async function AdminOpsPage() {
-  const [d, session] = await Promise.all([getOpsData(), auth()])
+export default async function AdminOpsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ periodo?: string }>
+}) {
+  const { periodo: rawPeriodo } = await searchParams
+  const periodo = (VALID_PERIODOS.includes(rawPeriodo as Periodo) ? rawPeriodo : "mes") as Periodo
+
+  const [d, session] = await Promise.all([getOpsData(periodo), auth()])
   const { receitaDeltaNum, aulasDeltaNum } = d
 
   const now       = new Date()
@@ -285,21 +391,42 @@ export default async function AdminOpsPage() {
     <div className="flex flex-col gap-[18px]">
 
       {/* Header */}
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="text-[11px] font-medium uppercase tracking-[0.04em] text-muted-foreground">
-            Visão geral · {d.todayLabel}
-          </p>
-          <h1 className="font-sub text-[22px] font-semibold leading-tight tracking-[-0.02em]">
-            {greeting}, {firstName}!
-          </h1>
-          <p className="text-[13px] text-muted-foreground mt-0.5">
-            Operação · {d.periodLabel}
-          </p>
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <p className="text-[11px] font-medium uppercase tracking-[0.04em] text-muted-foreground">
+              Visão geral · {d.todayLabel}
+            </p>
+            <h1 className="font-sub text-[22px] font-semibold leading-tight tracking-[-0.02em]">
+              {greeting}, {firstName}!
+            </h1>
+            <p className="text-[13px] text-muted-foreground mt-0.5">
+              Operação · {d.periodLabel}
+            </p>
+          </div>
+          <div className="flex gap-1.5">
+            <OpsBtn href="/admin/relatorios">↗ Relatórios</OpsBtn>
+            <OpsBtn href="/admin/agenda" primary>+ Nova aula</OpsBtn>
+          </div>
         </div>
-        <div className="flex gap-1.5">
-          <OpsBtn href="/admin/relatorios">↗ Relatórios</OpsBtn>
-          <OpsBtn href="/admin/agenda" primary>+ Nova aula</OpsBtn>
+
+        {/* Seletor de período */}
+        <div className="flex items-center gap-[3px] self-start rounded-[9px] border border-border bg-card p-[3px]">
+          {PERIODOS.map((p) => (
+            <Link
+              key={p.id}
+              href={`?periodo=${p.id}`}
+              className={cn(
+                "rounded-[6px] px-[11px] py-[5px] text-[12px] font-medium transition-colors",
+                periodo === p.id
+                  ? "text-white shadow-sm"
+                  : "text-muted-foreground hover:bg-[var(--hover)] hover:text-[var(--text)]"
+              )}
+              style={periodo === p.id ? { background: "var(--primary)" } : {}}
+            >
+              {p.label}
+            </Link>
+          ))}
         </div>
       </div>
 
@@ -309,7 +436,7 @@ export default async function AdminOpsPage() {
         style={{ gap: "1px", background: "var(--border)" }}
       >
         <KpiCell
-          label="Receita do mês"
+          label="Receita do período"
           value={brl(d.receitaMes)}
           delta={receitaDeltaNum != null ? `${receitaDeltaNum >= 0 ? "+" : ""}${receitaDeltaNum}%` : "novo"}
           deltaPos={receitaDeltaNum != null ? receitaDeltaNum >= 0 : null}
@@ -359,7 +486,7 @@ export default async function AdminOpsPage() {
               <div>
                 <p className="text-[13px] font-semibold tracking-[-0.01em]">Receita vs. meta</p>
                 <p className="mt-0.5 text-[11px] text-muted-foreground">
-                  Últimos 6 meses · linha pontilhada = meta
+                  {d.periodLabel} · linha pontilhada = meta por período
                 </p>
               </div>
               <div className="mt-0.5 flex items-center gap-3.5 text-[11px] text-muted-foreground">
