@@ -3,7 +3,7 @@
 import { useTransition }            from "react"
 import { Button }                   from "@/components/ui/button"
 import { updateLessonStatusAction } from "@/lib/actions/lesson-request"
-import { sendLessonWhatsAppAction } from "@/lib/actions/colaborador"
+import { sendConfirmationToGuardianAction } from "@/lib/actions/colaborador"
 import { CheckCircle2, XCircle, UserX, MessageCircle, Loader2 } from "lucide-react"
 import { toast }                    from "sonner"
 
@@ -35,7 +35,7 @@ export function LessonActions({ lessonId, status }: LessonActionsProps) {
   async function handleWhatsApp() {
     startTransition(async () => {
       try {
-        await sendLessonWhatsAppAction(lessonId)
+        await sendConfirmationToGuardianAction(lessonId)
         toast.success("Confirmação enviada via WhatsApp")
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Erro ao enviar WhatsApp")

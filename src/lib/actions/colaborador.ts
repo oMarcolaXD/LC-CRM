@@ -306,15 +306,23 @@ export async function sendConfirmationsBatchAction(items: {
   }
 }
 
-// ─── Enviar WhatsApp de confirmação de aula ────────────────────────────────────
+// ─── Enviar confirmação para o responsável/aluno ──────────────────────────────
 
-export async function sendLessonWhatsAppAction(lessonId: string) {
+export async function sendConfirmationToGuardianAction(lessonId: string) {
   await requireCollaboratorOrAdmin()
 
   const lesson = await prisma.lesson.findUnique({
     where:   { id: lessonId },
     include: {
-      participants: { include: { student: { include: { user: true } } } },
+      participants: {
+        include: {
+          student: {
+            include: {
+              guardian: { include: { user: true } },
+            },
+          },
+        },
+      },
       teacher: { include: { user: true } },
       subject: true,
     },
@@ -324,14 +332,19 @@ export async function sendLessonWhatsAppAction(lessonId: string) {
   const scheduledAt = format(lesson.scheduledAt, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
 
   for (const p of lesson.participants) {
+    const { student } = p
+    const guardian    = student.guardian
+    if (!guardian) continue
+
     await notify({
-      userId:  p.student.userId ?? "",
+      userId:  guardian.userId,
       type:    "LESSON_CONFIRMED",
-      title:   "Lembrete de aula confirmada",
-      message: `Sua aula de ${lesson.subject.name} com ${lesson.teacher.user.name} está confirmada para ${scheduledAt}.`,
-      email:   p.student.user?.email ?? undefined,
-      phone:   p.student.user?.phone ?? undefined,
+      title:   "Confirmação de aula",
+      message: `A aula de ${lesson.subject.name} de ${student.name} com ${lesson.teacher.user.name} está confirmada para ${scheduledAt}.`,
+      email:   guardian.user?.email ?? undefined,
+      phone:   guardian.user?.phone ?? undefined,
       data: {
+        "Aluno":      student.name,
         "Matéria":    lesson.subject.name,
         "Professor":  lesson.teacher.user.name,
         "Data/Hora":  scheduledAt,
@@ -339,4 +352,35 @@ export async function sendLessonWhatsAppAction(lessonId: string) {
       },
     })
   }
+}
+
+// ─── Enviar confirmação para o professor ───────────────────────────────────────
+
+export async function sendConfirmationToTeacherAction(lessonId: string) {
+  await requireCollaboratorOrAdmin()
+
+  const lesson = await prisma.lesson.findUnique({
+    where:   { id: lessonId },
+    include: {
+      teacher: { include: { user: true } },
+      subject: true,
+    },
+  })
+  if (!lesson) throw new Error("Aula não encontrada")
+
+  const scheduledAt = format(lesson.scheduledAt, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
+
+  await notify({
+    userId:  lesson.teacher.userId,
+    type:    "LESSON_CONFIRMED",
+    title:   "Confirmação de aula",
+    message: `Sua aula de ${lesson.subject.name} está confirmada para ${scheduledAt}.`,
+    email:   lesson.teacher.user.email ?? undefined,
+    phone:   lesson.teacher.user.phone ?? undefined,
+    data: {
+      "Matéria":    lesson.subject.name,
+      "Data/Hora":  scheduledAt,
+      "Modalidade": lesson.modality === "ONLINE" ? "Online" : "Presencial",
+    },
+  })
 }

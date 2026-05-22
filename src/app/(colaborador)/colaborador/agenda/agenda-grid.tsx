@@ -19,7 +19,10 @@ import {
   approveRequestAction,
   rejectRequestAction,
 } from "@/lib/actions/lesson-request"
-import { sendLessonWhatsAppAction } from "@/lib/actions/colaborador"
+import {
+  sendConfirmationToGuardianAction,
+  sendConfirmationToTeacherAction,
+} from "@/lib/actions/colaborador"
 import { toast }                   from "sonner"
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -108,7 +111,7 @@ export interface PendingRequestSlot {
   notes:       string | null
 }
 
-// ─── Modal: detalhes de aula ─────────────────────────────────────────────────
+// ─── Modal: detalhes de aula (visão 360) ─────────────────────────────────────
 
 function LessonDetailModal({
   lesson,
@@ -119,9 +122,11 @@ function LessonDetailModal({
   teacherName: string
   onClose:     () => void
 }) {
-  const [completing,    setCompleting]    = useState(false)
-  const [topicsCovered, setTopicsCovered] = useState("")
-  const [teacherNotes,  setTeacherNotes]  = useState("")
+  const [completing,      setCompleting]      = useState(false)
+  const [topicsCovered,   setTopicsCovered]   = useState("")
+  const [teacherNotes,    setTeacherNotes]    = useState("")
+  const [sendingGuardian, setSendingGuardian] = useState(false)
+  const [sendingTeacher,  setSendingTeacher]  = useState(false)
   const [pending, start] = useTransition()
 
   const canAct = lesson.status === "SCHEDULED" || lesson.status === "CONFIRMED"
@@ -145,15 +150,29 @@ function LessonDetailModal({
       }
     })
 
-  const whatsapp = () =>
-    start(async () => {
-      try {
-        await sendLessonWhatsAppAction(lesson.id)
-        toast.success("WhatsApp enviado")
-      } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Erro")
-      }
-    })
+  const sendToGuardian = async () => {
+    setSendingGuardian(true)
+    try {
+      await sendConfirmationToGuardianAction(lesson.id)
+      toast.success("WhatsApp enviado ao responsável")
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro")
+    } finally {
+      setSendingGuardian(false)
+    }
+  }
+
+  const sendToTeacher = async () => {
+    setSendingTeacher(true)
+    try {
+      await sendConfirmationToTeacherAction(lesson.id)
+      toast.success("WhatsApp enviado ao professor")
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro")
+    } finally {
+      setSendingTeacher(false)
+    }
+  }
 
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose() }}>
@@ -161,11 +180,11 @@ function LessonDetailModal({
         <DialogHeader>
           <div className="flex items-center gap-2 flex-wrap">
             <DialogTitle>Detalhes da Aula</DialogTitle>
-            <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${bg} ${text}`}>
+            <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${bg} ${text}`}>
               {STATUS_LABEL[lesson.status]}
             </span>
             {lesson.isGroupLesson && (
-              <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-primary/10 text-primary flex items-center gap-1">
+              <span className="text-xs px-2 py-0.5 rounded-full font-semibold bg-primary/10 text-primary flex items-center gap-1">
                 <Users className="w-3 h-3" />
                 Grupo · {lesson.groupSize ?? lesson.groupMates.length + 1} alunos
               </span>
@@ -174,49 +193,51 @@ function LessonDetailModal({
         </DialogHeader>
 
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+
+          {/* ── Informações da aula ──────────────────────────── */}
+          <div className="grid grid-cols-2 gap-x-6 gap-y-4 rounded-lg bg-muted/30 px-4 py-3">
             <div>
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-0.5">Aluno</p>
-              <p className="font-medium">{lesson.studentName}</p>
+              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-1">Aluno</p>
+              <p className="font-semibold text-[13px] leading-snug">{lesson.studentName}</p>
               {lesson.guardianName && (
-                <p className="text-[11px] text-muted-foreground">↳ {lesson.guardianName}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">↳ {lesson.guardianName}</p>
               )}
             </div>
             <div>
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-0.5">Matéria</p>
-              <p className="font-medium">{lesson.subjectName}</p>
+              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-1">Matéria</p>
+              <p className="font-semibold text-[13px] leading-snug">{lesson.subjectName}</p>
             </div>
             <div>
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-0.5">Professor</p>
-              <p className="font-medium">{teacherName}</p>
+              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-1">Professor</p>
+              <p className="font-semibold text-[13px] leading-snug">{teacherName}</p>
             </div>
             <div>
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-0.5">Horário</p>
-              <p className="font-medium flex items-center gap-1">
-                <Clock className="w-3 h-3" />
+              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-1">Horário</p>
+              <p className="font-semibold text-[13px] leading-snug flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                 {lesson.time} · {lesson.duration}min
               </p>
             </div>
             {lesson.isGroupLesson && lesson.groupMates.length > 0 && (
               <div className="col-span-2">
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-0.5">Colegas de turma</p>
+                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-1">Colegas de turma</p>
                 <div className="flex flex-wrap gap-1">
                   {lesson.groupMates.map(name => (
-                    <span key={name} className="text-[11px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium flex items-center gap-1">
+                    <span key={name} className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium flex items-center gap-1">
                       <Users className="w-3 h-3" />{name}
                     </span>
                   ))}
                 </div>
               </div>
             )}
-            <div>
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-0.5">Modalidade</p>
+            <div className="col-span-2">
+              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-1">Modalidade</p>
               {lesson.modality === "ONLINE" ? (
                 <div>
-                  <p className="font-medium flex items-center gap-1">
-                    <Wifi className="w-3 h-3" /> Online
+                  <p className="font-semibold text-[13px] flex items-center gap-1.5">
+                    <Wifi className="w-3.5 h-3.5 shrink-0" /> Online
                   </p>
-                  <p className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5">
+                  <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
                     {lesson.teacherOnsite
                       ? <><Building2 className="w-3 h-3 text-amber-500" /> Professor na sede</>
                       : <><Home className="w-3 h-3 text-blue-400" /> Professor em casa</>
@@ -224,61 +245,110 @@ function LessonDetailModal({
                   </p>
                 </div>
               ) : (
-                <p className="font-medium flex items-center gap-1">
-                  <MapPin className="w-3 h-3" /> Presencial
+                <p className="font-semibold text-[13px] flex items-center gap-1.5">
+                  <MapPin className="w-3.5 h-3.5 shrink-0" /> Presencial
                 </p>
               )}
             </div>
           </div>
 
-          {(canAct || true) && <hr className="border-border" />}
-
-          {canAct && completing ? (
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs font-medium">
-                  Tópicos cobertos <span className="text-destructive">*</span>
-                </label>
-                <textarea
-                  value={topicsCovered}
-                  onChange={e => setTopicsCovered(e.target.value)}
-                  placeholder="Ex: Equações do 2º grau, fórmula de Bhaskara..."
-                  className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/30"
-                  rows={3}
-                />
-              </div>
-              <div>
-                <label className="text-xs font-medium text-muted-foreground">Notas do professor</label>
-                <textarea
-                  value={teacherNotes}
-                  onChange={e => setTeacherNotes(e.target.value)}
-                  placeholder="Observações internas..."
-                  className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/30"
-                  rows={2}
-                />
-              </div>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={() => setCompleting(false)} disabled={pending}>
-                  Voltar
-                </Button>
+          {/* ── Confirmações ─────────────────────────────────── */}
+          <div>
+            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-2">
+              Confirmações via WhatsApp
+            </p>
+            <div className="rounded-lg border border-border overflow-hidden divide-y divide-border">
+              <div className="flex items-center justify-between px-3 py-2.5 gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold leading-tight">Responsável / Aluno</p>
+                  {lesson.guardianName && (
+                    <p className="text-xs text-muted-foreground truncate">{lesson.guardianName}</p>
+                  )}
+                </div>
                 <Button
                   size="sm"
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                  onClick={() => act("COMPLETED")}
-                  disabled={pending || !topicsCovered.trim()}
+                  variant="outline"
+                  className="gap-1.5 shrink-0 text-emerald-700 border-emerald-200 hover:bg-emerald-50"
+                  onClick={sendToGuardian}
+                  disabled={sendingGuardian}
                 >
-                  {pending
-                    ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />
-                    : <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
+                  {sendingGuardian
+                    ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    : <MessageCircle className="w-3.5 h-3.5" />
                   }
-                  Salvar e concluir
+                  Enviar
+                </Button>
+              </div>
+              <div className="flex items-center justify-between px-3 py-2.5 gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold leading-tight">Professor</p>
+                  <p className="text-xs text-muted-foreground truncate">{teacherName}</p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5 shrink-0 text-emerald-700 border-emerald-200 hover:bg-emerald-50"
+                  onClick={sendToTeacher}
+                  disabled={sendingTeacher}
+                >
+                  {sendingTeacher
+                    ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    : <MessageCircle className="w-3.5 h-3.5" />
+                  }
+                  Enviar
                 </Button>
               </div>
             </div>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              {canAct && (
-                <>
+          </div>
+
+          {/* ── Ações de status ──────────────────────────────── */}
+          {canAct && (
+            <>
+              <hr className="border-border" />
+              {completing ? (
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-xs font-semibold">
+                      Tópicos cobertos <span className="text-destructive">*</span>
+                    </label>
+                    <textarea
+                      value={topicsCovered}
+                      onChange={e => setTopicsCovered(e.target.value)}
+                      placeholder="Ex: Equações do 2º grau, fórmula de Bhaskara..."
+                      className="mt-1.5 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      rows={3}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground">Notas do professor</label>
+                    <textarea
+                      value={teacherNotes}
+                      onChange={e => setTeacherNotes(e.target.value)}
+                      placeholder="Observações internas..."
+                      className="mt-1.5 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      rows={2}
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={() => setCompleting(false)} disabled={pending}>
+                      Voltar
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                      onClick={() => act("COMPLETED")}
+                      disabled={pending || !topicsCovered.trim()}
+                    >
+                      {pending
+                        ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />
+                        : <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
+                      }
+                      Salvar e concluir
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-2">
                   <Button
                     size="sm"
                     className="bg-emerald-600 hover:bg-emerald-700 text-white"
@@ -302,16 +372,9 @@ function LessonDetailModal({
                     }
                     Faltou
                   </Button>
-                </>
+                </div>
               )}
-              <Button size="sm" variant="outline" onClick={whatsapp} disabled={pending}>
-                {pending
-                  ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />
-                  : <MessageCircle className="w-3.5 h-3.5 mr-1" />
-                }
-                WhatsApp
-              </Button>
-            </div>
+            </>
           )}
         </div>
       </DialogContent>
