@@ -79,7 +79,7 @@ export default async function StudentDetailPage({ params, searchParams }: Props)
   const base = await prisma.student.findUnique({ where: { id }, select: { name: true } })
   if (!base) notFound()
 
-  // Step 2 — all queries in parallel
+  // Step 2 — all queries in a single transaction (1 connection, sequential)
   const [
     student,
     totalDone,
@@ -91,7 +91,7 @@ export default async function StudentDetailPage({ params, searchParams }: Props)
     nextStudent,
     totalStudents,
     teachersRaw,
-  ] = await Promise.all([
+  ] = await prisma.$transaction([
     prisma.student.findUnique({
       where: { id },
       include: {
