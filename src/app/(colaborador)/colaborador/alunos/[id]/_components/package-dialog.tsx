@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useTransition } from "react"
+import { useRouter }               from "next/navigation"
 import { Plus, Loader2, BookOpen, RefreshCw } from "lucide-react"
 import { Button }                  from "@/components/ui/button"
 import {
@@ -18,6 +19,7 @@ interface Props {
 }
 
 export function PackageDialog({ studentId, studentName, mode }: Props) {
+  const router = useRouter()
   const [open, setOpen]               = useState(false)
   const [totalLessons, setTotal]      = useState("10")
   const [pricePerLesson, setPrice]    = useState("90")
@@ -51,7 +53,7 @@ export function PackageDialog({ studentId, studentName, mode }: Props) {
         })
         toast.success(mode === "renovar" ? "Pacote renovado com sucesso" : "Pacote criado com sucesso")
         setOpen(false)
-        window.location.reload()
+        router.push(`/colaborador/alunos/${studentId}`)
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Erro ao criar pacote")
       }
