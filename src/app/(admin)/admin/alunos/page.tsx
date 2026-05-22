@@ -1,14 +1,8 @@
 import { prisma }        from "@/lib/prisma"
 import { PageHeader }    from "@/components/shared/page-header"
-import { StudentsBoard } from "./_components/students-board"
+import { StudentsBoard } from "@/app/(colaborador)/colaborador/alunos/_components/students-board"
 
-interface AlunosPageProps {
-  searchParams: Promise<{ success?: string }>
-}
-
-export default async function ColaboradorAlunosPage({ searchParams }: AlunosPageProps) {
-  const { success } = await searchParams
-
+export default async function AdminAlunosPage() {
   const [students, subjectRows] = await Promise.all([
     prisma.student.findMany({
       include: {
@@ -45,17 +39,11 @@ export default async function ColaboradorAlunosPage({ searchParams }: AlunosPage
         description={`${students.length} aluno${students.length !== 1 ? "s" : ""} cadastrado${students.length !== 1 ? "s" : ""}`}
       />
 
-      {success && (
-        <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm">
-          {decodeURIComponent(success)}
-        </div>
-      )}
-
       <StudentsBoard
         students={students}
         grades={grades}
         subjects={subjects}
-        newStudentHref="/colaborador/alunos/novo"
+        newStudentHref="/admin/usuarios/novo"
         importHref="/colaborador/alunos/importar"
         detailBasePath="/colaborador/alunos"
       />

@@ -15,6 +15,7 @@ export const NAV_ITEMS: Record<Role, NavItem[]> = {
   ADMIN: [
     { label: "Dashboard",   href: "/admin/dashboard",  icon: LayoutDashboard },
     { label: "Usuários",    href: "/admin/usuarios",   icon: Users           },
+    { label: "Alunos",      href: "/admin/alunos",     icon: GraduationCap   },
     { label: "Agenda",      href: "/admin/agenda",     icon: CalendarDays    },
     { label: "Financeiro",  href: "/admin/financeiro", icon: DollarSign      },
     { label: "Relatórios",  href: "/admin/relatorios", icon: BarChart3       },
