@@ -219,7 +219,7 @@ export function StudentsBoard({
           />
         </div>
 
-        <Select value={gradeFilter} onValueChange={setGradeFilter}>
+        <Select value={gradeFilter} onValueChange={(v) => setGradeFilter(v ?? "todos")}>
           <SelectTrigger className="w-36 h-9">
             <SelectValue placeholder="Série" />
           </SelectTrigger>
