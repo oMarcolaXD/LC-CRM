@@ -648,6 +648,20 @@ async function main() {
   })
   console.log("✅ 4 solicitações adicionais pendentes")
 
+  // ─── Demo de conflito: Bruno solicita Ana às 14h30, mas ela já tem aula às 14h ──
+  await prisma.lessonRequest.create({
+    data: {
+      studentId: "student-7",
+      teacherId: "teacher-1",
+      subjectId: "sub-mat",
+      modality:  LessonModality.PRESENCIAL,
+      preferredAt: todayAt(14, 30),
+      status:    RequestStatus.PENDING,
+      reason:    "Tenho prova amanhã, preciso de ajuda com geometria",
+    },
+  })
+  console.log("✅ 1 solicitação com conflito (Bruno → Ana às 14h30, Pedro já confirmado às 14h)")
+
   // ─── Notificações extras para o colaborador ───────────────────────────────
   await prisma.notification.createMany({
     data: [
