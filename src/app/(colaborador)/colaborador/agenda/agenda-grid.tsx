@@ -1549,7 +1549,10 @@ export function AgendaGrid({
                 </div>
                 {effectiveTeachers.map(t => {
                   const count        = byTeacher(t.id).length
-                  const pendingCount = pendingRequests.filter(r => r.teacherId === t.id).length
+                  // Só exibe pendências se o professor tem disponibilidade hoje
+                  const pendingCount = t.slots.length > 0
+                    ? pendingRequests.filter(r => r.teacherId === t.id).length
+                    : 0
                   const available    = t.slots.length > 0
                   const firstName    = t.name.split(" ")[0]
                   const lastName     = t.name.split(" ").slice(1).join(" ")

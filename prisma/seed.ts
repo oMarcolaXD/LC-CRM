@@ -4,7 +4,7 @@ import {
   TeacherMode, EducationLevel,
 } from "@prisma/client"
 import bcrypt from "bcryptjs"
-import { subMonths, addHours, startOfMonth, setHours, setMinutes } from "date-fns"
+import { subMonths, addHours, addDays, startOfMonth, setHours, setMinutes } from "date-fns"
 
 const prisma = new PrismaClient()
 const hash   = (pwd: string) => bcrypt.hash(pwd, 12)
@@ -29,6 +29,13 @@ function pastDate(monthsAgo: number, dayOffset = 0, hour = 10) {
 
 function todayAt(hour: number, minute = 0) {
   const d = new Date()
+  d.setHours(hour, minute, 0, 0)
+  return d
+}
+
+// Cria data futura em horário de funcionamento (evita horários fora do expediente)
+function futureAt(daysAhead: number, hour: number, minute = 0) {
+  const d = addDays(now, daysAhead)
   d.setHours(hour, minute, 0, 0)
   return d
 }
@@ -511,22 +518,22 @@ async function main() {
     data: [
       {
         studentId: "student-7",  teacherId: "teacher-4", subjectId: "sub-mat",
-        modality: LessonModality.PRESENCIAL, preferredAt: addHours(now, 26), status: RequestStatus.PENDING,
+        modality: LessonModality.PRESENCIAL, preferredAt: futureAt(1, 10), status: RequestStatus.PENDING,
         reason: "Preciso de reforço urgente para prova de sexta",
       },
       {
         studentId: "student-9",  teacherId: "teacher-1", subjectId: "sub-fis",
-        modality: LessonModality.ONLINE, preferredAt: addHours(now, 27), status: RequestStatus.PENDING,
+        modality: LessonModality.ONLINE, preferredAt: futureAt(1, 15, 30), status: RequestStatus.PENDING,
         reason: "Prefiro online hoje",
       },
       {
         studentId: "student-11", teacherId: "teacher-3", subjectId: "sub-qui",
-        modality: LessonModality.ONLINE, preferredAt: addHours(now, 50), status: RequestStatus.PENDING,
+        modality: LessonModality.ONLINE, preferredAt: futureAt(2, 9), status: RequestStatus.PENDING,
         reason: "Dificuldade com reações químicas",
       },
       {
         studentId: "student-12", teacherId: "teacher-2", subjectId: "sub-his",
-        modality: LessonModality.ONLINE, preferredAt: addHours(now, 72), status: RequestStatus.PENDING,
+        modality: LessonModality.ONLINE, preferredAt: futureAt(3, 11), status: RequestStatus.PENDING,
         reason: "Revisão para ENEM",
       },
     ],
@@ -581,7 +588,7 @@ async function main() {
   await prisma.lessonRequest.create({
     data: {
       studentId: "student-5", teacherId: "teacher-1", subjectId: "sub-fis",
-      modality: LessonModality.PRESENCIAL, preferredAt: addHours(now, 96), status: RequestStatus.PENDING,
+      modality: LessonModality.PRESENCIAL, preferredAt: futureAt(4, 17), status: RequestStatus.PENDING,
       reason: "Quero fazer aula em grupo com colegas",
       isGroupRequest: true,
       groupNote: "Quero aula com alguém revisando cinemática",
@@ -626,22 +633,22 @@ async function main() {
     data: [
       {
         studentId: "student-3", teacherId: "teacher-3", subjectId: "sub-qui",
-        modality: LessonModality.PRESENCIAL, preferredAt: addHours(now, 24),
+        modality: LessonModality.PRESENCIAL, preferredAt: futureAt(1, 14),
         status: RequestStatus.PENDING, reason: "Prova de Química na semana que vem",
       },
       {
         studentId: "student-6", teacherId: "teacher-6", subjectId: "sub-fis",
-        modality: LessonModality.ONLINE, preferredAt: addHours(now, 30),
+        modality: LessonModality.ONLINE, preferredAt: futureAt(2, 10, 30),
         status: RequestStatus.PENDING, reason: null,
       },
       {
         studentId: "student-1", teacherId: "teacher-1", subjectId: "sub-mat",
-        modality: LessonModality.PRESENCIAL, preferredAt: addHours(now, 48),
+        modality: LessonModality.PRESENCIAL, preferredAt: futureAt(3, 16),
         status: RequestStatus.PENDING, reason: "Dificuldade com equações do 2º grau",
       },
       {
         studentId: "student-8", teacherId: "teacher-3", subjectId: "sub-bio",
-        modality: LessonModality.PRESENCIAL, preferredAt: addHours(now, 56),
+        modality: LessonModality.PRESENCIAL, preferredAt: futureAt(4, 9, 30),
         status: RequestStatus.PENDING, reason: null,
       },
     ],

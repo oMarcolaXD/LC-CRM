@@ -4,7 +4,7 @@ import { prisma }              from "@/lib/prisma"
 import { auth }                from "@/lib/auth"
 import { revalidatePath }      from "next/cache"
 import { notify, notifyLessonConfirmed, notifyLowBalance } from "@/lib/notifications"
-import { getRoomCount }        from "@/lib/config"
+import { getRoomCount, getOperationalConfig, isOperational } from "@/lib/config"
 import { startOfDay, endOfDay } from "date-fns"
 import { format }              from "date-fns"
 import { ptBR }                from "date-fns/locale"
@@ -63,6 +63,22 @@ export async function approveRequestAction(
   }
 
   const isHistorical = request.preferredAt < new Date()
+
+  // ── Verificação de horário de funcionamento ───────────────────────────────────
+  if (!isHistorical) {
+    const opConfig = await getOperationalConfig()
+    if (!isOperational(request.preferredAt, opConfig)) {
+      const days  = opConfig.days
+      const start = `${String(Math.floor(opConfig.startMin / 60)).padStart(2, "0")}:${String(opConfig.startMin % 60).padStart(2, "0")}`
+      const end   = `${String(Math.floor(opConfig.endMin   / 60)).padStart(2, "0")}:${String(opConfig.endMin   % 60).padStart(2, "0")}`
+      const dowNames = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"]
+      const diasStr  = days.map(d => dowNames[d]).join(", ")
+      throw new Error(
+        `Fora do horário de funcionamento (${diasStr}, ${start}–${end}). ` +
+        `Verifique as configurações ou escolha outro horário.`
+      )
+    }
+  }
 
   // ── Verificação de salas: presencial OU online com professor na sede ─────────
   const occupiesRoom = finalModality === "PRESENCIAL" || (finalModality === "ONLINE" && teacherOnsite)

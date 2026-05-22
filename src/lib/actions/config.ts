@@ -29,3 +29,65 @@ export async function getRoomCountAction(): Promise<number> {
   const val = await getConfigValue("room_count", "3")
   return Math.max(1, parseInt(val, 10) || 3)
 }
+
+// ─── Horário de Funcionamento ─────────────────────────────────────────────────
+
+function err(msg: string): never {
+  redirect(`/admin/config?error=${encodeURIComponent(msg)}`)
+}
+
+function parseDates(raw: string): string[] {
+  try { return JSON.parse(raw) } catch { return [] }
+}
+
+export async function setOperationalConfigAction(formData: FormData) {
+  await requireAdmin()
+
+  const days  = formData.getAll("operational_days").map(Number)
+  const start = String(formData.get("operational_start") ?? "08:00")
+  const end   = String(formData.get("operational_end")   ?? "20:00")
+
+  if (days.length === 0)                err("Selecione ao menos um dia de funcionamento")
+  if (!/^\d{2}:\d{2}$/.test(start))    err("Horário de início inválido")
+  if (!/^\d{2}:\d{2}$/.test(end))      err("Horário de término inválido")
+
+  const [sh] = start.split(":").map(Number)
+  const [eh] = end.split(":").map(Number)
+  if (sh >= eh) err("Horário de início deve ser anterior ao de término")
+
+  await Promise.all([
+    setConfigValue("operational_days",  days.join(",")),
+    setConfigValue("operational_start", start),
+    setConfigValue("operational_end",   end),
+  ])
+  revalidatePath("/admin/config")
+  redirect("/admin/config?success=Horário+de+funcionamento+atualizado")
+}
+
+export async function addClosedDateAction(formData: FormData) {
+  await requireAdmin()
+
+  const date = String(formData.get("closed_date") ?? "")
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) err("Data inválida")
+
+  const current = await getConfigValue("operational_closed_dates", "[]")
+  const dates   = parseDates(current)
+  if (!dates.includes(date)) dates.push(date)
+  dates.sort()
+
+  await setConfigValue("operational_closed_dates", JSON.stringify(dates))
+  revalidatePath("/admin/config")
+  redirect("/admin/config?success=Data+de+fechamento+adicionada")
+}
+
+export async function removeClosedDateAction(formData: FormData) {
+  await requireAdmin()
+
+  const date    = String(formData.get("closed_date") ?? "")
+  const current = await getConfigValue("operational_closed_dates", "[]")
+  const dates   = parseDates(current).filter(d => d !== date)
+
+  await setConfigValue("operational_closed_dates", JSON.stringify(dates))
+  revalidatePath("/admin/config")
+  redirect("/admin/config?success=Data+de+fechamento+removida")
+}
