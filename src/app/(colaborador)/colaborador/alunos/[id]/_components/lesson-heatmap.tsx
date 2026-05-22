@@ -84,8 +84,8 @@ export function LessonHeatmap({ entries }: Props) {
               return (
                 <div
                   key={di}
-                  className={`rounded-sm cursor-default transition-opacity hover:opacity-80 ${color}`}
-                  style={{ width: 12, height: 12, minWidth: 12, minHeight: 12 }}
+                  className={`cursor-default transition-opacity hover:opacity-80 ${color}`}
+                  style={{ width: 13, height: 13, minWidth: 13, minHeight: 13, borderRadius: 2 }}
                   onMouseEnter={(e) => {
                     if (!hasSomething) {
                       setTooltip({ text: format(cell.date, "dd/MM/yyyy", { locale: ptBR }), x: e.clientX, y: e.clientY })
@@ -109,12 +109,12 @@ export function LessonHeatmap({ entries }: Props) {
         <span>menos</span>
         <div className="flex gap-1">
           {["bg-muted/40","bg-primary/30","bg-primary/60","bg-primary"].map((c, i) => (
-            <div key={i} className={`w-3 h-3 rounded-sm ${c}`} />
+            <div key={i} className={`w-3 h-3 ${c}`} style={{ borderRadius: 2 }} />
           ))}
         </div>
         <span>mais</span>
         <div className="flex items-center gap-1 ml-2">
-          <div className="w-3 h-3 rounded-sm bg-red-400" />
+          <div className="w-3 h-3 bg-red-400" style={{ borderRadius: 2 }} />
           <span>faltou</span>
         </div>
       </div>

@@ -3,6 +3,7 @@ import { Sidebar }              from "./sidebar"
 import { Header }               from "./header"
 import { WhatsAppButton }       from "./whatsapp-button"
 import { EmailMissingBanner }   from "./email-missing-banner"
+import { NavigationProgress }   from "./navigation-progress"
 import type { Role }            from "@prisma/client"
 
 interface StudentOption {
@@ -29,6 +30,7 @@ export async function AppLayout({ children, name, email, role, image, phone, mis
 
   return (
     <div className="flex h-screen bg-muted/30 overflow-hidden">
+      <NavigationProgress />
       {/* Sidebar — desktop */}
       <aside className="hidden lg:flex w-60 shrink-0 flex-col">
         <Sidebar name={name} email={email} role={role} image={image} phone={phone} />
