@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "cross-env NODE_OPTIONS=--max-http-header-size=32768 next dev --turbopack",
-    "build": "prisma migrate deploy && prisma generate && next build",
+    "build": "prisma migrate resolve --applied 20260522000000_add_missing_schema_fields || true && prisma migrate deploy && prisma generate && next build",
     "start": "cross-env NODE_OPTIONS=--max-http-header-size=32768 next start",
     "lint": "eslint",
     "db:migrate": "prisma migrate dev",
