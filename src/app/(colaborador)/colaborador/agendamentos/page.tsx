@@ -117,7 +117,7 @@ export default async function AgendamentosPage({ searchParams }: PageProps) {
     })
 
     const pkg             = r.student.packages[0]
-    const remainingLessons = pkg?.remainingLessons ?? null
+    const remainingLessons = pkg ? Number(pkg.remainingLessons) : null
     const packageExpired  = !pkg
 
     return {

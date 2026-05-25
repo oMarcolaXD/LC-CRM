@@ -64,7 +64,7 @@ function classify(student: StudentRow): BoardColumn {
   const pkg = student.packages[0] ?? null
   if (!pkg) return "novos"
 
-  const remaining = pkg.remainingLessons
+  const remaining = Number(pkg.remainingLessons)
   const expiresAt = pkg.expiresAt ? new Date(pkg.expiresAt) : null
   const isExpired = expiresAt && expiresAt < new Date()
 
@@ -78,7 +78,7 @@ function classify(student: StudentRow): BoardColumn {
 function ListRow({ student, detailBasePath }: { student: StudentRow; detailBasePath: string }) {
   const displayName  = student.name?.trim() || student.user?.name?.trim() || "Aluno"
   const pkg          = student.packages[0] ?? null
-  const remaining    = pkg?.remainingLessons ?? 0
+  const remaining    = Number(pkg?.remainingLessons ?? 0)
   const nextLesson   = student.participations[0]?.lesson ?? null
   const guardianUser = student.guardian?.user ?? null
   const guardianPhone = guardianUser?.phone?.replace(/\D/g, "") ?? null
@@ -121,7 +121,7 @@ function ListRow({ student, detailBasePath }: { student: StudentRow; detailBaseP
           )}
           {pkg && (
             <p className="text-xs text-muted-foreground">
-              Pacote: {pkg.totalLessons} aulas
+              Pacote: {Number(pkg.totalLessons)} aulas
               {pkg.expiresAt && ` · vence ${format(new Date(pkg.expiresAt), "dd/MM/yyyy", { locale: ptBR })}`}
             </p>
           )}

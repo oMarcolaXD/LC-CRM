@@ -66,7 +66,7 @@ export default async function MeusAlunosPage() {
         completed:       lessonsCompleted.find((r) => r.studentId === id)?._count._all ?? 0,
         upcoming:        lessonsUpcoming.find((r) => r.studentId === id)?._count._all ?? 0,
         pendingPayments: pendingPayments.find((r) => r.studentId === id)?._count._all ?? 0,
-        saldo:           activePackages.find((r) => r.studentId === id)?._sum.remainingLessons ?? 0,
+        saldo:           Number(activePackages.find((r) => r.studentId === id)?._sum.remainingLessons ?? 0),
       },
     ])
   )

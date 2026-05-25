@@ -30,6 +30,10 @@ function brl(v: number | string) {
   return Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
 }
 
+function fmtLessons(n: number) {
+  return n % 1 === 0 ? String(n) : n.toFixed(1).replace(".", ",")
+}
+
 function initials(name: string) {
   return name.split(" ").slice(0, 2).map(w => w[0]).join("").toUpperCase()
 }
@@ -315,9 +319,9 @@ export default async function StudentDetailPage({ params, searchParams }: Props)
               <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${activePkg ? "bg-green-100 text-green-700" : "bg-muted text-muted-foreground"}`}>
                 {activePkg ? "Ativa" : "Sem pacote"}
               </span>
-              {activePkg && activePkg.remainingLessons <= 4 && (
+              {activePkg && Number(activePkg.remainingLessons) <= 4 && (
                 <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700">
-                  {activePkg.remainingLessons <= 1 ? "Atenção" : "Renovar em breve"}
+                  {Number(activePkg.remainingLessons) <= 1 ? "Atenção" : "Renovar em breve"}
                 </span>
               )}
             </div>
@@ -375,7 +379,7 @@ export default async function StudentDetailPage({ params, searchParams }: Props)
               studentId={id}
               studentName={student.name}
               teachers={teachersForDialog}
-              hasBalance={!!activePkg && activePkg.remainingLessons > 0}
+              hasBalance={!!activePkg && Number(activePkg.remainingLessons) > 0}
             />
             {whatsappPhone && (
               <a
@@ -418,12 +422,12 @@ export default async function StudentDetailPage({ params, searchParams }: Props)
           {activePkg ? (
             <>
               <p className="text-lg font-bold">
-                <span className={activePkg.remainingLessons <= 2 ? "text-red-600" : "text-primary"}>
-                  {activePkg.remainingLessons}
+                <span className={Number(activePkg.remainingLessons) <= 2 ? "text-red-600" : "text-primary"}>
+                  {fmtLessons(Number(activePkg.remainingLessons))}
                 </span>
-                <span className="text-muted-foreground font-normal text-sm"> / {activePkg.totalLessons}</span>
+                <span className="text-muted-foreground font-normal text-sm"> / {fmtLessons(Number(activePkg.totalLessons))}</span>
               </p>
-              <p className="text-[11px] text-muted-foreground">{activePkg.remainingLessons} aulas restantes</p>
+              <p className="text-[11px] text-muted-foreground">{fmtLessons(Number(activePkg.remainingLessons))} aulas restantes</p>
             </>
           ) : (
             <p className="text-sm text-muted-foreground">Sem pacote</p>
@@ -505,11 +509,11 @@ export default async function StudentDetailPage({ params, searchParams }: Props)
                       Pago
                     </Badge>
                   </CardTitle>
-                  <PackageDialog studentId={id} studentName={student.name} mode={activePkg.remainingLessons <= 4 ? "renovar" : "novo"} />
+                  <PackageDialog studentId={id} studentName={student.name} mode={Number(activePkg.remainingLessons) <= 4 ? "renovar" : "novo"} />
                 </div>
                 <p className="text-xs text-muted-foreground">
                   Comprado em {format(activePkg.purchaseDate, "dd 'de' MMMM", { locale: ptBR })}
-                  {" · "}{activePkg.totalLessons} aulas
+                  {" · "}{fmtLessons(Number(activePkg.totalLessons))} aulas
                   {activePkg.expiresAt
                     ? ` · vence ${format(activePkg.expiresAt, "dd/MM/yyyy", { locale: ptBR })}`
                     : " · sem validade"}
@@ -517,32 +521,55 @@ export default async function StudentDetailPage({ params, searchParams }: Props)
               </CardHeader>
               <CardContent>
                 {/* Bubbles */}
-                <div className="flex flex-wrap gap-2">
-                  {Array.from({ length: activePkg.totalLessons }, (_, i) => {
-                    const lessonNum = i + 1
-                    const used = lessonNum <= (activePkg.totalLessons - activePkg.remainingLessons)
-                    const isNext = lessonNum === (activePkg.totalLessons - activePkg.remainingLessons + 1)
-                    return (
-                      <div
-                        key={i}
-                        className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold transition-all
-                          ${used
-                            ? "bg-primary text-white"
-                            : isNext
-                            ? "ring-2 ring-primary text-primary bg-primary/5"
-                            : "border border-border text-muted-foreground bg-muted/20"}`}
-                      >
-                        {String(lessonNum).padStart(2, "0")}
-                      </div>
-                    )
-                  })}
-                </div>
+                {(() => {
+                  const total      = Number(activePkg.totalLessons)
+                  const remaining  = Number(activePkg.remainingLessons)
+                  const usedUnits  = total - remaining
+                  const fullBubbles = Math.floor(total)
+                  const hasHalf    = total % 1 >= 0.5
+                  const nextBubble = Math.floor(usedUnits) + 1
+                  return (
+                    <div className="flex flex-wrap gap-2">
+                      {Array.from({ length: fullBubbles }, (_, i) => {
+                        const lessonNum = i + 1
+                        const used   = lessonNum <= Math.floor(usedUnits)
+                        const isNext = !used && lessonNum === nextBubble
+                        return (
+                          <div
+                            key={i}
+                            className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold transition-all
+                              ${used
+                                ? "bg-primary text-white"
+                                : isNext
+                                ? "ring-2 ring-primary text-primary bg-primary/5"
+                                : "border border-border text-muted-foreground bg-muted/20"}`}
+                          >
+                            {String(lessonNum).padStart(2, "0")}
+                          </div>
+                        )
+                      })}
+                      {hasHalf && (
+                        <div
+                          className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold transition-all
+                            ${usedUnits >= fullBubbles + 0.5
+                              ? "bg-primary text-white"
+                              : usedUnits >= fullBubbles
+                              ? "ring-2 ring-primary text-primary bg-primary/5"
+                              : "border border-border text-muted-foreground bg-muted/20"}`}
+                          title="Meia aula"
+                        >
+                          ½
+                        </div>
+                      )}
+                    </div>
+                  )
+                })()}
 
                 {/* Stats row */}
                 <div className="flex flex-wrap gap-x-6 gap-y-1 mt-3 pt-3 border-t border-border/50 text-xs text-muted-foreground">
-                  <span>Usadas <strong className="text-foreground">{activePkg.totalLessons - activePkg.remainingLessons}</strong></span>
-                  <span>Restantes <strong className={activePkg.remainingLessons <= 2 ? "text-red-600" : "text-foreground"}>{activePkg.remainingLessons}</strong></span>
-                  {activePkg.remainingLessons > 0 && totalDone > 0 && (
+                  <span>Usadas <strong className="text-foreground">{fmtLessons(Number(activePkg.totalLessons) - Number(activePkg.remainingLessons))}</strong></span>
+                  <span>Restantes <strong className={Number(activePkg.remainingLessons) <= 2 ? "text-red-600" : "text-foreground"}>{fmtLessons(Number(activePkg.remainingLessons))}</strong></span>
+                  {Number(activePkg.remainingLessons) > 0 && totalDone > 0 && (
                     <span>
                       Ritmo <strong className="text-foreground">~{(totalDone / monthsActive).toFixed(1)}/mês</strong>
                     </span>
@@ -567,8 +594,8 @@ export default async function StudentDetailPage({ params, searchParams }: Props)
               <CardContent className="space-y-2">
                 {[...student.packages].reverse().map((pkg, revIdx) => {
                   const pkgNum  = student.packages.length - revIdx
-                  const total   = Number(pkg.pricePerLesson) * pkg.totalLessons
-                  const used    = pkg.totalLessons - pkg.remainingLessons
+                  const total   = Number(pkg.pricePerLesson) * Number(pkg.totalLessons)
+                  const used    = Number(pkg.totalLessons) - Number(pkg.remainingLessons)
                   const STATUS  = {
                     ACTIVE:    { label: "Ativo",    cls: "bg-green-100 text-green-700 border-green-200" },
                     EXPIRED:   { label: "Expirado", cls: "bg-yellow-100 text-yellow-700 border-yellow-200" },
@@ -590,7 +617,7 @@ export default async function StudentDetailPage({ params, searchParams }: Props)
                           </span>
                         </div>
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          {pkg.totalLessons} aulas · {used} usadas · {brl(Number(pkg.pricePerLesson))}/aula · total {brl(total)}
+                          {fmtLessons(Number(pkg.totalLessons))} aulas · {fmtLessons(used)} usadas · {brl(Number(pkg.pricePerLesson))}/aula · total {brl(total)}
                           {pkg.expiresAt && ` · vence ${format(pkg.expiresAt, "dd/MM/yyyy", { locale: ptBR })}`}
                         </p>
                       </div>
@@ -598,16 +625,16 @@ export default async function StudentDetailPage({ params, searchParams }: Props)
                         studentId={id}
                         packageId={pkg.id}
                         studentName={student.name}
-                        totalLessons={pkg.totalLessons}
+                        totalLessons={Number(pkg.totalLessons)}
                         teachers={teachersForDialog}
                       />
                       <EditPackageDialog
                         studentId={id}
                         pkg={{
                           id:               pkg.id,
-                          totalLessons:     pkg.totalLessons,
+                          totalLessons:     Number(pkg.totalLessons),
                           pricePerLesson:   Number(pkg.pricePerLesson),
-                          remainingLessons: pkg.remainingLessons,
+                          remainingLessons: Number(pkg.remainingLessons),
                           status:           pkg.status as "ACTIVE" | "EXHAUSTED" | "EXPIRED",
                           purchaseDate:     format(pkg.purchaseDate, "yyyy-MM-dd"),
                           expiresAt:        pkg.expiresAt ? format(pkg.expiresAt, "yyyy-MM-dd") : null,
@@ -750,7 +777,7 @@ export default async function StudentDetailPage({ params, searchParams }: Props)
                   <p className="text-xs text-muted-foreground mt-0.5">
                     {brl(totalInvested)} totais
                     {activePkg && (
-                      <> · próx. {brl(Number(activePkg.pricePerLesson) * activePkg.remainingLessons)}</>
+                      <> · próx. {brl(Number(activePkg.pricePerLesson) * Number(activePkg.remainingLessons))}</>
                     )}
                   </p>
                 </div>

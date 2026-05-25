@@ -150,7 +150,7 @@ export default async function ColaboradorFinanceiroPage({ searchParams }: Financ
           <CardContent>
             <div className="space-y-2">
               {packages.map((pkg) => {
-                const pct = Math.round((pkg.remainingLessons / pkg.totalLessons) * 100)
+                const pct = Math.round((Number(pkg.remainingLessons) / Number(pkg.totalLessons)) * 100)
                 return (
                   <div key={pkg.id} className="flex items-center gap-4 p-3 rounded-lg border border-border">
                     <div className="flex-1 min-w-0">
@@ -172,12 +172,12 @@ export default async function ColaboradorFinanceiroPage({ searchParams }: Financ
                     </div>
                     <div className="text-right shrink-0">
                       <p className={`text-lg font-bold ${
-                        pkg.remainingLessons <= 1 ? "text-destructive" :
-                        pkg.remainingLessons <= 2 ? "text-orange-600" : "text-foreground"
+                        Number(pkg.remainingLessons) <= 1 ? "text-destructive" :
+                        Number(pkg.remainingLessons) <= 2 ? "text-orange-600" : "text-foreground"
                       }`}>
-                        {pkg.remainingLessons}
+                        {Number(pkg.remainingLessons)}
                       </p>
-                      <p className="text-xs text-muted-foreground">de {pkg.totalLessons}</p>
+                      <p className="text-xs text-muted-foreground">de {Number(pkg.totalLessons)}</p>
                     </div>
                   </div>
                 )

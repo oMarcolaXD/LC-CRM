@@ -24,7 +24,7 @@ export default async function AgendarPage({ searchParams }: AgendarPageProps) {
     include: { packages: { where: { status: "ACTIVE", remainingLessons: { gt: 0 } } } },
   })
 
-  const saldo = student?.packages.reduce((s, p) => s + p.remainingLessons, 0) ?? 0
+  const saldo = student?.packages.reduce((s, p) => s + Number(p.remainingLessons), 0) ?? 0
 
   if (saldo === 0) {
     return (

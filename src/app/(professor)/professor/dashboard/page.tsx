@@ -239,7 +239,7 @@ async function getProfData(email: string) {
       s.modo      = l.modality === "PRESENCIAL" ? "sede" : "online"
     }
     const pkg = p.student.packages?.[0]
-    if (pkg && pkg.remainingLessons <= 2 && s.tag === "Em dia") {
+    if (pkg && Number(pkg.remainingLessons) <= 2 && s.tag === "Em dia") {
       s.tag = "Renovar"; s.tagColor = "warn"
     }
   }

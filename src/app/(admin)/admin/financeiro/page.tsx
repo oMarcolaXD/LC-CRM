@@ -133,7 +133,7 @@ export default async function FinanceiroPage() {
                   <div key={r.id} className="flex items-center justify-between py-2 border-b border-border last:border-0">
                     <div>
                       <p className="text-sm font-medium">{r.teacher.user.name}</p>
-                      <p className="text-xs text-muted-foreground">{r.totalLessons} aulas</p>
+                      <p className="text-xs text-muted-foreground">{Number(r.totalLessons) % 1 === 0 ? Number(r.totalLessons) : Number(r.totalLessons).toFixed(1).replace(".", ",")} aulas</p>
                     </div>
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-semibold">{brl(Number(r.totalAmount))}</p>

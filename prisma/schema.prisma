@@ -238,8 +238,8 @@ model LessonPackage {
   id               String        @id @default(cuid())
   studentId        String
   student          Student       @relation(fields: [studentId], references: [id])
-  totalLessons     Int
-  remainingLessons Int
+  totalLessons     Decimal       @db.Decimal(5, 1)
+  remainingLessons Decimal       @db.Decimal(5, 1)
   pricePerLesson   Decimal       @db.Decimal(10, 2)
   purchaseDate     DateTime      @default(now())
   expiresAt        DateTime?
@@ -394,7 +394,7 @@ model TeacherPayout {
   teacher      Teacher      @relation(fields: [teacherId], references: [id])
   month        Int
   year         Int
-  totalLessons Int
+  totalLessons Decimal      @db.Decimal(5, 1)
   totalAmount  Decimal      @db.Decimal(10, 2)
   paidAt       DateTime?
   status       PayoutStatus @default(PENDING)

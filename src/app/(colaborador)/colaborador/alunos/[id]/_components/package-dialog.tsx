@@ -81,11 +81,11 @@ export function PackageDialog({ studentId, studentName, mode }: Props) {
   }
 
   function submit() {
-    const total   = parseInt(totalLessons, 10)
+    const total   = parseFloat(totalLessons)
     const price   = parseFloat(pricePerLesson)
     const expires = expiresInDays ? parseInt(expiresInDays, 10) : undefined
 
-    if (!total || total < 1) { toast.error("Número de aulas inválido"); return }
+    if (!total || total < 0.5 || !Number.isInteger(total * 2)) { toast.error("Número de aulas inválido (use múltiplos de 0,5)"); return }
     if (!price || price < 0) { toast.error("Valor por aula inválido");  return }
 
     if (createPayment) {
@@ -150,7 +150,8 @@ export function PackageDialog({ studentId, studentName, mode }: Props) {
               <Label className="text-xs">Quantidade de aulas *</Label>
               <Input
                 type="number"
-                min={1}
+                min={0.5}
+                step={0.5}
                 value={totalLessons}
                 onChange={e => setTotal(e.target.value)}
                 placeholder="10"

@@ -50,7 +50,7 @@ function mapToLessonSlot(
         name: string
         user: { name: string } | null
         guardian: { user: { name: string } } | null
-        packages: { remainingLessons: number }[]
+        packages: { remainingLessons: number | { toNumber(): number } }[]
       }
     }[]
     subject: { name: string } | null
@@ -67,7 +67,7 @@ function mapToLessonSlot(
   const packageStatus: LessonSlot["packageStatus"] =
     isSpecial                  ? "pago"     :
     !pkg                       ? "pendente" :
-    pkg.remainingLessons > 0   ? "pago"     : "atrasado"
+    Number(pkg.remainingLessons) > 0   ? "pago"     : "atrasado"
   return {
     id:            l.id,
     teacherId:     l.teacherId,
@@ -262,7 +262,7 @@ export default async function ColaboradorAgendaPage({ searchParams }: AgendaPage
       const guardianFirst = guardianName.split(" ")[0]
       const teacherFirst  = lesson.teacher.user.name.split(" ")[0]
       const pkg      = student.packages[0]
-      const isOverdue = !pkg || pkg.remainingLessons <= 0
+      const isOverdue = !pkg || Number(pkg.remainingLessons) <= 0
       const phone    = guardian?.user.phone ?? student.user?.phone ?? null
       const email    = guardian?.user.email ?? student.user?.email ?? null
 
@@ -362,7 +362,7 @@ export default async function ColaboradorAgendaPage({ searchParams }: AgendaPage
   const students: StudentOption[] = studentsRaw.map(s => ({
     id:               s.id,
     name:             s.name,
-    remainingLessons: s.packages[0]?.remainingLessons ?? 0,
+    remainingLessons: Number(s.packages[0]?.remainingLessons ?? 0),
   }))
 
   const allStudents = allStudentsRaw.map(s => ({ id: s.id, name: s.name }))

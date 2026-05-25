@@ -25,6 +25,7 @@ interface LessonRow {
   teacherId: string
   subjectId: string
   status:    LessonStatus
+  duration:  number
 }
 
 interface Props {
@@ -51,9 +52,9 @@ const WEEKDAYS = [
   { label: "Dom", value: 0 },
 ]
 
-function emptyRow(teachers: Teacher[]): LessonRow {
+function emptyRow(teachers: Teacher[], duration = 60): LessonRow {
   const t = teachers[0]
-  return { date: "", time: "08:00", teacherId: t?.id ?? "", subjectId: t?.subjects[0]?.id ?? "", status: "COMPLETED" }
+  return { date: "", time: "08:00", teacherId: t?.id ?? "", subjectId: t?.subjects[0]?.id ?? "", status: "COMPLETED", duration }
 }
 
 // Returns the N most recent past dates (incl. today) for the given weekdays, oldest first
@@ -79,7 +80,6 @@ export function BatchPastLessonsDialog({
   const [pending, start]     = useTransition()
 
   const [modality,     setModality]     = useState<"PRESENCIAL" | "ONLINE">("PRESENCIAL")
-  const [duration,     setDuration]     = useState("60")
   const [lessons,      setLessons]      = useState<LessonRow[]>([])
   const [quickDays,    setQuickDays]    = useState<number[]>([])
   const [defaultTime,  setDefaultTime]  = useState("08:00")
@@ -87,10 +87,13 @@ export function BatchPastLessonsDialog({
   function handleOpen(v: boolean) {
     if (v) {
       setModality("PRESENCIAL")
-      setDuration("60")
       setQuickDays([])
       setDefaultTime("08:00")
-      setLessons(Array.from({ length: totalLessons }, () => emptyRow(teachers)))
+      const fullCount = Math.floor(totalLessons)
+      const hasHalf   = totalLessons % 1 >= 0.5
+      const rows = Array.from({ length: fullCount }, () => emptyRow(teachers, 60))
+      if (hasHalf) rows.push(emptyRow(teachers, 30))
+      setLessons(rows)
     }
     setOpen(v)
   }
@@ -98,7 +101,7 @@ export function BatchPastLessonsDialog({
   function updateRow(i: number, field: keyof LessonRow, value: string) {
     setLessons(prev => prev.map((r, idx) => {
       if (idx !== i) return r
-      const updated = { ...r, [field]: value }
+      const updated: LessonRow = { ...r, [field]: field === "duration" ? parseInt(value) : value }
       if (field === "teacherId") {
         const t = teachers.find(x => x.id === value)
         updated.subjectId = t?.subjects[0]?.id ?? ""
@@ -107,7 +110,7 @@ export function BatchPastLessonsDialog({
     }))
   }
 
-  function addRow() { setLessons(prev => [...prev, emptyRow(teachers)]) }
+  function addRow() { setLessons(prev => [...prev, emptyRow(teachers, 60)]) }
   function removeRow(i: number) { setLessons(prev => prev.filter((_, idx) => idx !== i)) }
 
   function toggleQuickDay(day: number) {
@@ -136,7 +139,7 @@ export function BatchPastLessonsDialog({
 
     start(async () => {
       try {
-        await createBatchPastLessonsAction({ studentId, packageId, modality, duration: parseInt(duration) || 60, lessons: toRegister })
+        await createBatchPastLessonsAction({ studentId, packageId, modality, lessons: toRegister })
         const n = toRegister.length
         toast.success(`${n} aula${n !== 1 ? "s" : ""} registrada${n !== 1 ? "s" : ""}`)
         setOpen(false)
@@ -166,37 +169,27 @@ export function BatchPastLessonsDialog({
           </DialogHeader>
 
           <div className="space-y-4 py-2">
-            {/* Global: duração + modalidade */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs">Duração (min)</Label>
-                <Input
-                  type="number" min={30} max={240} step={30}
-                  value={duration} onChange={e => setDuration(e.target.value)}
-                  className="h-9"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Modalidade</Label>
-                <div className="flex gap-2">
-                  {(["PRESENCIAL", "ONLINE"] as const).map(m => (
-                    <button
-                      key={m}
-                      type="button"
-                      onClick={() => setModality(m)}
-                      className={`flex-1 flex items-center justify-center gap-1.5 h-9 rounded-lg border text-xs font-medium transition-colors ${
-                        modality === m
-                          ? "bg-primary text-white border-primary"
-                          : "bg-muted text-muted-foreground border-border"
-                      }`}
-                    >
-                      {m === "PRESENCIAL"
-                        ? <><School className="w-3.5 h-3.5" /> Presencial</>
-                        : <><MonitorPlay className="w-3.5 h-3.5" /> Online</>
-                      }
-                    </button>
-                  ))}
-                </div>
+            {/* Global: modalidade */}
+            <div className="space-y-1.5">
+              <Label className="text-xs">Modalidade</Label>
+              <div className="flex gap-2">
+                {(["PRESENCIAL", "ONLINE"] as const).map(m => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setModality(m)}
+                    className={`flex-1 flex items-center justify-center gap-1.5 h-9 rounded-lg border text-xs font-medium transition-colors ${
+                      modality === m
+                        ? "bg-primary text-white border-primary"
+                        : "bg-muted text-muted-foreground border-border"
+                    }`}
+                  >
+                    {m === "PRESENCIAL"
+                      ? <><School className="w-3.5 h-3.5" /> Presencial</>
+                      : <><MonitorPlay className="w-3.5 h-3.5" /> Online</>
+                    }
+                  </button>
+                ))}
               </div>
             </div>
 
@@ -260,7 +253,7 @@ export function BatchPastLessonsDialog({
                   const rowSubjects = rowTeacher?.subjects ?? []
                   return (
                     <div key={i} className="rounded-xl border bg-card p-2.5 space-y-2">
-                      {/* Linha 1: número, data, horário, status, excluir */}
+                      {/* Linha 1: número, data, horário, duração, status, excluir */}
                       <div className="flex items-center gap-1.5">
                         <span className="text-xs text-muted-foreground w-5 shrink-0 text-right">
                           {String(i + 1).padStart(2, "0")}
@@ -279,6 +272,18 @@ export function BatchPastLessonsDialog({
                         >
                           {TIME_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
                         </select>
+                        <button
+                          type="button"
+                          onClick={() => updateRow(i, "duration", row.duration === 60 ? "30" : "60")}
+                          title={row.duration === 60 ? "Aula inteira (60 min) — clique para meia aula" : "Meia aula (30 min) — clique para aula inteira"}
+                          className={`h-8 px-2 rounded-lg border text-xs font-bold shrink-0 transition-colors ${
+                            row.duration === 30
+                              ? "bg-amber-100 text-amber-700 border-amber-300"
+                              : "bg-muted text-muted-foreground border-border"
+                          }`}
+                        >
+                          {row.duration === 30 ? "½" : "1"}
+                        </button>
                         <button
                           type="button"
                           onClick={() => updateRow(i, "status", row.status === "COMPLETED" ? "MISSED" : "COMPLETED")}

@@ -55,14 +55,14 @@ export function EditPackageDialog({ pkg, studentId }: Props) {
   }
 
   function submitEdit() {
-    const total     = parseInt(totalLessons, 10)
+    const total     = parseFloat(totalLessons)
     const price     = parseFloat(pricePerLesson)
-    const remaining = parseInt(remainingLessons, 10)
+    const remaining = parseFloat(remainingLessons)
 
-    if (!total || total < 1)                { toast.error("Qtd. de aulas inválida"); return }
-    if (isNaN(price) || price < 0)          { toast.error("Valor inválido"); return }
-    if (isNaN(remaining) || remaining < 0)  { toast.error("Aulas restantes inválido"); return }
-    if (remaining > total)                  { toast.error("Restantes não pode ser maior que o total"); return }
+    if (!total || total < 0.5 || !Number.isInteger(total * 2)) { toast.error("Qtd. de aulas inválida (use múltiplos de 0,5)"); return }
+    if (isNaN(price) || price < 0)                             { toast.error("Valor inválido"); return }
+    if (isNaN(remaining) || remaining < 0)                     { toast.error("Aulas restantes inválido"); return }
+    if (remaining > total)                                     { toast.error("Restantes não pode ser maior que o total"); return }
 
     start(async () => {
       try {
@@ -123,7 +123,7 @@ export function EditPackageDialog({ pkg, studentId }: Props) {
               <div className="space-y-1.5">
                 <Label className="text-xs">Total de aulas</Label>
                 <Input
-                  type="number" min={1}
+                  type="number" min={0.5} step={0.5}
                   value={totalLessons}
                   onChange={e => setTotal(e.target.value)}
                   className="h-9"
@@ -132,7 +132,7 @@ export function EditPackageDialog({ pkg, studentId }: Props) {
               <div className="space-y-1.5">
                 <Label className="text-xs">Aulas restantes</Label>
                 <Input
-                  type="number" min={0}
+                  type="number" min={0} step={0.5}
                   value={remainingLessons}
                   onChange={e => setRemaining(e.target.value)}
                   className="h-9"

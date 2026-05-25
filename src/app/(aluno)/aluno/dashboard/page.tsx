@@ -156,10 +156,10 @@ export default async function AlunoDashboard() {
   // Active package for the selected child
   const heroLesson    = studentNextLesson[activeStudent.id]
   const activePackage = packages.find((p) => p.studentId === activeStudent.id)
-  const usedLessons   = activePackage ? activePackage.totalLessons - activePackage.remainingLessons : 0
-  const displaySlots  = activePackage ? Math.min(activePackage.totalLessons, 12) : 12
-  const filledSlots   = activePackage && activePackage.totalLessons > 0
-    ? Math.round((usedLessons / activePackage.totalLessons) * displaySlots)
+  const usedLessons   = activePackage ? Number(activePackage.totalLessons) - Number(activePackage.remainingLessons) : 0
+  const displaySlots  = activePackage ? Math.min(Number(activePackage.totalLessons), 12) : 12
+  const filledSlots   = activePackage && Number(activePackage.totalLessons) > 0
+    ? Math.round((usedLessons / Number(activePackage.totalLessons)) * displaySlots)
     : 0
 
   let paceStr: string | null = null
@@ -167,7 +167,7 @@ export default async function AlunoDashboard() {
     const weeksSince = (now.getTime() - new Date(activePackage.purchaseDate).getTime()) / (7 * 24 * 60 * 60 * 1000)
     if (weeksSince >= 0.5) {
       const pace = usedLessons / weeksSince
-      if (pace > 0) paceStr = `~${Math.round((activePackage.remainingLessons / pace) * 7)} dias`
+      if (pace > 0) paceStr = `~${Math.round((Number(activePackage.remainingLessons) / pace) * 7)} dias`
     }
   }
 
@@ -287,10 +287,10 @@ export default async function AlunoDashboard() {
             <>
               <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 14 }}>
                 <span style={{ fontSize: 36, fontWeight: 600, letterSpacing: "-0.025em", fontFamily: "ui-monospace, monospace", color: "var(--primary)" }}>
-                  {activePackage.remainingLessons}
+                  {Number(activePackage.remainingLessons)}
                 </span>
                 <span style={{ fontSize: 14, color: "var(--subtle)" }}>
-                  aulas restantes <span style={{ color: "var(--subtle)" }}>· de {activePackage.totalLessons}</span>
+                  aulas restantes <span style={{ color: "var(--subtle)" }}>· de {Number(activePackage.totalLessons)}</span>
                 </span>
               </div>
 
@@ -303,7 +303,7 @@ export default async function AlunoDashboard() {
               <div style={{ fontSize: 12, color: "var(--subtle)", lineHeight: 1.5, marginBottom: 14 }}>
                 {paceStr
                   ? <>Estimativa: pacote acaba em <b style={{ color: "var(--text)", fontFamily: "ui-monospace, monospace" }}>{paceStr}</b>.</>
-                  : <>{activePackage.remainingLessons} aulas restantes no pacote atual.</>
+                  : <>{Number(activePackage.remainingLessons)} aulas restantes no pacote atual.</>
                 }
               </div>
 
@@ -349,11 +349,11 @@ export default async function AlunoDashboard() {
                 <div>
                   <div style={{ fontSize: 12, color: "var(--text-2)" }}>Pacote</div>
                   <div style={{ fontSize: 10.5, color: "var(--subtle)" }}>
-                    {otherPackage ? `${otherPackage.remainingLessons} restantes` : "sem pacote ativo"}
+                    {otherPackage ? `${Number(otherPackage.remainingLessons)} restantes` : "sem pacote ativo"}
                   </div>
                 </div>
                 <div style={{ fontSize: 14, fontWeight: 600, fontFamily: "ui-monospace, monospace" }}>
-                  {otherPackage ? `${otherPackage.totalLessons - otherPackage.remainingLessons} / ${otherPackage.totalLessons}` : "—"}
+                  {otherPackage ? `${Number(otherPackage.totalLessons) - Number(otherPackage.remainingLessons)} / ${Number(otherPackage.totalLessons)}` : "—"}
                 </div>
               </div>
 

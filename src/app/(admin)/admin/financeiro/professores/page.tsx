@@ -8,6 +8,7 @@ import { PayoutActions }       from "./payout-actions"
 import { Wallet, Plus, AlertCircle } from "lucide-react"
 
 function brl(v: number) { return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) }
+function fmtLessons(n: number) { return n % 1 === 0 ? String(n) : n.toFixed(1).replace(".", ",") }
 
 const MONTHS = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"]
 
@@ -101,7 +102,7 @@ export default async function RepasesPage({ searchParams }: ProfessoresPageProps
                     <div>
                       <p className="font-medium text-sm">{r.teacher.user.name}</p>
                       <p className="text-xs text-muted-foreground">
-                        {MONTHS[r.month - 1]}/{r.year} · {r.totalLessons} aulas
+                        {MONTHS[r.month - 1]}/{r.year} · {fmtLessons(Number(r.totalLessons))} aulas
                       </p>
                       {r.paidAt && (
                         <p className="text-xs text-green-600 mt-0.5">

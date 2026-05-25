@@ -113,7 +113,7 @@ export default async function AdminAgendaPage({ searchParams }: AgendaPageProps)
   const students: StudentOption[] = studentsRaw.map(s => ({
     id:               s.id,
     name:             s.user?.name ?? "Aluno",
-    remainingLessons: s.packages[0]?.remainingLessons ?? 0,
+    remainingLessons: Number(s.packages[0]?.remainingLessons ?? 0),
   }))
 
   const weekday = format(dateObj, "EEEE", { locale: ptBR })

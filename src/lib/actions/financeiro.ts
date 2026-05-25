@@ -14,7 +14,10 @@ async function requireAdmin() {
 // ─── Criar Pacote para Aluno ──────────────────────────────────────────────────
 const packageSchema = z.object({
   studentId:       z.string().min(1),
-  totalLessons:    z.coerce.number().int().min(1),
+  totalLessons:    z.coerce.number().min(0.5).refine(
+    v => Number.isInteger(v * 2),
+    { message: "Quantidade de aulas deve ser múltiplo de 0,5 (ex: 1, 1,5, 8, 10)" }
+  ),
   pricePerLesson:  z.coerce.number().min(0),
   expiresInDays:   z.coerce.number().int().min(1).optional(),
 })
@@ -92,7 +95,7 @@ export async function createStudentPackageAction(data: {
           paidAt:      paidAtDate ?? undefined,
           method:      method || undefined,
           status:      paidAtDate ? "PAID" : "PENDING",
-          description: `Pacote de ${data.totalLessons} aulas`,
+          description: `Pacote de ${Number(data.totalLessons) % 1 === 0 ? data.totalLessons : Number(data.totalLessons).toFixed(1).replace(".", ",")} aulas`,
         },
       })
     }
@@ -158,13 +161,14 @@ export async function generatePayoutAction(teacherId: string, month: number, yea
     redirect(`/admin/financeiro/professores?error=Nenhuma+aula+realizada+neste+período`)
   }
 
-  const rate  = Number(lessons[0].teacher.hourlyRate)
-  const total = lessons.length * rate
+  const rate       = Number(lessons[0].teacher.hourlyRate)
+  const totalUnits = lessons.reduce((sum, l) => sum + l.duration / 60, 0)
+  const total      = totalUnits * rate
 
   await prisma.teacherPayout.upsert({
     where:  { teacherId_month_year: { teacherId, month, year } },
-    update: { totalLessons: lessons.length, totalAmount: total },
-    create: { teacherId, month, year, totalLessons: lessons.length, totalAmount: total, status: "PENDING" },
+    update: { totalLessons: totalUnits, totalAmount: total },
+    create: { teacherId, month, year, totalLessons: totalUnits, totalAmount: total, status: "PENDING" },
   })
 
   revalidatePath("/admin/financeiro/professores")

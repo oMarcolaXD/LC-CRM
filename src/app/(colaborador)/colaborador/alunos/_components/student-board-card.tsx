@@ -38,7 +38,7 @@ function initials(name: string) {
 function getStatusInfo(pkg: StudentRow["packages"][number] | null) {
   if (!pkg) return { label: "Sem pacote", cls: "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400" }
 
-  const remaining = pkg.remainingLessons
+  const remaining = Number(pkg.remainingLessons)
   const now = new Date()
   const expiresAt = pkg.expiresAt ? new Date(pkg.expiresAt) : null
   const isExpired = expiresAt && expiresAt < now
@@ -87,7 +87,7 @@ interface StudentBoardCardProps {
 export function StudentBoardCard({ student, column, detailBasePath }: StudentBoardCardProps) {
   const displayName  = student.name?.trim() || student.user?.name?.trim() || "Aluno"
   const pkg          = student.packages[0] ?? null
-  const remaining    = pkg?.remainingLessons ?? 0
+  const remaining    = Number(pkg?.remainingLessons ?? 0)
   const nextLesson   = student.participations[0]?.lesson ?? null
   const guardianUser = student.guardian?.user ?? null
   const guardianPhone = guardianUser?.phone?.replace(/\D/g, "") ?? null
@@ -99,8 +99,8 @@ export function StudentBoardCard({ student, column, detailBasePath }: StudentBoa
   const hasNoPackage  = student._count.packages === 0
   const hasNoHistory  = student._count.participations === 0
 
-  const remainingPct = pkg && pkg.totalLessons > 0
-    ? Math.round((pkg.remainingLessons / pkg.totalLessons) * 100)
+  const remainingPct = pkg && Number(pkg.totalLessons) > 0
+    ? Math.round((Number(pkg.remainingLessons) / Number(pkg.totalLessons)) * 100)
     : 0
 
   const barColor = remaining === 0 ? "bg-red-400"
@@ -159,7 +159,7 @@ export function StudentBoardCard({ student, column, detailBasePath }: StudentBoa
         <div>
           <div className="flex items-center justify-between text-xs text-muted-foreground mb-1.5">
             <span className="font-medium tabular-nums">
-              {remaining} / {pkg.totalLessons}
+              {remaining} / {Number(pkg.totalLessons)}
             </span>
           </div>
           <div className="h-1.5 w-full rounded-full bg-muted">

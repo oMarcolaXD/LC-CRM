@@ -82,7 +82,7 @@ async function getMeusAlunos(email: string): Promise<AlunoProf[] | null> {
         let packageStatus: AlunoProf["packageStatus"] = "sem-pacote"
         if (pkg) {
           if (pkg.status === "EXHAUSTED")    packageStatus = "esgotado"
-          else if (pkg.remainingLessons <= 2) packageStatus = "renovar"
+          else if (Number(pkg.remainingLessons) <= 2) packageStatus = "renovar"
           else                               packageStatus = "ok"
         }
 
@@ -95,7 +95,7 @@ async function getMeusAlunos(email: string): Promise<AlunoProf[] | null> {
           lastDate:        lesson.scheduledAt,
           lastContent:     lesson.topicsCovered ?? lesson.subject?.name ?? "–",
           modo:            lesson.modality === "PRESENCIAL" ? "sede" : "online",
-          remainingLessons: pkg?.remainingLessons ?? null,
+          remainingLessons: pkg ? Number(pkg.remainingLessons) : null,
           packageStatus,
           pendingHomework: 0,
           lastLessonId:    null,

@@ -9,7 +9,11 @@ import { startOfDay, endOfDay, addWeeks, addMonths, parseISO, isAfter } from "da
 import { format }              from "date-fns"
 import { ptBR }                from "date-fns/locale"
 
-// ─── Helpers de autorização ───────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function lessonCost(durationMinutes: number): number {
+  return durationMinutes / 60
+}
 
 async function requireCollaboratorOrAdmin() {
   const session = await auth()
@@ -45,6 +49,11 @@ export async function approveRequestAction(
 
   const pkg = request.student.packages[0]
   if (!pkg) throw new Error("Aluno sem saldo de aulas")
+
+  const pkgRemaining = Number(pkg.remainingLessons)
+  if (pkgRemaining < 1) {
+    throw new Error(`Saldo insuficiente para uma aula completa. O aluno tem ${pkgRemaining.toFixed(1).replace(".", ",")} aulas restantes.`)
+  }
 
   // Modalidade final: override do colaborador > modality do request > PRESENCIAL
   const finalModality = modalityOverride ?? request.modality ?? "PRESENCIAL"
@@ -129,7 +138,7 @@ export async function approveRequestAction(
     }),
     prisma.lessonPackage.update({
       where: { id: pkg.id },
-      data:  { remainingLessons: { decrement: 1 }, status: pkg.remainingLessons <= 1 ? "EXHAUSTED" : "ACTIVE" },
+      data:  { remainingLessons: { decrement: 1 }, status: pkgRemaining <= 1 ? "EXHAUSTED" : "ACTIVE" },
     }),
     prisma.lessonRequest.update({
       where: { id: requestId },
@@ -155,7 +164,7 @@ export async function approveRequestAction(
         modality:      finalModality === "PRESENCIAL" ? "Presencial" : "Online",
       })
 
-      const remaining = pkg.remainingLessons - 1
+      const remaining = pkgRemaining - 1
       if (remaining <= 2 && remaining > 0) {
         await notifyLowBalance({
           studentUserId: recipientId,
@@ -271,11 +280,12 @@ export async function updateLessonStatusAction(
         })
       : null
     if (activePkg) {
+      const refundCost = lessonCost(lesson.duration)
       await prisma.$transaction([
         prisma.lesson.update({ where: { id: lessonId }, data: { status, topicsCovered, teacherNotes } }),
         prisma.lessonPackage.update({
           where: { id: activePkg.id },
-          data:  { remainingLessons: { increment: 1 }, status: "ACTIVE" },
+          data:  { remainingLessons: { increment: refundCost }, status: "ACTIVE" },
         }),
       ])
     } else {
@@ -360,6 +370,12 @@ export async function createLessonDirectAction(data: {
 
   const pkg = student.packages[0]
   if (!pkg) throw new Error("Aluno sem saldo de aulas disponível")
+
+  const cost         = lessonCost(duration)
+  const pkgRemaining = Number(pkg.remainingLessons)
+  if (pkgRemaining < cost) {
+    throw new Error(`Saldo insuficiente. O aluno tem ${pkgRemaining.toFixed(1).replace(".", ",")} aulas restantes e esta aula custa ${cost.toFixed(1).replace(".", ",")} aula.`)
+  }
 
   const dayStart = startOfDay(scheduledAt)
   const dayEnd   = endOfDay(scheduledAt)
@@ -449,8 +465,8 @@ export async function createLessonDirectAction(data: {
     prisma.lessonPackage.update({
       where: { id: pkg.id },
       data:  {
-        remainingLessons: { decrement: 1 },
-        status: pkg.remainingLessons <= 1 ? "EXHAUSTED" : "ACTIVE",
+        remainingLessons: { decrement: cost },
+        status: pkgRemaining <= cost ? "EXHAUSTED" : "ACTIVE",
       },
     }),
   ])
@@ -467,7 +483,7 @@ export async function createLessonDirectAction(data: {
       modality:      data.modality === "PRESENCIAL" ? "Presencial" : "Online",
     })
 
-    const remaining = pkg.remainingLessons - 1
+    const remaining = pkgRemaining - cost
     if (remaining <= 2 && remaining > 0) {
       await notifyLowBalance({
         studentUserId: student.userId ?? "",
@@ -650,17 +666,21 @@ export async function createBatchPastLessonsAction(data: {
   studentId: string
   packageId: string
   modality:  "PRESENCIAL" | "ONLINE"
-  duration?: number
-  lessons:   { date: string; time: string; status: "COMPLETED" | "MISSED"; teacherId: string; subjectId: string }[]
+  lessons:   { date: string; time: string; status: "COMPLETED" | "MISSED"; teacherId: string; subjectId: string; duration: number }[]
 }) {
   await requireCollaboratorOrAdmin()
   if (!data.lessons.length) return
 
-  const duration = data.duration ?? 60
-  const count    = data.lessons.length
+  const pkg = await prisma.lessonPackage.findUnique({ where: { id: data.packageId } })
+  if (!pkg) throw new Error("Pacote não encontrado")
+
+  const totalCost    = data.lessons.reduce((sum, l) => sum + lessonCost(l.duration), 0)
+  const pkgRemaining = Number(pkg.remainingLessons)
+  const newRemaining = Math.max(0, pkgRemaining - totalCost)
+  const newStatus    = newRemaining <= 0 ? "EXHAUSTED" : "ACTIVE"
 
   await prisma.$transaction([
-    ...data.lessons.map(({ date, time, status, teacherId, subjectId }) => {
+    ...data.lessons.map(({ date, time, status, teacherId, subjectId, duration }) => {
       const scheduledAt = new Date(`${date}T${time}:00`)
       return prisma.lesson.create({
         data: {
@@ -677,20 +697,9 @@ export async function createBatchPastLessonsAction(data: {
     }),
     prisma.lessonPackage.update({
       where: { id: data.packageId },
-      data: {
-        remainingLessons: { decrement: count },
-      },
+      data:  { remainingLessons: newRemaining, status: newStatus },
     }),
   ])
-
-  // Recalculate status after decrement
-  const pkg = await prisma.lessonPackage.findUnique({ where: { id: data.packageId } })
-  if (pkg && pkg.remainingLessons <= 0) {
-    await prisma.lessonPackage.update({
-      where: { id: data.packageId },
-      data:  { remainingLessons: 0, status: "EXHAUSTED" },
-    })
-  }
 
   revalidatePath(`/colaborador/alunos/${data.studentId}`)
   revalidatePath(`/admin/usuarios/${data.studentId}`)

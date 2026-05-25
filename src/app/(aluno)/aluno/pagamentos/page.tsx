@@ -37,7 +37,7 @@ export default async function AlunoPagamentosPage() {
   const totalPago    = payments.filter((p) => p.status === "PAID").reduce((s, p) => s + Number(p.amount), 0)
   const pendente     = payments.filter((p) => p.status === "PENDING").reduce((s, p) => s + Number(p.amount), 0)
   const vencido      = payments.filter((p) => p.status === "OVERDUE").reduce((s, p) => s + Number(p.amount), 0)
-  const saldoAulas   = student?.packages.filter((p) => p.status === "ACTIVE").reduce((s, p) => s + p.remainingLessons, 0) ?? 0
+  const saldoAulas   = student?.packages.filter((p) => p.status === "ACTIVE").reduce((s, p) => s + Number(p.remainingLessons), 0) ?? 0
 
   return (
     <div className="space-y-6">
@@ -99,16 +99,16 @@ export default async function AlunoPagamentosPage() {
           </CardHeader>
           <CardContent className="space-y-3">
             {student.packages.map((pkg) => {
-              const pct = Math.round((pkg.remainingLessons / pkg.totalLessons) * 100)
+              const pct = Math.round((Number(pkg.remainingLessons) / Number(pkg.totalLessons)) * 100)
               return (
                 <div key={pkg.id} className="p-4 rounded-xl border border-border">
                   <div className="flex items-center justify-between mb-2">
                     <div>
-                      <p className="text-sm font-medium">{pkg.totalLessons} aulas</p>
+                      <p className="text-sm font-medium">{Number(pkg.totalLessons)} aulas</p>
                       <p className="text-xs text-muted-foreground">{brl(Number(pkg.pricePerLesson))}/aula</p>
                     </div>
                     <div className="text-right">
-                      <p className="text-lg font-bold text-primary">{pkg.remainingLessons}</p>
+                      <p className="text-lg font-bold text-primary">{Number(pkg.remainingLessons)}</p>
                       <p className="text-xs text-muted-foreground">restantes</p>
                     </div>
                   </div>

@@ -21,6 +21,10 @@ function brl(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
 }
 
+function fmtLessons(n: number) {
+  return n % 1 === 0 ? String(n) : n.toFixed(1).replace(".", ",")
+}
+
 interface PacotesPageProps {
   searchParams: Promise<{ error?: string; success?: string }>
 }
@@ -71,7 +75,7 @@ export default async function PacotesPage({ searchParams }: PacotesPageProps) {
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
                   <Label htmlFor="totalLessons">Nº de Aulas *</Label>
-                  <Input id="totalLessons" name="totalLessons" type="number" min="1" placeholder="8" required />
+                  <Input id="totalLessons" name="totalLessons" type="number" min="0.5" step="0.5" placeholder="8" required />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="pricePerLesson">Valor/Aula (R$) *</Label>
@@ -100,8 +104,8 @@ export default async function PacotesPage({ searchParams }: PacotesPageProps) {
             ) : (
               <div className="space-y-3">
                 {packages.map((pkg) => {
-                  const total = Number(pkg.pricePerLesson) * pkg.totalLessons
-                  const pct   = Math.round((pkg.remainingLessons / pkg.totalLessons) * 100)
+                  const total = Number(pkg.pricePerLesson) * Number(pkg.totalLessons)
+                  const pct   = Math.round((Number(pkg.remainingLessons) / Number(pkg.totalLessons)) * 100)
                   return (
                     <div key={pkg.id} className="p-4 rounded-xl border border-border">
                       <div className="flex items-start justify-between gap-3 mb-3">
@@ -116,11 +120,11 @@ export default async function PacotesPage({ searchParams }: PacotesPageProps) {
                       </div>
                       <div className="grid grid-cols-3 gap-3 text-center text-xs">
                         <div className="bg-muted/50 rounded-lg py-2">
-                          <p className="font-bold text-base">{pkg.totalLessons}</p>
+                          <p className="font-bold text-base">{fmtLessons(Number(pkg.totalLessons))}</p>
                           <p className="text-muted-foreground">Total</p>
                         </div>
                         <div className="bg-primary/10 rounded-lg py-2">
-                          <p className="font-bold text-base text-primary">{pkg.remainingLessons}</p>
+                          <p className="font-bold text-base text-primary">{fmtLessons(Number(pkg.remainingLessons))}</p>
                           <p className="text-muted-foreground">Restantes</p>
                         </div>
                         <div className="bg-muted/50 rounded-lg py-2">

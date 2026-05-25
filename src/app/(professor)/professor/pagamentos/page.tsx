@@ -76,7 +76,7 @@ export default async function ProfessorPagamentosPage() {
                 <div key={p.id} className="flex items-center justify-between p-4 rounded-xl border border-border">
                   <div>
                     <p className="font-medium text-sm">{MONTHS[p.month - 1]}/{p.year}</p>
-                    <p className="text-xs text-muted-foreground">{p.totalLessons} aulas × {brl(rate)}</p>
+                    <p className="text-xs text-muted-foreground">{Number(p.totalLessons)} aulas × {brl(rate)}</p>
                     {p.paidAt && <p className="text-xs text-green-600 mt-0.5">Pago em {new Date(p.paidAt).toLocaleDateString("pt-BR")}</p>}
                   </div>
                   <div className="flex items-center gap-3">
