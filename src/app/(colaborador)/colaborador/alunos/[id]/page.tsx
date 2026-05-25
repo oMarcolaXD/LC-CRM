@@ -1,4 +1,5 @@
 import { prisma }        from "@/lib/prisma"
+import { auth }          from "@/lib/auth"
 import { notFound }      from "next/navigation"
 import Link             from "next/link"
 import { format, formatDistanceToNow, subDays, differenceInMonths } from "date-fns"
@@ -18,6 +19,8 @@ import { PackageDialog }                      from "./_components/package-dialog
 import { EditStudentDialog }                  from "./_components/edit-student-dialog"
 import { RegisterPastLessonDialog }           from "./_components/register-past-lesson-dialog"
 import { BatchPastLessonsDialog }             from "./_components/batch-past-lessons-dialog"
+import { EditPackageDialog }                  from "./_components/edit-package-dialog"
+import { EditLessonDialog }                   from "./_components/edit-lesson-dialog"
 import { AddPaymentDialog }                   from "./_components/add-payment-dialog"
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -78,6 +81,8 @@ interface Props {
 export default async function StudentDetailPage({ params, searchParams }: Props) {
   const { id }  = await params
   const { tab, success, aulas, pagamentos } = await searchParams
+  const session = await auth()
+  const isAdmin = session?.user?.role === "ADMIN"
 
   // Step 1 — lightweight fetch for cursor-based prev/next
   const base = await prisma.student.findUnique({ where: { id }, select: { name: true } })
@@ -129,7 +134,8 @@ export default async function StudentDetailPage({ params, searchParams }: Props)
       where: { participants: { some: { studentId: id } } },
       select: {
         id: true, scheduledAt: true, status: true,
-        topicsCovered: true, studentRating: true,
+        subjectId: true, modality: true, duration: true,
+        topicsCovered: true, teacherNotes: true, studentRating: true,
         subject: { select: { name: true } },
         teacher: { select: { id: true, user: { select: { name: true } } } },
       },
@@ -590,8 +596,19 @@ export default async function StudentDetailPage({ params, searchParams }: Props)
                         studentId={id}
                         studentName={student.name}
                         totalLessons={pkg.totalLessons}
-                        teachers={teachersForDialog.map(t => ({ id: t.id, name: t.name }))}
-                        subjects={subjectsForDialog}
+                        teachers={teachersForDialog}
+                      />
+                      <EditPackageDialog
+                        studentId={id}
+                        pkg={{
+                          id:               pkg.id,
+                          totalLessons:     pkg.totalLessons,
+                          pricePerLesson:   Number(pkg.pricePerLesson),
+                          remainingLessons: pkg.remainingLessons,
+                          status:           pkg.status as "ACTIVE" | "EXHAUSTED" | "EXPIRED",
+                          purchaseDate:     format(pkg.purchaseDate, "yyyy-MM-dd"),
+                          expiresAt:        pkg.expiresAt ? format(pkg.expiresAt, "yyyy-MM-dd") : null,
+                        }}
                       />
                     </div>
                   )
@@ -614,8 +631,7 @@ export default async function StudentDetailPage({ params, searchParams }: Props)
                   </p>
                   <RegisterPastLessonDialog
                     studentId={id}
-                    teachers={teachersForDialog.map(t => ({ id: t.id, name: t.name }))}
-                    subjects={subjectsForDialog}
+                    teachers={teachersForDialog}
                     allStudents={allStudentsRaw}
                   />
                 </div>
@@ -682,9 +698,29 @@ export default async function StudentDetailPage({ params, searchParams }: Props)
                             <StarRating rating={l.studentRating} />
                           </td>
                           <td className="py-2">
-                            <span className={`text-xs font-medium px-1.5 py-0.5 rounded border ${LESSON_STATUS[l.status as keyof typeof LESSON_STATUS]?.cls ?? ""}`}>
-                              {LESSON_STATUS[l.status as keyof typeof LESSON_STATUS]?.label ?? l.status}
-                            </span>
+                            <div className="flex items-center gap-1.5">
+                              <span className={`text-xs font-medium px-1.5 py-0.5 rounded border ${LESSON_STATUS[l.status as keyof typeof LESSON_STATUS]?.cls ?? ""}`}>
+                                {LESSON_STATUS[l.status as keyof typeof LESSON_STATUS]?.label ?? l.status}
+                              </span>
+                              {isAdmin && (
+                                <EditLessonDialog
+                                  lesson={{
+                                    id:            l.id,
+                                    date:          format(l.scheduledAt, "yyyy-MM-dd"),
+                                    time:          format(l.scheduledAt, "HH:mm"),
+                                    status:        l.status,
+                                    teacherId:     l.teacher?.id ?? "",
+                                    subjectId:     l.subjectId ?? null,
+                                    modality:      l.modality,
+                                    duration:      l.duration,
+                                    topicsCovered: l.topicsCovered,
+                                    teacherNotes:  l.teacherNotes,
+                                  }}
+                                  studentId={id}
+                                  teachers={teachersForDialog}
+                                />
+                              )}
+                            </div>
                           </td>
                         </tr>
                       ))}

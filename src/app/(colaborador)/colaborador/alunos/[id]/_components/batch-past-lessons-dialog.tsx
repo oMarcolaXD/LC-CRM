@@ -15,8 +15,8 @@ import {
   MonitorPlay, School, Plus, Trash2,
 } from "lucide-react"
 
-interface Teacher { id: string; name: string }
 interface Subject { id: string; name: string }
+interface Teacher { id: string; name: string; subjects: Subject[] }
 type LessonStatus = "COMPLETED" | "MISSED"
 interface LessonRow { date: string; time: string; status: LessonStatus }
 
@@ -25,7 +25,6 @@ interface Props {
   studentName:  string
   totalLessons: number
   teachers:     Teacher[]
-  subjects:     Subject[]
 }
 
 function emptyRow(): LessonRow {
@@ -33,24 +32,37 @@ function emptyRow(): LessonRow {
 }
 
 export function BatchPastLessonsDialog({
-  studentId, studentName, totalLessons, teachers, subjects,
+  studentId, studentName, totalLessons, teachers,
 }: Props) {
   const router = useRouter()
   const [open, setOpen]   = useState(false)
   const [pending, start]  = useTransition()
 
   const [teacherId, setTeacherId] = useState(teachers[0]?.id ?? "")
-  const [subjectId, setSubjectId] = useState(subjects[0]?.id ?? "")
+  const [subjectId, setSubjectId] = useState(teachers[0]?.subjects[0]?.id ?? "")
   const [modality,  setModality]  = useState<"PRESENCIAL" | "ONLINE">("PRESENCIAL")
   const [duration,  setDuration]  = useState("60")
   const [lessons,   setLessons]   = useState<LessonRow[]>(() =>
     Array.from({ length: totalLessons }, emptyRow)
   )
 
+  const selectedTeacher   = teachers.find(t => t.id === teacherId)
+  const availableSubjects = selectedTeacher?.subjects ?? []
+
+  function handleTeacherChange(tid: string) {
+    setTeacherId(tid)
+    const t = teachers.find(x => x.id === tid)
+    const subs = t?.subjects ?? []
+    if (!subs.find(s => s.id === subjectId)) {
+      setSubjectId(subs[0]?.id ?? "")
+    }
+  }
+
   function handleOpen(v: boolean) {
     if (v) {
-      setTeacherId(teachers[0]?.id ?? "")
-      setSubjectId(subjects[0]?.id ?? "")
+      const firstTeacher = teachers[0]
+      setTeacherId(firstTeacher?.id ?? "")
+      setSubjectId(firstTeacher?.subjects[0]?.id ?? "")
       setModality("PRESENCIAL")
       setDuration("60")
       setLessons(Array.from({ length: totalLessons }, emptyRow))
@@ -120,13 +132,13 @@ export function BatchPastLessonsDialog({
           </DialogHeader>
 
           <div className="space-y-4 py-2">
-            {/* Shared fields */}
+            {/* Professor e Matéria */}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-xs">Professor *</Label>
                 <select
                   value={teacherId}
-                  onChange={e => setTeacherId(e.target.value)}
+                  onChange={e => handleTeacherChange(e.target.value)}
                   className="flex h-9 w-full rounded-lg border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                 >
                   <option value="">Selecione</option>
@@ -139,9 +151,12 @@ export function BatchPastLessonsDialog({
                   value={subjectId}
                   onChange={e => setSubjectId(e.target.value)}
                   className="flex h-9 w-full rounded-lg border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  disabled={availableSubjects.length === 0}
                 >
                   <option value="">Selecione</option>
-                  {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  {availableSubjects.map(s => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
                 </select>
               </div>
             </div>
@@ -179,7 +194,7 @@ export function BatchPastLessonsDialog({
               </div>
             </div>
 
-            {/* Lesson rows */}
+            {/* Linhas de datas */}
             <div className="border-t pt-3 space-y-2">
               <div className="flex items-center justify-between">
                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">

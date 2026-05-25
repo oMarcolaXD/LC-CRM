@@ -177,3 +177,52 @@ export async function markPayoutPaidAction(id: string) {
   await prisma.teacherPayout.update({ where: { id }, data: { status: "PAID", paidAt: new Date() } })
   revalidatePath("/admin/financeiro/professores")
 }
+
+// ─── Editar Pacote do Aluno ───────────────────────────────────────────────────
+
+export async function updateStudentPackageAction(data: {
+  packageId:       string
+  studentId:       string
+  totalLessons:    number
+  pricePerLesson:  number
+  remainingLessons: number
+  status:          "ACTIVE" | "EXHAUSTED" | "EXPIRED"
+  purchaseDate:    string   // "YYYY-MM-DD"
+  expiresAt?:      string   // "YYYY-MM-DD" | undefined
+}) {
+  const session = await auth()
+  if (!session?.user || !["ADMIN", "COLLABORATOR"].includes(session.user.role)) {
+    throw new Error("Sem permissão")
+  }
+
+  await prisma.lessonPackage.update({
+    where: { id: data.packageId },
+    data: {
+      totalLessons:     data.totalLessons,
+      pricePerLesson:   data.pricePerLesson,
+      remainingLessons: data.remainingLessons,
+      status:           data.status,
+      purchaseDate:     new Date(data.purchaseDate),
+      expiresAt:        data.expiresAt ? new Date(data.expiresAt) : null,
+    },
+  })
+
+  revalidatePath(`/colaborador/alunos/${data.studentId}`)
+  revalidatePath(`/admin/usuarios/${data.studentId}`)
+  revalidatePath("/admin/financeiro/pacotes")
+}
+
+// ─── Excluir Pacote do Aluno ──────────────────────────────────────────────────
+
+export async function deleteStudentPackageAction(packageId: string, studentId: string) {
+  const session = await auth()
+  if (!session?.user || !["ADMIN", "COLLABORATOR"].includes(session.user.role)) {
+    throw new Error("Sem permissão")
+  }
+
+  await prisma.lessonPackage.delete({ where: { id: packageId } })
+
+  revalidatePath(`/colaborador/alunos/${studentId}`)
+  revalidatePath(`/admin/usuarios/${studentId}`)
+  revalidatePath("/admin/financeiro/pacotes")
+}

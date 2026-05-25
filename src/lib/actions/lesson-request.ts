@@ -487,17 +487,18 @@ export async function createLessonDirectAction(data: {
 // ─── Criar aula em grupo ──────────────────────────────────────────────────────
 
 export async function createGroupLessonAction(data: {
-  teacherId:       string
-  subjectId:       string
-  studentIds:      string[]      // 2–4 alunos
-  date:            string        // "YYYY-MM-DD"
-  time:            string        // "HH:mm"
-  modality:        "PRESENCIAL" | "ONLINE"
-  pricePerStudent?: number       // valor uniforme por aluno (omita se usar studentPrices)
-  studentPrices?:  { studentId: string; price: number }[]  // preços individuais — sobrescreve pricePerStudent
-  statusOverride?: "COMPLETED" | "MISSED"  // para registro de aulas passadas em dupla
-  duration?:       number
-  teacherOnsite?:  boolean
+  teacherId:        string
+  subjectId:        string
+  studentIds:       string[]      // 2–4 alunos
+  date:             string        // "YYYY-MM-DD"
+  time:             string        // "HH:mm"
+  modality:         "PRESENCIAL" | "ONLINE"
+  pricePerStudent?: number        // valor uniforme por aluno (omita se usar studentPrices)
+  studentPrices?:   { studentId: string; price: number }[]   // preços individuais — sobrescreve pricePerStudent
+  studentPayments?: { studentId: string; paid: boolean }[]   // status de pagamento por aluno
+  statusOverride?:  "COMPLETED" | "MISSED"  // para registro de aulas passadas em grupo
+  duration?:        number
+  teacherOnsite?:   boolean
 }) {
   await requireCollaboratorOrAdmin()
 
@@ -604,20 +605,23 @@ export async function createGroupLessonAction(data: {
         participants: { create: students.map((s) => ({ studentId: s.id })) },
       },
     }),
-    // Criar um pagamento por aluno — valor individual se studentPrices fornecido
-    ...students.map((student) =>
-      prisma.payment.create({
+    // Criar um pagamento por aluno — valor e status individuais
+    ...students.map((student) => {
+      const payInfo = data.studentPayments?.find(sp => sp.studentId === student.id)
+      const isPaid  = payInfo?.paid ?? false
+      return prisma.payment.create({
         data: {
           studentId:   student.id,
           amount:      data.studentPrices?.find(sp => sp.studentId === student.id)?.price
                        ?? data.pricePerStudent
                        ?? 0,
           dueDate:     scheduledAt,
+          paidAt:      isPaid ? scheduledAt : undefined,
           description: `Aula em grupo – ${subject.name} (${scheduledAtFmt})`,
-          status:      "PENDING",
+          status:      isPaid ? "PAID" : "PENDING",
         },
       })
-    ),
+    }),
   ])
 
   if (!isHistorical) {
@@ -677,6 +681,49 @@ export async function createBatchPastLessonsAction(data: {
   revalidatePath(`/admin/usuarios/${data.studentId}`)
   revalidatePath("/colaborador/agenda")
   revalidatePath("/admin/agenda")
+}
+
+// ─── Editar Aula (admin only) ─────────────────────────────────────────────────
+
+export async function updateLessonDirectAction(data: {
+  lessonId:       string
+  studentId:      string   // para revalidação
+  date:           string   // "YYYY-MM-DD"
+  time:           string   // "HH:mm"
+  teacherId:      string
+  subjectId:      string
+  modality:       "PRESENCIAL" | "ONLINE"
+  duration:       number
+  topicsCovered?: string
+  teacherNotes?:  string
+  status:         "COMPLETED" | "MISSED" | "CONFIRMED" | "CANCELLED" | "SCHEDULED"
+}) {
+  const session = await auth()
+  if (session?.user?.role !== "ADMIN") throw new Error("Sem permissão")
+
+  const scheduledAt  = new Date(`${data.date}T${data.time}:00`)
+  const teacherOnsite = data.modality === "PRESENCIAL"
+
+  await prisma.lesson.update({
+    where: { id: data.lessonId },
+    data: {
+      scheduledAt,
+      teacherId:     data.teacherId,
+      subjectId:     data.subjectId,
+      modality:      data.modality,
+      duration:      data.duration,
+      teacherOnsite,
+      topicsCovered: data.topicsCovered || null,
+      teacherNotes:  data.teacherNotes  || null,
+      status:        data.status,
+    },
+  })
+
+  revalidatePath(`/colaborador/alunos/${data.studentId}`)
+  revalidatePath(`/admin/usuarios/${data.studentId}`)
+  revalidatePath("/colaborador/agenda")
+  revalidatePath("/admin/agenda")
+  revalidatePath("/professor/agenda")
 }
 
 // ─── Criar Aulão ──────────────────────────────────────────────────────────────

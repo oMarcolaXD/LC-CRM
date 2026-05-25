@@ -11,24 +11,25 @@ import { Button }   from "@/components/ui/button"
 import { Input }    from "@/components/ui/input"
 import { Label }    from "@/components/ui/label"
 import {
-  History, Loader2, CheckCircle2, XCircle, MonitorPlay, School, Users,
+  History, Loader2, CheckCircle2, XCircle, MonitorPlay, School,
+  Users, Plus, Trash2, DollarSign,
 } from "lucide-react"
 
-interface Teacher { id: string; name: string }
 interface Subject { id: string; name: string }
+interface Teacher { id: string; name: string; subjects: Subject[] }
 interface Student { id: string; name: string }
 
 interface RegisterPastLessonDialogProps {
   studentId:   string
   teachers:    Teacher[]
-  subjects:    Subject[]
   allStudents: Student[]
 }
+
+interface GroupEntry { studentId: string; price: string; paid: boolean }
 
 export function RegisterPastLessonDialog({
   studentId,
   teachers,
-  subjects,
   allStudents,
 }: RegisterPastLessonDialogProps) {
   const router = useRouter()
@@ -40,29 +41,60 @@ export function RegisterPastLessonDialog({
   const [date,      setDate]      = useState(today)
   const [time,      setTime]      = useState("08:00")
   const [teacherId, setTeacherId] = useState(teachers[0]?.id ?? "")
-  const [subjectId, setSubjectId] = useState(subjects[0]?.id ?? "")
+  const [subjectId, setSubjectId] = useState(teachers[0]?.subjects[0]?.id ?? "")
   const [duration,  setDuration]  = useState("60")
   const [modality,  setModality]  = useState<"PRESENCIAL" | "ONLINE">("PRESENCIAL")
   const [topics,    setTopics]    = useState("")
   const [status,    setStatus]    = useState<"COMPLETED" | "MISSED">("COMPLETED")
 
-  // Dupla
-  const [isDuo,          setIsDuo]          = useState(false)
-  const [secondStudentId, setSecondStudentId] = useState(allStudents[0]?.id ?? "")
-  const [price1,         setPrice1]         = useState("")
-  const [price2,         setPrice2]         = useState("")
+  // Grupo
+  const [isGroup,      setIsGroup]  = useState(false)
+  const [price1,       setPrice1]   = useState("")
+  const [paid1,        setPaid1]    = useState(false)
+  const [groupEntries, setGroupEntries] = useState<GroupEntry[]>([
+    { studentId: allStudents.find(s => s.id !== studentId)?.id ?? "", price: "", paid: false },
+  ])
+
+  const otherStudents    = allStudents.filter(s => s.id !== studentId)
+  const selectedTeacher  = teachers.find(t => t.id === teacherId)
+  const availableSubjects = selectedTeacher?.subjects ?? []
+
+  function handleTeacherChange(tid: string) {
+    setTeacherId(tid)
+    const t = teachers.find(x => x.id === tid)
+    const subs = t?.subjects ?? []
+    // keep current subject only if it's in the new teacher's list
+    if (!subs.find(s => s.id === subjectId)) {
+      setSubjectId(subs[0]?.id ?? "")
+    }
+  }
 
   function reset() {
     setDate(today); setTime("08:00")
-    setTeacherId(teachers[0]?.id ?? ""); setSubjectId(subjects[0]?.id ?? "")
+    const firstTeacher = teachers[0]
+    setTeacherId(firstTeacher?.id ?? "")
+    setSubjectId(firstTeacher?.subjects[0]?.id ?? "")
     setDuration("60"); setModality("PRESENCIAL"); setTopics(""); setStatus("COMPLETED")
-    setIsDuo(false); setSecondStudentId(allStudents[0]?.id ?? "")
-    setPrice1(""); setPrice2("")
+    setIsGroup(false); setPrice1(""); setPaid1(false)
+    setGroupEntries([{ studentId: otherStudents[0]?.id ?? "", price: "", paid: false }])
   }
 
   function handleOpen(v: boolean) {
     if (v) reset()
     setOpen(v)
+  }
+
+  function addGroupEntry() {
+    if (groupEntries.length >= 3) return
+    setGroupEntries(prev => [...prev, { studentId: "", price: "", paid: false }])
+  }
+
+  function removeGroupEntry(i: number) {
+    setGroupEntries(prev => prev.filter((_, idx) => idx !== i))
+  }
+
+  function updateGroupEntry(i: number, field: keyof GroupEntry, value: string | boolean) {
+    setGroupEntries(prev => prev.map((e, idx) => idx === i ? { ...e, [field]: value } : e))
   }
 
   function submit() {
@@ -71,31 +103,48 @@ export function RegisterPastLessonDialog({
       return
     }
 
-    if (isDuo) {
-      if (!secondStudentId) { toast.error("Selecione o segundo aluno"); return }
-      if (secondStudentId === studentId) { toast.error("Selecione um aluno diferente"); return }
+    if (isGroup) {
       const p1 = parseFloat(price1)
-      const p2 = parseFloat(price2)
       if (!price1 || p1 < 0) { toast.error("Informe o valor do aluno 1"); return }
-      if (!price2 || p2 < 0) { toast.error("Informe o valor do aluno 2"); return }
+
+      for (let i = 0; i < groupEntries.length; i++) {
+        const entry = groupEntries[i]
+        if (!entry.studentId) { toast.error(`Selecione o aluno ${i + 2}`); return }
+        if (entry.studentId === studentId) { toast.error(`Aluno ${i + 2} deve ser diferente do aluno principal`); return }
+        const p = parseFloat(entry.price)
+        if (!entry.price || p < 0) { toast.error(`Informe o valor do aluno ${i + 2}`); return }
+      }
+
+      const allIds = [studentId, ...groupEntries.map(e => e.studentId)]
+      if (new Set(allIds).size !== allIds.length) {
+        toast.error("Há alunos duplicados na seleção")
+        return
+      }
 
       start(async () => {
         try {
           await createGroupLessonAction({
             teacherId,
             subjectId,
-            studentIds:   [studentId, secondStudentId],
+            studentIds:     allIds,
             date,
             time,
             modality,
-            duration:     parseInt(duration) || 60,
+            duration:       parseInt(duration) || 60,
             statusOverride: status,
             studentPrices: [
-              { studentId,       price: p1 },
-              { studentId: secondStudentId, price: p2 },
+              { studentId, price: p1 },
+              ...groupEntries.map(e => ({ studentId: e.studentId, price: parseFloat(e.price) })),
+            ],
+            studentPayments: [
+              { studentId, paid: paid1 },
+              ...groupEntries.map(e => ({ studentId: e.studentId, paid: e.paid })),
             ],
           })
-          toast.success(status === "COMPLETED" ? "Aula em dupla registrada" : "Falta em dupla registrada")
+          const n = allIds.length
+          toast.success(status === "COMPLETED"
+            ? `Aula em grupo (${n} alunos) registrada`
+            : `Falta em grupo registrada`)
           setOpen(false)
           router.refresh()
         } catch (e) {
@@ -114,7 +163,7 @@ export function RegisterPastLessonDialog({
           date,
           time,
           modality,
-          duration:      parseInt(duration) || 60,
+          duration:       parseInt(duration) || 60,
           statusOverride: status,
           topicsCovered:  topics || undefined,
         })
@@ -151,83 +200,127 @@ export function RegisterPastLessonDialog({
           <div className="space-y-4 py-2">
             {/* Status */}
             <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setStatus("COMPLETED")}
-                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg border text-sm font-medium transition-colors ${
-                  status === "COMPLETED"
-                    ? "bg-green-100 text-green-700 border-green-400"
-                    : "bg-muted text-muted-foreground border-border hover:bg-muted/80"
-                }`}
-              >
-                <CheckCircle2 className="w-4 h-4" /> Realizada
-              </button>
-              <button
-                type="button"
-                onClick={() => setStatus("MISSED")}
-                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg border text-sm font-medium transition-colors ${
-                  status === "MISSED"
-                    ? "bg-red-100 text-red-700 border-red-400"
-                    : "bg-muted text-muted-foreground border-border hover:bg-muted/80"
-                }`}
-              >
-                <XCircle className="w-4 h-4" /> Faltou
-              </button>
+              {(["COMPLETED", "MISSED"] as const).map(s => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setStatus(s)}
+                  className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                    status === s
+                      ? s === "COMPLETED"
+                        ? "bg-green-100 text-green-700 border-green-400"
+                        : "bg-red-100 text-red-700 border-red-400"
+                      : "bg-muted text-muted-foreground border-border hover:bg-muted/80"
+                  }`}
+                >
+                  {s === "COMPLETED"
+                    ? <><CheckCircle2 className="w-4 h-4" /> Realizada</>
+                    : <><XCircle className="w-4 h-4" /> Faltou</>}
+                </button>
+              ))}
             </div>
 
-            {/* Dupla toggle */}
+            {/* Grupo toggle */}
             <button
               type="button"
-              onClick={() => setIsDuo(v => !v)}
+              onClick={() => setIsGroup(v => !v)}
               className={`w-full flex items-center justify-center gap-2 py-2 rounded-lg border text-sm font-medium transition-colors ${
-                isDuo
+                isGroup
                   ? "bg-brand-blue/10 text-brand-blue border-brand-blue/40"
                   : "bg-muted text-muted-foreground border-border hover:bg-muted/80"
               }`}
             >
               <Users className="w-4 h-4" />
-              {isDuo ? "Aula em dupla (ativado)" : "Aula em dupla"}
+              {isGroup ? "Aula em grupo (ativado)" : "Aula em grupo"}
             </button>
 
-            {/* Segundo aluno + preços */}
-            {isDuo && (
+            {/* Alunos do grupo + preços + pagamento */}
+            {isGroup && (
               <div className="rounded-lg border border-brand-blue/30 bg-brand-blue/5 p-3 space-y-3">
+                {/* Aluno 1 — atual */}
                 <div className="space-y-1.5">
-                  <Label className="text-xs">Segundo aluno *</Label>
-                  <select
-                    value={secondStudentId}
-                    onChange={e => setSecondStudentId(e.target.value)}
-                    className="flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                  >
-                    <option value="">Selecione</option>
-                    {allStudents
-                      .filter(s => s.id !== studentId)
-                      .map(s => <option key={s.id} value={s.id}>{s.name}</option>)
-                    }
-                  </select>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">Valor aluno 1 (R$) *</Label>
+                  <Label className="text-xs">Aluno 1 (este aluno)</Label>
+                  <div className="flex gap-2 items-center">
                     <Input
                       type="number" min={0} step="0.01"
                       value={price1}
                       onChange={e => setPrice1(e.target.value)}
-                      placeholder="Ex: 80.00"
-                      className="h-9"
+                      placeholder="R$ valor"
+                      className="h-9 flex-1"
                     />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">Valor aluno 2 (R$) *</Label>
-                    <Input
-                      type="number" min={0} step="0.01"
-                      value={price2}
-                      onChange={e => setPrice2(e.target.value)}
-                      placeholder="Ex: 60.00"
-                      className="h-9"
-                    />
+                    <button
+                      type="button"
+                      onClick={() => setPaid1(v => !v)}
+                      className={`h-9 px-2.5 rounded-lg border text-xs font-medium shrink-0 flex items-center gap-1.5 transition-colors ${
+                        paid1
+                          ? "bg-green-100 text-green-700 border-green-300"
+                          : "bg-muted text-muted-foreground border-border"
+                      }`}
+                    >
+                      <DollarSign className="w-3 h-3" />
+                      {paid1 ? "Pago" : "Pendente"}
+                    </button>
                   </div>
                 </div>
+
+                {/* Alunos adicionais */}
+                {groupEntries.map((entry, i) => (
+                  <div key={i} className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs">Aluno {i + 2} *</Label>
+                      {groupEntries.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removeGroupEntry(i)}
+                          className="text-muted-foreground hover:text-destructive transition-colors"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      <select
+                        value={entry.studentId}
+                        onChange={e => updateGroupEntry(i, "studentId", e.target.value)}
+                        className="flex-1 h-9 rounded-lg border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                      >
+                        <option value="">Selecione</option>
+                        {otherStudents.map(s => (
+                          <option key={s.id} value={s.id}>{s.name}</option>
+                        ))}
+                      </select>
+                      <Input
+                        type="number" min={0} step="0.01"
+                        value={entry.price}
+                        onChange={e => updateGroupEntry(i, "price", e.target.value)}
+                        placeholder="R$ valor"
+                        className="h-9 w-24 shrink-0"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => updateGroupEntry(i, "paid", !entry.paid)}
+                        className={`h-9 px-2.5 rounded-lg border text-xs font-medium shrink-0 flex items-center gap-1.5 transition-colors ${
+                          entry.paid
+                            ? "bg-green-100 text-green-700 border-green-300"
+                            : "bg-muted text-muted-foreground border-border"
+                        }`}
+                      >
+                        <DollarSign className="w-3 h-3" />
+                        {entry.paid ? "Pago" : "Pend."}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+
+                {groupEntries.length < 3 && (
+                  <button
+                    type="button"
+                    onClick={addGroupEntry}
+                    className="w-full flex items-center justify-center gap-1.5 h-8 rounded-lg border border-dashed border-brand-blue/40 text-xs text-brand-blue hover:bg-brand-blue/5 transition-colors"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Adicionar aluno
+                  </button>
+                )}
               </div>
             )}
 
@@ -252,7 +345,7 @@ export function RegisterPastLessonDialog({
                 <Label>Professor *</Label>
                 <select
                   value={teacherId}
-                  onChange={e => setTeacherId(e.target.value)}
+                  onChange={e => handleTeacherChange(e.target.value)}
                   className="flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                 >
                   <option value="">Selecione</option>
@@ -265,9 +358,12 @@ export function RegisterPastLessonDialog({
                   value={subjectId}
                   onChange={e => setSubjectId(e.target.value)}
                   className="flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  disabled={availableSubjects.length === 0}
                 >
                   <option value="">Selecione</option>
-                  {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  {availableSubjects.map(s => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
                 </select>
               </div>
             </div>
@@ -284,34 +380,28 @@ export function RegisterPastLessonDialog({
               <div className="space-y-1.5">
                 <Label>Modalidade</Label>
                 <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setModality("PRESENCIAL")}
-                    className={`flex-1 flex items-center justify-center gap-1.5 h-10 rounded-lg border text-xs font-medium transition-colors ${
-                      modality === "PRESENCIAL"
-                        ? "bg-primary text-white border-primary"
-                        : "bg-muted text-muted-foreground border-border"
-                    }`}
-                  >
-                    <School className="w-3.5 h-3.5" /> Presencial
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setModality("ONLINE")}
-                    className={`flex-1 flex items-center justify-center gap-1.5 h-10 rounded-lg border text-xs font-medium transition-colors ${
-                      modality === "ONLINE"
-                        ? "bg-primary text-white border-primary"
-                        : "bg-muted text-muted-foreground border-border"
-                    }`}
-                  >
-                    <MonitorPlay className="w-3.5 h-3.5" /> Online
-                  </button>
+                  {(["PRESENCIAL", "ONLINE"] as const).map(m => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setModality(m)}
+                      className={`flex-1 flex items-center justify-center gap-1.5 h-10 rounded-lg border text-xs font-medium transition-colors ${
+                        modality === m
+                          ? "bg-primary text-white border-primary"
+                          : "bg-muted text-muted-foreground border-border"
+                      }`}
+                    >
+                      {m === "PRESENCIAL"
+                        ? <><School className="w-3.5 h-3.5" /> Presencial</>
+                        : <><MonitorPlay className="w-3.5 h-3.5" /> Online</>}
+                    </button>
+                  ))}
                 </div>
               </div>
             </div>
 
             {/* Conteúdo (só para individual) */}
-            {!isDuo && (
+            {!isGroup && (
               <div className="space-y-1.5">
                 <Label>Conteúdo abordado</Label>
                 <Input
