@@ -39,19 +39,24 @@ export function LessonHeatmap({ entries }: Props) {
     })
   }, [entries])
 
-  // Month labels: show month name on the first cell of each month in the grid
+  // Month labels: one per month, dropping labels that are < 3 weeks from the next
+  // (prevents overlap when a month occupies only a few days at the start of the window)
   const monthLabels = useMemo(() => {
-    const labels: { weekIndex: number; label: string }[] = []
+    const raw: { weekIndex: number; label: string }[] = []
     let lastMonth = -1
     cells.forEach((c, i) => {
       const weekIndex = Math.floor(i / 7)
       const month = c.date.getMonth()
       if (month !== lastMonth) {
-        labels.push({ weekIndex, label: format(c.date, "MMM", { locale: ptBR }) })
+        raw.push({ weekIndex, label: format(c.date, "MMM", { locale: ptBR }) })
         lastMonth = month
       }
     })
-    return labels
+    // Drop a label when the next one starts within 3 weeks (text would overlap)
+    return raw.filter((m, i) => {
+      const next = raw[i + 1]
+      return !next || next.weekIndex - m.weekIndex >= 3
+    })
   }, [cells])
 
   // Columns = weeks (left to right), rows = days (Mon→Sun top to bottom)

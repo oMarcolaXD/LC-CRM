@@ -5,6 +5,7 @@ import { Sparkline }   from "@/components/shared/kpi-card"
 import { RevenueMetaChart } from "@/components/charts/revenue-meta-chart"
 import { ModoBadge }   from "@/components/shared/modo-badge"
 import { PeriodSelector } from "./period-selector"
+import { CancellationActions } from "./cancellation-actions"
 import { DashboardGreeting } from "@/components/shared/dashboard-greeting"
 import Link            from "next/link"
 import { cn }          from "@/lib/utils"
@@ -141,6 +142,7 @@ async function getOpsData(periodo: Periodo) {
     pendingCount,
     proximasAulas,
     lowPackages,
+    pendingCancellations,
   ] = await Promise.all([
     prisma.payment.findMany({
       where:  { status: "PAID", paidAt: { gte: fetchFrom } },
@@ -175,6 +177,21 @@ async function getOpsData(periodo: Periodo) {
     }),
     prisma.lessonPackage.count({
       where: { status: "ACTIVE", remainingLessons: { gt: 0, lte: 2 } },
+    }),
+    prisma.lessonCancellationRequest.findMany({
+      where:   { status: "PENDING" },
+      include: {
+        lesson: {
+          include: {
+            subject:      true,
+            teacher:      { include: { user: true } },
+            participants: { take: 1, include: { student: true } },
+          },
+        },
+        requestedBy: true,
+      },
+      orderBy: { createdAt: "asc" },
+      take:    20,
     }),
   ])
 
@@ -293,6 +310,13 @@ async function getOpsData(periodo: Periodo) {
       acao: "Ver agenda",
       href: "/admin/agenda",
     })
+  if (pendingCancellations.length > 0)
+    alertas.push({
+      tipo: "warn",
+      txt:  `${pendingCancellations.length} pedido${pendingCancellations.length > 1 ? "s" : ""} de cancelamento aguardando revisão`,
+      acao: "Ver cancelamentos",
+      href: "#cancelamentos",
+    })
   if (lowPackages > 0)
     alertas.push({
       tipo: "warn",
@@ -319,7 +343,7 @@ async function getOpsData(periodo: Periodo) {
     aulasMes, aulasGoal, aulasSpark, aulasDeltaNum,
     alunosAtivos, alunosGoal, alunosSpark,
     inadimplenciaTotal, inadimplenciaAlunos, inadimplenciaSpark,
-    chartData, atrasados, alertas, proximas,
+    chartData, atrasados, alertas, proximas, pendingCancellations,
     periodLabel: raw.charAt(0).toUpperCase() + raw.slice(1),
     todayLabel:  format(now, "EEE, dd 'de' MMMM", { locale: ptBR }),
   }
@@ -645,6 +669,39 @@ export default async function AdminOpsPage({
               })}
             </div>
           </div>
+
+          {/* Cancelamentos pendentes */}
+          {d.pendingCancellations.length > 0 && (
+            <div id="cancelamentos" className="overflow-hidden rounded-[10px] border border-amber-200 bg-card">
+              <div className="p-[12px_14px_8px]">
+                <p className="text-[13px] font-semibold tracking-[-0.01em]">Cancelamentos pendentes</p>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                  {d.pendingCancellations.length} pedido{d.pendingCancellations.length !== 1 ? "s" : ""} aguardando revisão
+                </p>
+              </div>
+              <div className="flex flex-col divide-y divide-border">
+                {d.pendingCancellations.map(cr => (
+                  <div key={cr.id} className="px-3.5 py-2.5 flex items-start gap-3">
+                    <span className="text-base shrink-0 mt-0.5">🚫</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[12.5px] font-medium truncate">
+                        {cr.lesson.subject?.name ?? "–"} · {cr.lesson.teacher.user.name.split(" ")[0]}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">
+                        {format(cr.lesson.scheduledAt, "dd/MM 'às' HH:mm", { locale: ptBR })}
+                        {" · "}{cr.lesson.participants[0]?.student.name ?? "–"}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground">
+                        Solicitado por {cr.requestedBy.name.split(" ")[0]}
+                        {cr.reason && <span className="italic"> · "{cr.reason}"</span>}
+                      </p>
+                    </div>
+                    <CancellationActions requestId={cr.id} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Próximas aulas */}
           <div className="flex flex-1 flex-col overflow-hidden rounded-[10px] border border-border bg-card">

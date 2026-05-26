@@ -22,6 +22,7 @@ import { BatchPastLessonsDialog }             from "./_components/batch-past-les
 import { EditPackageDialog }                  from "./_components/edit-package-dialog"
 import { EditLessonDialog }                   from "./_components/edit-lesson-dialog"
 import { DeleteLessonButton }                from "./_components/delete-lesson-button"
+import { RequestCancellationButton }         from "./_components/request-cancellation-button"
 import { AddPaymentDialog }                   from "./_components/add-payment-dialog"
 import { DeletePaymentButton }               from "./_components/delete-payment-button"
 
@@ -177,6 +178,13 @@ export default async function StudentDetailPage({ params, searchParams }: Props)
   ])
 
   if (!student) notFound()
+
+  // Pending cancellation requests for the lessons shown in the table
+  const pendingCancellations = await prisma.lessonCancellationRequest.findMany({
+    where: { lessonId: { in: recentLessons.map(l => l.id) }, status: "PENDING" },
+    select: { lessonId: true },
+  })
+  const pendingCancellationLessonIds = new Set(pendingCancellations.map(r => r.lessonId))
 
   // ─── Computed values ─────────────────────────────────────────────────────
 
@@ -733,7 +741,7 @@ export default async function StudentDetailPage({ params, searchParams }: Props)
                               <span className={`text-xs font-medium px-1.5 py-0.5 rounded border ${LESSON_STATUS[l.status as keyof typeof LESSON_STATUS]?.cls ?? ""}`}>
                                 {LESSON_STATUS[l.status as keyof typeof LESSON_STATUS]?.label ?? l.status}
                               </span>
-                              {isAdmin && (
+                              {isAdmin ? (
                                 <>
                                   <EditLessonDialog
                                     lesson={{
@@ -753,6 +761,11 @@ export default async function StudentDetailPage({ params, searchParams }: Props)
                                   />
                                   <DeleteLessonButton lessonId={l.id} />
                                 </>
+                              ) : (
+                                <RequestCancellationButton
+                                  lessonId={l.id}
+                                  hasPendingRequest={pendingCancellationLessonIds.has(l.id)}
+                                />
                               )}
                             </div>
                           </td>

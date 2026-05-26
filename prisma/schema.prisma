@@ -106,6 +106,8 @@ model User {
   notifications  Notification[]
   activityLogs   ActivityLog[]
   authoredNotes  StudentNote[]
+  cancellationRequests LessonCancellationRequest[] @relation("CancellationRequests")
+  cancellationReviews  LessonCancellationRequest[] @relation("CancellationReviews")
 
   @@map("users")
 }
@@ -278,8 +280,9 @@ model Lesson {
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
 
-  participants LessonParticipant[]
-  homework     Homework[]
+  participants         LessonParticipant[]
+  homework             Homework[]
+  cancellationRequests LessonCancellationRequest[]
 
   @@index([teacherId])
   @@index([status])
@@ -319,6 +322,26 @@ model LessonRequest {
   @@index([teacherId, status])
   @@index([studentId, status])
   @@map("lesson_requests")
+}
+
+model LessonCancellationRequest {
+  id            String        @id @default(cuid())
+  lessonId      String
+  lesson        Lesson        @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  requestedById String
+  requestedBy   User          @relation("CancellationRequests", fields: [requestedById], references: [id])
+  reason        String?
+  status        RequestStatus @default(PENDING)
+  reviewedById  String?
+  reviewedBy    User?         @relation("CancellationReviews", fields: [reviewedById], references: [id])
+  reviewedAt    DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([lessonId])
+  @@index([requestedById])
+  @@index([status])
+  @@map("lesson_cancellation_requests")
 }
 
 // ─── Lição de Casa ────────────────────────────────────────────────────────────
