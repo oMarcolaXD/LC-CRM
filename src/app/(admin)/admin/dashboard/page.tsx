@@ -693,7 +693,7 @@ export default async function AdminOpsPage({
                       </p>
                       <p className="text-[11px] text-muted-foreground">
                         Solicitado por {cr.requestedBy.name.split(" ")[0]}
-                        {cr.reason && <span className="italic"> · "{cr.reason}"</span>}
+                        {cr.reason && <span className="italic"> · &ldquo;{cr.reason}&rdquo;</span>}
                       </p>
                     </div>
                     <CancellationActions requestId={cr.id} />
