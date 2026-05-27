@@ -1,8 +1,6 @@
 "use client"
 
-import { LogoutButton }        from "./logout-button"
 import { NotificationBell }    from "./notification-bell"
-import { ThemeToggle }         from "./theme-toggle"
 import { StudentSelector }     from "./student-selector"
 import type { Role }           from "@prisma/client"
 
@@ -26,9 +24,7 @@ export function Header({ role, allStudents, activeStudentId }: HeaderProps) {
           <StudentSelector students={allStudents} activeStudentId={activeStudentId} />
         )}
         <div className="flex items-center gap-1">
-          <ThemeToggle />
           <NotificationBell />
-          <LogoutButton />
         </div>
       </div>
     </header>
