@@ -14,6 +14,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet"
 import { BOTTOM_NAV }            from "./bottom-nav-items"
+import { NotificationBell }      from "./notification-bell"
 import type { Role }             from "@prisma/client"
 
 interface BottomNavProps {
@@ -77,7 +78,10 @@ export function BottomNav({ role }: BottomNavProps) {
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent side="bottom" className="rounded-t-[14px] px-0 pb-0">
           <SheetHeader className="px-5 pb-3">
-            <SheetTitle className="text-left text-[15px]">Menu</SheetTitle>
+            <div className="flex items-center justify-between">
+              <SheetTitle className="text-[15px]">Menu</SheetTitle>
+              <NotificationBell />
+            </div>
           </SheetHeader>
 
           <nav className="flex flex-col">
