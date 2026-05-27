@@ -15,7 +15,7 @@ export function WhatsAppButton() {
   if (dismissed) return null
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 flex items-center gap-1">
+    <div className="fixed bottom-[calc(4rem+1.5rem)] right-6 z-50 flex items-center gap-1 lg:bottom-6">
       <Link
         href={href}
         target="_blank"
