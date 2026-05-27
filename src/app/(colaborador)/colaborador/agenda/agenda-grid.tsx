@@ -1,6 +1,8 @@
 "use client"
 
 import { useState, useTransition, useEffect, useRef } from "react"
+import { usePathname } from "next/navigation"
+import Link from "next/link"
 import {
   addDays, addMonths, format, isToday, parseISO, getDay,
   startOfWeek, endOfWeek, startOfMonth, endOfMonth,
@@ -83,6 +85,7 @@ export interface TeacherCol {
 export interface LessonSlot {
   id:            string
   teacherId:     string
+  studentId:     string
   startMin:      number
   duration:      number
   status:        LessonStatus
@@ -151,6 +154,12 @@ function LessonDetailModal({
   const [sendingGuardian, setSendingGuardian] = useState(false)
   const [sendingTeacher,  setSendingTeacher]  = useState(false)
   const [pending, start] = useTransition()
+  const pathname = usePathname()
+  const isAdmin  = pathname.startsWith("/admin")
+  const teacherHref  = isAdmin
+    ? `/admin/professores/${lesson.teacherId}`
+    : `/colaborador/professores/${lesson.teacherId}`
+  const studentHref  = `/colaborador/alunos/${lesson.studentId}`
 
   const canAct = lesson.status === "SCHEDULED" || lesson.status === "CONFIRMED"
   const { bg, text } = STATUS_STYLE[lesson.status]
@@ -274,6 +283,30 @@ function LessonDetailModal({
               )}
             </div>
           </div>
+
+          {/* ── Links rápidos ────────────────────────────────── */}
+          {lesson.lessonType !== "COMPROMISSO" && (
+            <div className="flex gap-2">
+              {lesson.studentId && (
+                <Link
+                  href={studentHref}
+                  onClick={onClose}
+                  className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-border bg-muted/30 hover:bg-muted/60 transition-colors py-2 text-xs font-medium text-foreground"
+                >
+                  <GraduationCap className="w-3.5 h-3.5 text-primary" />
+                  Ver aluno
+                </Link>
+              )}
+              <Link
+                href={teacherHref}
+                onClick={onClose}
+                className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-border bg-muted/30 hover:bg-muted/60 transition-colors py-2 text-xs font-medium text-foreground"
+              >
+                <User className="w-3.5 h-3.5 text-primary" />
+                Ver professor
+              </Link>
+            </div>
+          )}
 
           {/* ── Confirmações ─────────────────────────────────── */}
           <div>
@@ -1040,7 +1073,6 @@ export function AgendaGrid({
   students, allStudents,
   weekLessons: initialWeekLessons, monthLessons: initialMonthLessons, initialView = "day",
   pendingRequests: initialPending, weekPendingRequests: initialWeekPending,
-  scheduledCount: _scheduledCount = 0,
 }: AgendaGridProps) {
   // ── Data state (managed client-side after initial SSR) ────────────────────
 
@@ -1126,6 +1158,7 @@ export function AgendaGrid({
   }
 
   // Fetch whenever curDate or view changes (skip the initial render)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!hasMounted.current) { hasMounted.current = true; return }
     fetchData(curDate, view)

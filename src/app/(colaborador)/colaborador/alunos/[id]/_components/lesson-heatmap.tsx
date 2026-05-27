@@ -39,19 +39,24 @@ export function LessonHeatmap({ entries }: Props) {
     })
   }, [entries])
 
-  // Month labels: show month name on the first cell of each month in the grid
+  // Month labels: one per month, dropping labels that are < 3 weeks from the next
+  // (prevents overlap when a month occupies only a few days at the start of the window)
   const monthLabels = useMemo(() => {
-    const labels: { weekIndex: number; label: string }[] = []
+    const raw: { weekIndex: number; label: string }[] = []
     let lastMonth = -1
     cells.forEach((c, i) => {
       const weekIndex = Math.floor(i / 7)
       const month = c.date.getMonth()
       if (month !== lastMonth) {
-        labels.push({ weekIndex, label: format(c.date, "MMM", { locale: ptBR }) })
+        raw.push({ weekIndex, label: format(c.date, "MMM", { locale: ptBR }) })
         lastMonth = month
       }
     })
-    return labels
+    // Drop a label when the next one starts within 3 weeks (text would overlap)
+    return raw.filter((m, i) => {
+      const next = raw[i + 1]
+      return !next || next.weekIndex - m.weekIndex >= 3
+    })
   }, [cells])
 
   // Columns = weeks (left to right), rows = days (Mon→Sun top to bottom)
@@ -62,16 +67,17 @@ export function LessonHeatmap({ entries }: Props) {
 
   return (
     <div className="relative select-none">
-      {/* Month labels */}
-      <div className="flex mb-1" style={{ gap: 3 }}>
-        {Array.from({ length: WEEKS }, (_, w) => {
-          const label = monthLabels.find(m => m.weekIndex === w)
-          return (
-            <div key={w} className="text-[10px] text-muted-foreground" style={{ width: 12, minWidth: 12 }}>
-              {label ? label.label.charAt(0).toUpperCase() + label.label.slice(1) : ""}
-            </div>
-          )
-        })}
+      {/* Month labels — positioned absolutely to avoid overlap */}
+      <div className="relative mb-1" style={{ height: 14 }}>
+        {monthLabels.map((m, i) => (
+          <span
+            key={i}
+            className="absolute text-[10px] text-muted-foreground leading-none"
+            style={{ left: m.weekIndex * 16 }}
+          >
+            {m.label.charAt(0).toUpperCase() + m.label.slice(1)}
+          </span>
+        ))}
       </div>
 
       {/* Grid */}

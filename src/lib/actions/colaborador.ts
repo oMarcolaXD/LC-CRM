@@ -627,3 +627,22 @@ export async function sendConfirmationToTeacherAction(lessonId: string) {
     },
   })
 }
+
+// ─── Excluir Aula ──────────────────────────────────────────────────────────────
+
+export async function deleteLessonAction(lessonId: string) {
+  const session = await auth()
+  if (session?.user?.role !== "ADMIN") throw new Error("Sem permissão")
+
+  const participants = await prisma.lessonParticipant.findMany({
+    where: { lessonId },
+    select: { studentId: true },
+  })
+  if (participants.length === 0) throw new Error("Aula não encontrada")
+
+  await prisma.lesson.delete({ where: { id: lessonId } })
+
+  for (const p of participants) {
+    revalidatePath(`/colaborador/alunos/${p.studentId}`)
+  }
+}

@@ -13,6 +13,8 @@ export type NotificationType =
   | "PAYMENT_OVERDUE"       // pagamento vencido
   | "PAYOUT_GENERATED"      // repasse calculado
   | "LESSON_CONFIRMATION_REQUEST" // solicitação de confirmação em massa
+  | "CANCELLATION_REQUEST"        // admin recebe quando colab solicita cancelamento
+  | "CANCELLATION_REVIEWED"       // colab recebe quando admin aprova/rejeita
 
 export interface NotificationPayload {
   userId:   string

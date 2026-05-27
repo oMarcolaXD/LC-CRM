@@ -21,8 +21,11 @@ import { RegisterPastLessonDialog }           from "./_components/register-past-
 import { BatchPastLessonsDialog }             from "./_components/batch-past-lessons-dialog"
 import { EditPackageDialog }                  from "./_components/edit-package-dialog"
 import { EditLessonDialog }                   from "./_components/edit-lesson-dialog"
+import { DeleteLessonButton }                from "./_components/delete-lesson-button"
+import { RequestCancellationButton }         from "./_components/request-cancellation-button"
 import { AddPaymentDialog }                   from "./_components/add-payment-dialog"
 import { DeletePaymentButton }               from "./_components/delete-payment-button"
+import { ReceiptDialog }                     from "./_components/receipt-dialog"
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -201,13 +204,6 @@ export default async function StudentDetailPage({ params, searchParams }: Props)
     subjects: t.subjects.map(s => ({ id: s.subject.id, name: s.subject.name })),
   }))
 
-  // All subjects (flat, deduped) for RegisterPastLessonDialog
-  const subjectsForDialog = Array.from(
-    new Map(
-      teachersRaw.flatMap(t => t.subjects.map(s => [s.subject.id, s.subject]))
-    ).values()
-  ).sort((a, b) => a.name.localeCompare(b.name))
-
   // Teachers map from recent 20 lessons
   const teachersMap = new Map<string, { name: string; count: number; lastAt: Date }>()
   for (const l of recentLessons) {
@@ -235,6 +231,17 @@ export default async function StudentDetailPage({ params, searchParams }: Props)
     : tab === "faltas"
     ? recentLessons.filter(l => l.status === "MISSED")
     : recentLessons
+
+  // Payments serialized for client dialog (Decimal → number, Date → ISO string)
+  const paymentsForReceipt = student.payments.map(p => ({
+    id:          p.id,
+    amount:      Number(p.amount),
+    dueDate:     p.dueDate.toISOString(),
+    paidAt:      p.paidAt?.toISOString() ?? null,
+    method:      p.method,
+    description: p.description,
+    status:      p.status,
+  }))
 
   // Contact info
   const guardian     = student.guardian
@@ -711,7 +718,7 @@ export default async function StudentDetailPage({ params, searchParams }: Props)
                     </thead>
                     <tbody className="divide-y divide-border/50">
                       {filteredLessons.map(l => (
-                        <tr key={l.id} className="hover:bg-muted/30 transition-colors">
+                        <tr key={l.id} className="group hover:bg-muted/30 transition-colors">
                           <td className="py-2 pr-3 text-xs tabular-nums whitespace-nowrap">
                             {format(l.scheduledAt, "dd/MM · HH:mm", { locale: ptBR })}
                           </td>
@@ -732,24 +739,24 @@ export default async function StudentDetailPage({ params, searchParams }: Props)
                               <span className={`text-xs font-medium px-1.5 py-0.5 rounded border ${LESSON_STATUS[l.status as keyof typeof LESSON_STATUS]?.cls ?? ""}`}>
                                 {LESSON_STATUS[l.status as keyof typeof LESSON_STATUS]?.label ?? l.status}
                               </span>
-                              {isAdmin && (
-                                <EditLessonDialog
-                                  lesson={{
-                                    id:            l.id,
-                                    date:          format(l.scheduledAt, "yyyy-MM-dd"),
-                                    time:          format(l.scheduledAt, "HH:mm"),
-                                    status:        l.status,
-                                    teacherId:     l.teacher?.id ?? "",
-                                    subjectId:     l.subjectId ?? null,
-                                    modality:      l.modality,
-                                    duration:      l.duration,
-                                    topicsCovered: l.topicsCovered,
-                                    teacherNotes:  l.teacherNotes,
-                                  }}
-                                  studentId={id}
-                                  teachers={teachersForDialog}
-                                />
-                              )}
+                              <EditLessonDialog
+                                lesson={{
+                                  id:            l.id,
+                                  date:          format(l.scheduledAt, "yyyy-MM-dd"),
+                                  time:          format(l.scheduledAt, "HH:mm"),
+                                  status:        l.status,
+                                  teacherId:     l.teacher?.id ?? "",
+                                  subjectId:     l.subjectId ?? null,
+                                  modality:      l.modality,
+                                  duration:      l.duration,
+                                  topicsCovered: l.topicsCovered,
+                                  teacherNotes:  l.teacherNotes,
+                                }}
+                                studentId={id}
+                                teachers={teachersForDialog}
+                              />
+                              {isAdmin && <DeleteLessonButton lessonId={l.id} />}
+                              {!isAdmin && <RequestCancellationButton lessonId={l.id} />}
                             </div>
                           </td>
                         </tr>
@@ -781,7 +788,15 @@ export default async function StudentDetailPage({ params, searchParams }: Props)
                     )}
                   </p>
                 </div>
-                <AddPaymentDialog studentId={id} />
+                <div className="flex items-center gap-1">
+                  <ReceiptDialog
+                    studentId={id}
+                    payments={paymentsForReceipt}
+                    guardianName={guardianUser?.name ?? null}
+                    guardianPhone={guardianPhone ?? null}
+                  />
+                  <AddPaymentDialog studentId={id} />
+                </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-2">

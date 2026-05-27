@@ -214,7 +214,7 @@ function SyncHint({ webcalUrl, icsUrl: _icsUrl }: { webcalUrl: string; icsUrl: s
   const [open,       setOpen]       = useState(false)
   const [activeApp,  setActiveApp]  = useState<App>("google")
 
-  void webcalUrl // available for future use
+  void webcalUrl; void _icsUrl // available for future use
 
   const steps = APP_STEPS[activeApp]
 

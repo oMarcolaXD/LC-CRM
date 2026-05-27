@@ -571,7 +571,7 @@ export function UserForm({
                               checked={checked}
                               onChange={(e) => {
                                 const next = new Set(selectedStudentIds)
-                                e.target.checked ? next.add(student.id) : next.delete(student.id)
+                                if (e.target.checked) { next.add(student.id) } else { next.delete(student.id) }
                                 setSelectedStudentIds(next)
                               }}
                               className="accent-[#FB8500] w-4 h-4 shrink-0"

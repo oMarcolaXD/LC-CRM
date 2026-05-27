@@ -30,7 +30,9 @@ const TYPE_ICON: Record<string, string> = {
   PACKAGE_LOW_BALANCE:  "⚠️",
   PAYMENT_DUE:          "💰",
   PAYMENT_OVERDUE:      "🚨",
-  PAYOUT_GENERATED:     "💵",
+  PAYOUT_GENERATED:          "💵",
+  CANCELLATION_REQUEST:      "🚫",
+  CANCELLATION_REVIEWED:     "📋",
 }
 
 export function NotificationBell() {

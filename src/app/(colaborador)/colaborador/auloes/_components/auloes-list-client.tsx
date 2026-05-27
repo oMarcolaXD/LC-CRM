@@ -2,10 +2,10 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { format, isPast, isFuture } from "date-fns"
+import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import {
-  Users, MapPin, Wifi, Plus, Library, Tag, CheckCircle2, XCircle,
+  Users, MapPin, Wifi, Plus, Library, Tag, CheckCircle2,
   Clock, ChevronRight, Repeat2,
 } from "lucide-react"
 import { Button }                    from "@/components/ui/button"
@@ -83,7 +83,6 @@ export function AuloesListClient({
   const todayStr = format(today, "yyyy-MM-dd")
 
   const filtered = auloes.filter(a => {
-    const dt = new Date(a.scheduledAt)
     if (filter === "proximos")  return ["SCHEDULED", "CONFIRMED"].includes(a.status)
     if (filter === "historico") return ["COMPLETED", "CANCELLED", "MISSED"].includes(a.status)
     return true

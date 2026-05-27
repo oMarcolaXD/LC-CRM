@@ -91,13 +91,10 @@ export async function createUserAction(
 
   const userRole: Role = (role === "STUDENT" && guardianMode === "self") ? "GUARDIAN" : role as Role
 
-  let createdUserId = ""
-
   await prisma.$transaction(async (tx) => {
     const user = await tx.user.create({
       data: { name, email: emailNorm, password: hashed, phone: phoneNorm, role: userRole },
     })
-    createdUserId = user.id
 
     if (role === "STUDENT") {
       let resolvedGuardianId: string | undefined
@@ -173,9 +170,8 @@ export async function createUserAction(
     redirect("/colaborador/alunos?success=Usuário+criado+com+sucesso")
   }
 
-  // Admin: aluno vai direto pra visão 360; outros roles vão pra lista
   if (role === "STUDENT") {
-    redirect(`/admin/usuarios/${createdUserId}?success=${encodeURIComponent("Aluno criado com sucesso")}`)
+    redirect("/colaborador/alunos?success=Aluno+criado+com+sucesso")
   }
   redirect("/admin/usuarios?success=Usuário+criado+com+sucesso")
 }

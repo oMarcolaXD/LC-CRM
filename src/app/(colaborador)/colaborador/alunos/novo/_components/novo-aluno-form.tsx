@@ -74,7 +74,7 @@ export function NovoAlunoForm({
   return (
     <div className="lg:grid lg:grid-cols-[1fr_288px] lg:gap-6 space-y-6 lg:space-y-0">
       {/* ── Coluna principal ─────────────────────────────────────────── */}
-      <form ref={formRef} onSubmit={handleSubmit} className="space-y-6">
+      <form ref={formRef} onSubmit={handleSubmit} className="space-y-6" autoComplete="off">
 
         {/* Dados do Aluno */}
         <Card>
@@ -105,7 +105,7 @@ export function NovoAlunoForm({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="email">E-mail *</Label>
-                <Input id="email" name="email" type="email" placeholder="aluno@email.com" required />
+                <Input id="email" name="email" type="email" placeholder="aluno@email.com" required autoComplete="off" />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="birthDate">Data de nascimento</Label>
@@ -167,7 +167,7 @@ export function NovoAlunoForm({
                     id="password" name="password" type="text"
                     placeholder="Mínimo 6 caracteres"
                     required={manualPassword}
-                    autoComplete="off"
+                    autoComplete="new-password"
                   />
                 </div>
               </div>
@@ -212,7 +212,7 @@ export function NovoAlunoForm({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="guardianEmail">E-mail do responsável</Label>
-                <Input id="guardianEmail" name="guardianEmail" type="email" placeholder="responsavel@email.com" />
+                <Input id="guardianEmail" name="guardianEmail" type="email" placeholder="responsavel@email.com" autoComplete="off" />
               </div>
             </div>
             <p className="text-xs text-muted-foreground">

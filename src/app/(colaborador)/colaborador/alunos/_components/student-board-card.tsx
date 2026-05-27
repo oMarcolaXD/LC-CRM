@@ -1,4 +1,7 @@
+"use client"
+
 import Link          from "next/link"
+import { useRouter } from "next/navigation"
 import { format }    from "date-fns"
 import { ptBR }      from "date-fns/locale"
 import { MessageCircle, CalendarDays, UserRound } from "lucide-react"
@@ -70,11 +73,11 @@ const ACTION_CONFIG: Record<BoardColumn, { label: string; cls: string }> = {
   },
   "em-dia": {
     label: "Detalhes",
-    cls:   "border border-[#219EBC] text-[#219EBC] hover:bg-[#219EBC]/10 bg-transparent",
+    cls:   "border border-brand-blue text-brand-blue hover:bg-brand-blue/10 bg-transparent",
   },
   novos: {
     label: "Detalhes",
-    cls:   "border border-[#219EBC] text-[#219EBC] hover:bg-[#219EBC]/10 bg-transparent",
+    cls:   "border border-brand-blue text-brand-blue hover:bg-brand-blue/10 bg-transparent",
   },
 }
 
@@ -85,19 +88,21 @@ interface StudentBoardCardProps {
 }
 
 export function StudentBoardCard({ student, column, detailBasePath }: StudentBoardCardProps) {
-  const displayName  = student.name?.trim() || student.user?.name?.trim() || "Aluno"
-  const pkg          = student.packages[0] ?? null
-  const remaining    = Number(pkg?.remainingLessons ?? 0)
-  const nextLesson   = student.participations[0]?.lesson ?? null
-  const guardianUser = student.guardian?.user ?? null
+  const router = useRouter()
+
+  const displayName   = student.name?.trim() || student.user?.name?.trim() || "Aluno"
+  const pkg           = student.packages[0] ?? null
+  const remaining     = Number(pkg?.remainingLessons ?? 0)
+  const nextLesson    = student.participations[0]?.lesson ?? null
+  const guardianUser  = student.guardian?.user ?? null
   const guardianPhone = guardianUser?.phone?.replace(/\D/g, "") ?? null
   const studentPhone  = student.user?.phone?.replace(/\D/g, "") ?? null
   const waPhone       = guardianPhone ?? studentPhone
 
-  const status        = getStatusInfo(pkg)
-  const isInactive    = student.user?.active === false
-  const hasNoPackage  = student._count.packages === 0
-  const hasNoHistory  = student._count.participations === 0
+  const status       = getStatusInfo(pkg)
+  const isInactive   = student.user?.active === false
+  const hasNoPackage = student._count.packages === 0
+  const hasNoHistory = student._count.participations === 0
 
   const remainingPct = pkg && Number(pkg.totalLessons) > 0
     ? Math.round((Number(pkg.remainingLessons) / Number(pkg.totalLessons)) * 100)
@@ -112,42 +117,48 @@ export function StudentBoardCard({ student, column, detailBasePath }: StudentBoa
   const detailHref = `${detailBasePath}/${student.id}`
 
   return (
-    <div className={`rounded-xl border bg-card p-4 flex flex-col gap-3 hover:shadow-md transition-shadow ${isInactive ? "opacity-65" : ""}`}>
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={() => router.push(detailHref)}
+      onKeyDown={e => e.key === "Enter" && router.push(detailHref)}
+      className={[
+        "rounded-xl border bg-card p-4 flex flex-col gap-3 cursor-pointer",
+        "hover:-translate-y-1 hover:shadow-lg hover:border-primary/30",
+        "active:scale-[0.98] active:shadow-md",
+        "transition-all duration-200 ease-out",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
+        isInactive ? "opacity-65" : "",
+      ].join(" ")}
+    >
       {/* Header */}
       <div className="flex items-start gap-3">
         <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold text-white shrink-0 ${avatarColor(displayName)}`}>
           {initials(displayName)}
         </div>
         <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-2">
-            <div className="flex-1 min-w-0">
-              <Link href={detailHref} className="font-semibold text-sm hover:underline leading-tight truncate block">
-                {displayName}
-              </Link>
-              {/* Badges de status */}
-              <div className="flex flex-wrap gap-1 mt-0.5">
-                {isInactive && (
-                  <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600 border border-gray-300">
-                    Ex-aluno
-                  </span>
-                )}
-                {!isInactive && hasNoPackage && (
-                  <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-300">
-                    Sem pacote
-                  </span>
-                )}
-                {!isInactive && hasNoHistory && (
-                  <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-300">
-                    Sem histórico
-                  </span>
-                )}
-              </div>
-            </div>
-            <span className={`shrink-0 text-xs font-medium px-2 py-0.5 rounded-full whitespace-nowrap ${status.cls}`}>
+          <p className="font-semibold text-sm leading-snug wrap-break-word">{displayName}</p>
+          <div className="flex flex-wrap items-center gap-1 mt-1">
+            <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full whitespace-nowrap ${status.cls}`}>
               {status.label}
             </span>
+            {isInactive && (
+              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600 border border-gray-300">
+                Ex-aluno
+              </span>
+            )}
+            {!isInactive && hasNoPackage && (
+              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-300">
+                Sem pacote
+              </span>
+            )}
+            {!isInactive && hasNoHistory && (
+              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-300">
+                Sem histórico
+              </span>
+            )}
           </div>
-          <p className="text-xs text-muted-foreground mt-0.5 truncate">
+          <p className="text-xs text-muted-foreground mt-0.5">
             {student.grade}
             {nextLesson ? ` · ${nextLesson.subject?.name ?? "–"}` : ""}
           </p>
@@ -198,7 +209,7 @@ export function StudentBoardCard({ student, column, detailBasePath }: StudentBoa
             href={`https://wa.me/55${waPhone}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-[#219EBC] hover:bg-[#219EBC]/10 transition-colors"
+            className="relative z-10 shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-brand-blue hover:bg-brand-blue/10 transition-colors"
             title="Enviar WhatsApp"
             onClick={e => e.stopPropagation()}
           >
@@ -208,29 +219,31 @@ export function StudentBoardCard({ student, column, detailBasePath }: StudentBoa
       </div>
 
       {/* Action button(s) */}
-      {action.label === "Detalhes" ? (
-        <Link
-          href={detailHref}
-          className={`w-full text-center text-xs font-semibold py-1.5 rounded-lg transition-colors ${action.cls}`}
-        >
-          {action.label}
-        </Link>
-      ) : (
-        <div className="flex gap-2">
+      <div onClick={e => e.stopPropagation()}>
+        {action.label === "Detalhes" ? (
           <Link
             href={detailHref}
-            className="flex-1 text-center text-xs font-semibold py-1.5 rounded-lg transition-colors border border-brand-blue text-brand-blue hover:bg-brand-blue/10 bg-transparent"
-          >
-            Detalhes
-          </Link>
-          <Link
-            href={detailHref}
-            className={`flex-1 text-center text-xs font-semibold py-1.5 rounded-lg transition-colors ${action.cls}`}
+            className={`block w-full text-center text-xs font-semibold py-1.5 rounded-lg transition-colors ${action.cls}`}
           >
             {action.label}
           </Link>
-        </div>
-      )}
+        ) : (
+          <div className="flex gap-2">
+            <Link
+              href={detailHref}
+              className="flex-1 text-center text-xs font-semibold py-1.5 rounded-lg transition-colors border border-brand-blue text-brand-blue hover:bg-brand-blue/10 bg-transparent"
+            >
+              Detalhes
+            </Link>
+            <Link
+              href={detailHref}
+              className={`flex-1 text-center text-xs font-semibold py-1.5 rounded-lg transition-colors ${action.cls}`}
+            >
+              {action.label}
+            </Link>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

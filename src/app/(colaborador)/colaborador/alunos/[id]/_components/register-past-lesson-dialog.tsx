@@ -47,7 +47,7 @@ export function RegisterPastLessonDialog({
   const [time,      setTime]      = useState("08:00")
   const [teacherId, setTeacherId] = useState(teachers[0]?.id ?? "")
   const [subjectId, setSubjectId] = useState(teachers[0]?.subjects[0]?.id ?? "")
-  const [duration,  setDuration]  = useState("60")
+  const [duration,  setDuration]  = useState("1")
   const [modality,  setModality]  = useState<"PRESENCIAL" | "ONLINE">("PRESENCIAL")
   const [topics,    setTopics]    = useState("")
   const [status,    setStatus]    = useState<"COMPLETED" | "MISSED">("COMPLETED")
@@ -135,7 +135,7 @@ export function RegisterPastLessonDialog({
             date,
             time,
             modality,
-            duration:       parseInt(duration) || 60,
+            duration:       Math.round((parseFloat(duration.replace(",", ".")) || 1) * 60),
             statusOverride: status,
             studentPrices: [
               { studentId, price: p1 },
@@ -382,11 +382,13 @@ export function RegisterPastLessonDialog({
             {/* Duração e Modalidade */}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>Duração (min)</Label>
+                <Label>Número de aulas</Label>
                 <Input
-                  type="number" min={30} max={240} step={30}
+                  type="text" inputMode="decimal"
                   value={duration} onChange={e => setDuration(e.target.value)}
+                  placeholder="Ex: 1 ou 0,5"
                 />
+                <p className="text-[10px] text-muted-foreground">Prefira vírgula: 0,5 · 1 · 1,5</p>
               </div>
               <div className="space-y-1.5">
                 <Label>Modalidade</Label>

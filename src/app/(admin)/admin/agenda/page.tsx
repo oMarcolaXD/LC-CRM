@@ -91,6 +91,7 @@ export default async function AdminAgendaPage({ searchParams }: AgendaPageProps)
     return {
       id:            l.id,
       teacherId:     l.teacherId,
+      studentId:     first?.studentId ?? "",
       startMin:      min,
       duration:      l.duration ?? 60,
       status:        l.status as LessonSlot["status"],

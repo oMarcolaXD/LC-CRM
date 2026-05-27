@@ -2,6 +2,7 @@ import { Sidebar }              from "./sidebar"
 import { Header }               from "./header"
 import { WhatsAppButton }       from "./whatsapp-button"
 import { EmailMissingBanner }   from "./email-missing-banner"
+import { DevBanner }            from "./dev-banner"
 import { NavigationProgress }   from "./navigation-progress"
 import type { Role }            from "@prisma/client"
 
@@ -43,6 +44,7 @@ export async function AppLayout({ children, name, email, role, image, phone, mis
           allStudents={allStudents}
           activeStudentId={activeStudentId}
         />
+        <DevBanner />
         {missingEmail && <EmailMissingBanner role={role} />}
         <main className="flex-1 overflow-y-auto p-4 md:p-6">
           {children}

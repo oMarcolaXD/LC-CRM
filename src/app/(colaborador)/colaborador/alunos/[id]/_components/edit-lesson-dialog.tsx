@@ -52,7 +52,10 @@ export function EditLessonDialog({ lesson, studentId, teachers }: Props) {
   const [modality,  setModality]  = useState<"PRESENCIAL" | "ONLINE">(
     lesson.modality === "ONLINE" ? "ONLINE" : "PRESENCIAL"
   )
-  const [duration,  setDuration]  = useState(String(lesson.duration ?? 60))
+  const [duration,  setDuration]  = useState(() => {
+    const aulas = (lesson.duration ?? 60) / 60
+    return String(aulas).replace(".", ",")
+  })
   const [topics,    setTopics]    = useState(lesson.topicsCovered ?? "")
   const [notes,     setNotes]     = useState(lesson.teacherNotes ?? "")
   const [status,    setStatus]    = useState(lesson.status)
@@ -72,7 +75,7 @@ export function EditLessonDialog({ lesson, studentId, teachers }: Props) {
       setTeacherId(lesson.teacherId)
       setSubjectId(lesson.subjectId ?? "")
       setModality(lesson.modality === "ONLINE" ? "ONLINE" : "PRESENCIAL")
-      setDuration(String(lesson.duration ?? 60))
+      setDuration(() => { const a = (lesson.duration ?? 60) / 60; return String(a).replace(".", ",") })
       setTopics(lesson.topicsCovered ?? "")
       setNotes(lesson.teacherNotes ?? "")
       setStatus(lesson.status)
@@ -95,7 +98,7 @@ export function EditLessonDialog({ lesson, studentId, teachers }: Props) {
           teacherId,
           subjectId,
           modality,
-          duration:      parseInt(duration) || 60,
+          duration:      Math.round((parseFloat(duration.replace(",", ".")) || 1) * 60),
           topicsCovered: topics || undefined,
           teacherNotes:  notes  || undefined,
           status:        status as "COMPLETED" | "MISSED" | "CONFIRMED" | "CANCELLED" | "SCHEDULED",
@@ -194,12 +197,14 @@ export function EditLessonDialog({ lesson, studentId, teachers }: Props) {
             {/* Duração e Modalidade */}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs">Duração (min)</Label>
+                <Label className="text-xs">Número de aulas</Label>
                 <Input
-                  type="number" min={30} max={240} step={30}
+                  type="text" inputMode="decimal"
                   value={duration} onChange={e => setDuration(e.target.value)}
+                  placeholder="Ex: 1 ou 0,5"
                   className="h-9"
                 />
+                <p className="text-[10px] text-muted-foreground">Prefira vírgula: 0,5 · 1 · 1,5</p>
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Modalidade</Label>

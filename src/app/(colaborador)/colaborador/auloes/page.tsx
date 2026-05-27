@@ -1,6 +1,5 @@
 import { prisma }       from "@/lib/prisma"
 import { PageHeader }   from "@/components/shared/page-header"
-import { addMinutes }   from "date-fns"
 import type { AulaoItem, TeacherOption, StudentOption } from "./_components/auloes-list-client"
 import { AuloesListClient } from "./_components/auloes-list-client"
 

@@ -707,7 +707,7 @@ export async function createBatchPastLessonsAction(data: {
   revalidatePath("/admin/agenda")
 }
 
-// ─── Editar Aula (admin only) ─────────────────────────────────────────────────
+// ─── Editar Aula (admin e colaborador) ───────────────────────────────────────
 
 export async function updateLessonDirectAction(data: {
   lessonId:       string
@@ -723,7 +723,7 @@ export async function updateLessonDirectAction(data: {
   status:         "COMPLETED" | "MISSED" | "CONFIRMED" | "CANCELLED" | "SCHEDULED"
 }) {
   const session = await auth()
-  if (session?.user?.role !== "ADMIN") throw new Error("Sem permissão")
+  if (!["ADMIN", "COLLABORATOR"].includes(session?.user?.role ?? "")) throw new Error("Sem permissão")
 
   const scheduledAt  = new Date(`${data.date}T${data.time}:00`)
   const teacherOnsite = data.modality === "PRESENCIAL"

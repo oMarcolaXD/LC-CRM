@@ -27,14 +27,6 @@ type Periodo = "mes" | "mes-anterior" | "3meses" | "6meses" | "ano"
 
 const VALID_PERIODOS: Periodo[] = ["mes", "mes-anterior", "3meses", "6meses", "ano"]
 
-const PERIODOS: { id: Periodo; label: string }[] = [
-  { id: "mes",          label: "Este mês"    },
-  { id: "mes-anterior", label: "Mês anterior" },
-  { id: "3meses",       label: "3 meses"     },
-  { id: "6meses",       label: "6 meses"     },
-  { id: "ano",          label: "Este ano"    },
-]
-
 type ChartPoint = { start: Date; end: Date; label: string }
 
 function getPeriodBounds(periodo: Periodo, now: Date): {
@@ -129,7 +121,7 @@ function getPeriodBounds(periodo: Periodo, now: Date): {
 async function getOpsData(periodo: Periodo) {
   const now    = new Date()
   const bounds = getPeriodBounds(periodo, now)
-  const { start, end, prevStart, prevEnd, periodLabel, chartPoints, isMonthly } = bounds
+  const { start, end, prevStart, prevEnd, periodLabel, chartPoints } = bounds
 
   const fetchFrom = chartPoints[0].start < prevStart ? chartPoints[0].start : prevStart
 

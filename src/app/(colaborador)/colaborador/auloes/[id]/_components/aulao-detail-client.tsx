@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react"
 import {
   Users, MapPin, Wifi, Tag, CheckCircle2, Clock, XCircle, Loader2,
-  UserPlus, UserMinus, BookOpen, Building2, Home, X, Repeat2,
+  UserPlus, UserMinus, BookOpen, Building2, Home, Repeat2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge }  from "@/components/ui/badge"
