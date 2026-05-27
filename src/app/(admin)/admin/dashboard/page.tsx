@@ -341,7 +341,7 @@ function OpsBtn({
 }
 
 function KpiCell({
-  label, value, delta, deltaPos, sub, spark, sparkColor, goalProgress,
+  label, value, delta, deltaPos, sub, spark, sparkColor, goalProgress, className,
 }: {
   label:         string
   value:         string
@@ -351,6 +351,7 @@ function KpiCell({
   spark:         number[]
   sparkColor:    string
   goalProgress?: number
+  className?:    string
 }) {
   const dCls =
     deltaPos === null ? "bg-[var(--muted-soft)] text-muted-foreground"   :
@@ -358,7 +359,7 @@ function KpiCell({
                         "bg-[var(--danger-soft)] text-[var(--danger)]"
 
   return (
-    <div className="flex flex-col gap-1.5 bg-card p-[14px_16px_12px]">
+    <div className={cn("flex flex-col gap-1.5 bg-card p-[14px_16px_12px]", className)}>
       <div className="flex items-center justify-between gap-2">
         <span className="text-[11px] font-medium uppercase tracking-[0.02em] text-muted-foreground">
           {label}
@@ -427,7 +428,9 @@ export default async function AdminOpsPage({
         </div>
 
         {/* Seletor de período */}
-        <PeriodSelector current={periodo} />
+        <div className="-mx-4 overflow-x-auto px-4 lg:mx-0 lg:px-0">
+          <PeriodSelector current={periodo} />
+        </div>
       </div>
 
       {/* KPI row */}
@@ -444,6 +447,7 @@ export default async function AdminOpsPage({
           spark={d.receitaSpark}
           sparkColor="var(--primary)"
           goalProgress={d.receitaGoal > 0 ? d.receitaMes / d.receitaGoal : 0}
+          className="col-span-2 lg:col-span-1"
         />
         <KpiCell
           label="Aulas realizadas"
@@ -480,10 +484,10 @@ export default async function AdminOpsPage({
       </div>
 
       {/* Body */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_380px]">
+      <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[1fr_380px] lg:items-start">
 
-        {/* Left column */}
-        <div className="flex min-h-0 flex-col gap-4">
+        {/* Left column — chart + table (aparece depois dos alertas no mobile) */}
+        <div className="order-2 flex min-h-0 flex-col gap-4 lg:order-1">
 
           {/* Revenue chart */}
           <div className="overflow-hidden rounded-[10px] border border-border bg-card">
@@ -536,66 +540,110 @@ export default async function AdminOpsPage({
                 Nenhum pagamento atrasado ✓
               </p>
             ) : (
-              <div className="overflow-auto">
-                <table className="w-full border-collapse text-[12.5px]">
-                  <thead>
-                    <tr className="text-left text-[10.5px] font-medium uppercase tracking-[0.04em] text-muted-foreground">
-                      <th className="border-b border-border px-[14px] py-[8px] font-medium">Aluno</th>
-                      <th className="border-b border-border px-[14px] py-[8px] font-medium">Descrição</th>
-                      <th className="border-b border-border px-[14px] py-[8px] text-right font-medium">Valor</th>
-                      <th className="border-b border-border px-[14px] py-[8px] text-right font-medium">Atraso</th>
-                      <th className="border-b border-border px-[14px] py-[8px] font-medium">Contato</th>
-                      <th className="border-b border-border px-[14px] py-[8px] text-right font-medium">Ação</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {d.atrasados.map((r) => {
-                      const diasStyle =
-                        r.dias >= 15
-                          ? { background: "var(--danger-soft)", color: "var(--danger)" }
-                          : r.dias >= 7
-                          ? { background: "var(--warn-soft)",   color: "var(--warn)"   }
-                          : { background: "var(--hover)",       color: "var(--subtle)"  }
-                      return (
-                        <tr key={r.id} className="border-t border-border">
-                          <td className="px-[14px] py-[9px] font-medium">{r.aluno}</td>
-                          <td className="px-[14px] py-[9px] text-muted-foreground">{r.pacote}</td>
-                          <td
-                            className="px-[14px] py-[9px] text-right font-mono"
-                            style={{ fontFeatureSettings: '"tnum"' }}
+              <>
+                {/* Tabela — desktop */}
+                <div className="hidden overflow-auto md:block">
+                  <table className="w-full border-collapse text-[12.5px]">
+                    <thead>
+                      <tr className="text-left text-[10.5px] font-medium uppercase tracking-[0.04em] text-muted-foreground">
+                        <th className="border-b border-border px-[14px] py-[8px] font-medium">Aluno</th>
+                        <th className="border-b border-border px-[14px] py-[8px] font-medium">Descrição</th>
+                        <th className="border-b border-border px-[14px] py-[8px] text-right font-medium">Valor</th>
+                        <th className="border-b border-border px-[14px] py-[8px] text-right font-medium">Atraso</th>
+                        <th className="border-b border-border px-[14px] py-[8px] font-medium">Contato</th>
+                        <th className="border-b border-border px-[14px] py-[8px] text-right font-medium">Ação</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {d.atrasados.map((r) => {
+                        const diasStyle =
+                          r.dias >= 15
+                            ? { background: "var(--danger-soft)", color: "var(--danger)" }
+                            : r.dias >= 7
+                            ? { background: "var(--warn-soft)",   color: "var(--warn)"   }
+                            : { background: "var(--hover)",       color: "var(--subtle)"  }
+                        return (
+                          <tr key={r.id} className="border-t border-border">
+                            <td className="px-[14px] py-[9px] font-medium">{r.aluno}</td>
+                            <td className="px-[14px] py-[9px] text-muted-foreground">{r.pacote}</td>
+                            <td
+                              className="px-[14px] py-[9px] text-right font-mono"
+                              style={{ fontFeatureSettings: '"tnum"' }}
+                            >
+                              {brl(r.valor)}
+                            </td>
+                            <td className="px-[14px] py-[9px] text-right">
+                              <span
+                                className="inline-flex items-center rounded px-[7px] py-[2px] font-mono text-[11px] font-semibold"
+                                style={diasStyle}
+                              >
+                                {r.dias}d
+                              </span>
+                            </td>
+                            <td className="px-[14px] py-[9px] text-muted-foreground">{r.contato}</td>
+                            <td className="px-[14px] py-[9px] text-right">
+                              <Link
+                                href="/admin/financeiro/pagamentos?filter=OVERDUE"
+                                className="text-[11px] font-medium transition-opacity hover:opacity-70"
+                                style={{ color: "var(--primary)" }}
+                              >
+                                Cobrar →
+                              </Link>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Lista compacta — mobile */}
+                <div className="flex flex-col divide-y divide-border md:hidden">
+                  {d.atrasados.map((r) => {
+                    const diasStyle =
+                      r.dias >= 15
+                        ? { background: "var(--danger-soft)", color: "var(--danger)" }
+                        : r.dias >= 7
+                        ? { background: "var(--warn-soft)",   color: "var(--warn)"   }
+                        : { background: "var(--hover)",       color: "var(--subtle)"  }
+                    return (
+                      <div key={r.id} className="flex items-center gap-3 px-[14px] py-[11px]">
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-[13px] font-medium">{r.aluno}</p>
+                          <p className="truncate text-[11px] text-muted-foreground">{r.pacote}</p>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2">
+                          <span
+                            className="inline-flex items-center rounded px-[7px] py-[2px] font-mono text-[11px] font-semibold"
+                            style={diasStyle}
+                          >
+                            {r.dias}d
+                          </span>
+                          <span
+                            className="font-mono text-[13px]"
+                            style={{ fontFeatureSettings: '"tnum"', color: "var(--text)" }}
                           >
                             {brl(r.valor)}
-                          </td>
-                          <td className="px-[14px] py-[9px] text-right">
-                            <span
-                              className="inline-flex items-center rounded px-[7px] py-[2px] font-mono text-[11px] font-semibold"
-                              style={diasStyle}
-                            >
-                              {r.dias}d
-                            </span>
-                          </td>
-                          <td className="px-[14px] py-[9px] text-muted-foreground">{r.contato}</td>
-                          <td className="px-[14px] py-[9px] text-right">
-                            <Link
-                              href="/admin/financeiro/pagamentos?filter=OVERDUE"
-                              className="text-[11px] font-medium transition-opacity hover:opacity-70"
-                              style={{ color: "var(--primary)" }}
-                            >
-                              Cobrar →
-                            </Link>
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                          </span>
+                          <Link
+                            href="/admin/financeiro/pagamentos?filter=OVERDUE"
+                            className="text-[11px] font-medium transition-opacity hover:opacity-70"
+                            style={{ color: "var(--primary)" }}
+                          >
+                            Cobrar →
+                          </Link>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </>
             )}
           </div>
         </div>
 
-        {/* Right column */}
-        <div className="flex min-h-0 flex-col gap-4">
+        {/* Right column — alertas + próximas (aparecem primeiro no mobile) */}
+        <div className="order-1 flex min-h-0 flex-col gap-4 lg:order-2">
 
           {/* Alertas */}
           <div className="overflow-hidden rounded-[10px] border border-border bg-card">

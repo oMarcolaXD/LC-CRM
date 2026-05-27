@@ -1,5 +1,6 @@
 import { Sidebar }              from "./sidebar"
 import { Header }               from "./header"
+import { BottomNav }            from "./bottom-nav"
 import { WhatsAppButton }       from "./whatsapp-button"
 import { EmailMissingBanner }   from "./email-missing-banner"
 import { DevBanner }            from "./dev-banner"
@@ -36,19 +37,16 @@ export async function AppLayout({ children, name, email, role, image, phone, mis
       {/* Conteúdo principal */}
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
         <Header
-          name={name}
-          email={email}
           role={role}
-          image={image}
-          phone={phone}
           allStudents={allStudents}
           activeStudentId={activeStudentId}
         />
         <DevBanner />
         {missingEmail && <EmailMissingBanner role={role} />}
-        <main className="flex-1 overflow-y-auto p-4 md:p-6">
+        <main className="flex-1 overflow-y-auto p-4 pb-20 md:p-6 lg:pb-6">
           {children}
         </main>
+        <BottomNav role={role} />
       </div>
       <WhatsAppButton />
     </div>
