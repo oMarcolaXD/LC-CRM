@@ -6,6 +6,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Lição de Casa CRM** — sistema de gestão para empresa de aulas particulares. Alunos do 6º EF ao Superior. Aulas presenciais e online (Google Meet/Zoom), individuais ou em grupo.
 
+## Vault Obsidian (segundo cérebro)
+
+Notas de contexto (decisões, dev logs, roadmap real) ficam em
+`G:\Meu Drive\Obsidian\LC-CRM`. Ver `_CLAUDE.md` no vault para convenções.
+Ao final de sessões relevantes (feature entregue, decisão tomada), considere
+registrar lá em `Dev Logs/`.
+
 ## Stack
 
 - **Next.js 15** (App Router, Turbopack) + TypeScript
