@@ -1,16 +1,18 @@
+import Link                    from "next/link"
 import { prisma }              from "@/lib/prisma"
 import { PageHeader }         from "@/components/shared/page-header"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button }             from "@/components/ui/button"
+import { Button, buttonVariants } from "@/components/ui/button"
 import { Input }              from "@/components/ui/input"
 import { Label }              from "@/components/ui/label"
 import { setRoomCountAction } from "@/lib/actions/config"
-import { getOperationalConfig } from "@/lib/config"
+import { getOperationalConfig, isWhatsAppEnabled } from "@/lib/config"
 import { SubjectManager }     from "./subject-manager"
 import { OperationalConfigForm } from "./operational-config"
+import { WhatsAppToggle }     from "./whatsapp-toggle"
 import {
   DoorOpen, BookOpen, Settings, Info, AlertCircle, CheckCircle2,
-  Clock,
+  Clock, MessageCircle, MessageSquareText,
 } from "lucide-react"
 
 async function getRoomCount() {
@@ -23,10 +25,11 @@ interface ConfigPageProps {
 }
 
 export default async function AdminConfigPage({ searchParams }: ConfigPageProps) {
-  const [roomCount, subjects, opConfig, { error, success }] = await Promise.all([
+  const [roomCount, subjects, opConfig, whatsappEnabled, { error, success }] = await Promise.all([
     getRoomCount(),
     prisma.subject.findMany({ orderBy: { name: "asc" } }),
     getOperationalConfig(),
+    isWhatsAppEnabled(),
     searchParams,
   ])
 
@@ -119,6 +122,33 @@ export default async function AdminConfigPage({ searchParams }: ConfigPageProps)
         </Card>
 
       </div>
+
+      {/* ── Notificações WhatsApp ────────────────────────────────────── */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="font-sub text-base flex items-center gap-2">
+            <MessageCircle className="w-4 h-4 text-primary" />
+            Notificações via WhatsApp
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex items-center justify-between gap-3 p-3 rounded-lg bg-muted/40 border border-border">
+            <div>
+              <p className="text-sm font-medium">Envio de mensagens via WhatsApp</p>
+              <p className="text-xs text-muted-foreground">
+                Quando desativado, nenhuma mensagem é enviada — útil enquanto a integração
+                está em testes.
+              </p>
+            </div>
+            <WhatsAppToggle enabled={whatsappEnabled} />
+          </div>
+
+          <Link href="/admin/config/mensagens" className={buttonVariants({ variant: "outline", size: "sm" }) + " w-full"}>
+            <MessageSquareText className="w-4 h-4 mr-2" />
+            Configurar mensagens padrão
+          </Link>
+        </CardContent>
+      </Card>
 
       {/* ── Horário de Funcionamento ─────────────────────────────────── */}
       <Card>

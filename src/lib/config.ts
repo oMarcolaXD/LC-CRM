@@ -19,6 +19,13 @@ export async function getRoomCount(): Promise<number> {
   return Math.max(1, parseInt(val, 10) || 3)
 }
 
+// ─── Notificações WhatsApp ─────────────────────────────────────────────────────
+
+export async function isWhatsAppEnabled(): Promise<boolean> {
+  const val = await getConfigValue("whatsapp_enabled", "false")
+  return val === "true"
+}
+
 // ─── Horário de Funcionamento ─────────────────────────────────────────────────
 
 export interface OperationalConfig {

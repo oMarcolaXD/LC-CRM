@@ -19,8 +19,17 @@ export const authConfig: NextAuthConfig = {
   callbacks: {
     session({ session, token }) {
       if (session.user) {
-        session.user.id   = token.id   as string
-        session.user.role = token.role as Role
+        // Impersonação: se um ADMIN está "vendo como" outro usuário, a sessão
+        // efetiva (id/role) passa a ser a do alvo. token.id/token.role seguem
+        // sendo os do admin real — por isso o middleware roteia o admin como se
+        // fosse o perfil impersonado (e o impede de voltar ao /admin enquanto isso).
+        if (token.actAsId) {
+          session.user.id   = token.actAsId   as string
+          session.user.role = token.actAsRole as Role
+        } else {
+          session.user.id   = token.id   as string
+          session.user.role = token.role as Role
+        }
       }
       return session
     },

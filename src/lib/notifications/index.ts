@@ -1,6 +1,7 @@
 import { prisma }       from "@/lib/prisma"
 import { sendEmail }     from "./email"
 import { sendWhatsApp }  from "./whatsapp"
+import { getMessageTemplate, renderTemplate } from "./templates"
 import type { NotificationPayload } from "./types"
 
 export type { NotificationType, NotificationPayload } from "./types"
@@ -42,11 +43,17 @@ export async function notifyLessonRequest(opts: {
   teacherId: string; teacherEmail: string | null; teacherPhone?: string | null
   studentName: string; subject: string; preferredAt: string
 }) {
+  const template = await getMessageTemplate("lesson_request")
+  const message  = renderTemplate(template, {
+    aluno:             opts.studentName,
+    materia:           opts.subject,
+    horario_preferido: opts.preferredAt,
+  })
   await notify({
     userId:  opts.teacherId,
     type:    "LESSON_REQUEST",
     title:   "Nova solicitação de aula",
-    message: `${opts.studentName} solicitou uma aula de ${opts.subject}.`,
+    message,
     email:   opts.teacherEmail ?? undefined,
     phone:   opts.teacherPhone ?? undefined,
     data:    { "Matéria": opts.subject, "Aluno": opts.studentName, "Horário preferido": opts.preferredAt },
@@ -57,11 +64,18 @@ export async function notifyLessonConfirmed(opts: {
   studentUserId: string; studentEmail: string | null; studentPhone?: string | null
   teacherName: string; subject: string; scheduledAt: string; modality: string
 }) {
+  const template = await getMessageTemplate("lesson_confirmed_student")
+  const message  = renderTemplate(template, {
+    materia:    opts.subject,
+    professor:  opts.teacherName,
+    data_hora:  opts.scheduledAt,
+    modalidade: opts.modality,
+  })
   await notify({
     userId:  opts.studentUserId,
     type:    "LESSON_CONFIRMED",
     title:   "Aula confirmada!",
-    message: `Sua aula de ${opts.subject} com ${opts.teacherName} foi confirmada.`,
+    message,
     email:   opts.studentEmail ?? undefined,
     phone:   opts.studentPhone ?? undefined,
     data:    {
@@ -77,11 +91,13 @@ export async function notifyLowBalance(opts: {
   studentUserId: string; studentEmail: string | null; studentPhone?: string | null
   remaining: number
 }) {
+  const template = await getMessageTemplate("package_low_balance")
+  const message  = renderTemplate(template, { aulas_restantes: String(opts.remaining) })
   await notify({
     userId:  opts.studentUserId,
     type:    "PACKAGE_LOW_BALANCE",
     title:   "Saldo de aulas baixo",
-    message: `Você tem apenas ${opts.remaining} aula(s) restante(s). Renove seu pacote para não perder continuidade.`,
+    message,
     email:   opts.studentEmail ?? undefined,
     phone:   opts.studentPhone ?? undefined,
     data:    { "Aulas restantes": String(opts.remaining) },
@@ -92,11 +108,13 @@ export async function notifyPaymentDue(opts: {
   studentUserId: string; studentEmail: string | null; studentPhone?: string | null
   amount: string; dueDate: string
 }) {
+  const template = await getMessageTemplate("payment_due")
+  const message  = renderTemplate(template, { valor: opts.amount, vencimento: opts.dueDate })
   await notify({
     userId:  opts.studentUserId,
     type:    "PAYMENT_DUE",
     title:   "Pagamento próximo do vencimento",
-    message: `Você tem uma cobrança de ${opts.amount} com vencimento em ${opts.dueDate}.`,
+    message,
     email:   opts.studentEmail ?? undefined,
     phone:   opts.studentPhone ?? undefined,
     data:    { "Valor": opts.amount, "Vencimento": opts.dueDate },
@@ -110,9 +128,13 @@ export async function notifyLessonReminder(opts: {
   teacherName: string; studentName: string; subject: string; scheduledAt: string
 }) {
   const timeLabel = opts.type === "LESSON_REMINDER_24H" ? "em 24 horas" : "em 1 hora"
-  const message = opts.role === "student"
-    ? `Sua aula de ${opts.subject} com ${opts.teacherName} começa ${timeLabel}.`
-    : `Sua aula de ${opts.subject} com ${opts.studentName} começa ${timeLabel}.`
+  const template  = await getMessageTemplate("lesson_reminder")
+  const message   = renderTemplate(template, {
+    materia:   opts.subject,
+    pessoa:    opts.role === "student" ? opts.teacherName : opts.studentName,
+    tempo:     timeLabel,
+    data_hora: opts.scheduledAt,
+  })
   await notify({
     userId:  opts.userId,
     type:    opts.type,
@@ -132,11 +154,13 @@ export async function notifyPaymentOverdue(opts: {
   studentUserId: string; studentEmail: string | null; studentPhone?: string | null
   amount: string; dueDate: string
 }) {
+  const template = await getMessageTemplate("payment_overdue")
+  const message  = renderTemplate(template, { valor: opts.amount, vencimento: opts.dueDate })
   await notify({
     userId:  opts.studentUserId,
     type:    "PAYMENT_OVERDUE",
     title:   "Pagamento em atraso",
-    message: `Você tem uma cobrança de ${opts.amount} em atraso (venceu em ${opts.dueDate}). Regularize para continuar com suas aulas.`,
+    message,
     email:   opts.studentEmail ?? undefined,
     phone:   opts.studentPhone ?? undefined,
     data:    { "Valor": opts.amount, "Vencido em": opts.dueDate },
@@ -147,11 +171,17 @@ export async function notifyPayoutGenerated(opts: {
   teacherUserId: string; teacherEmail: string; teacherPhone?: string | null
   amount: string; month: string; totalLessons: number
 }) {
+  const template = await getMessageTemplate("payout_generated")
+  const message  = renderTemplate(template, {
+    valor:            opts.amount,
+    mes:              opts.month,
+    aulas_realizadas: String(opts.totalLessons),
+  })
   await notify({
     userId:  opts.teacherUserId,
     type:    "PAYOUT_GENERATED",
     title:   "Repasse calculado",
-    message: `Seu repasse de ${opts.amount} referente a ${opts.month} está disponível (${opts.totalLessons} aulas realizadas).`,
+    message,
     email:   opts.teacherEmail ?? undefined,
     phone:   opts.teacherPhone ?? undefined,
     data:    { "Valor": opts.amount, "Referência": opts.month, "Aulas realizadas": String(opts.totalLessons) },

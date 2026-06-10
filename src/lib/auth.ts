@@ -9,7 +9,7 @@ import type { Role } from "@prisma/client"
 
 export { ROLE_HOME }
 
-export const { handlers, auth, signIn, signOut } = NextAuth({
+export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
   ...authConfig,
   providers: [
     Google({
@@ -73,6 +73,33 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (trigger === "update" && session) {
         if (session.name  != null) token.name    = session.name
         if (session.image != null) token.picture = session.image
+
+        // ─── Iniciar impersonação ("Ver como") ──────────────────────────────
+        // GUARDA DE SEGURANÇA: só permite começar a impersonar se o token real
+        // for de um ADMIN. Como token.role NUNCA é sobrescrito durante a
+        // impersonação, essa checagem sempre reflete a identidade real — um
+        // usuário comum não consegue forjar isso via update() do client.
+        const imp = (session as { impersonate?: { id: string; role: Role; name: string; image?: string | null } }).impersonate
+        if (imp && token.role === "ADMIN") {
+          token.realId     = token.id
+          token.realName   = (token.name ?? "") as string
+          token.actAsId    = imp.id
+          token.actAsRole  = imp.role
+          token.actAsName  = imp.name
+          token.actAsImage = imp.image ?? null
+        }
+
+        // ─── Encerrar impersonação ──────────────────────────────────────────
+        // Voltar à própria identidade é sempre seguro.
+        if ((session as { stopImpersonate?: boolean }).stopImpersonate) {
+          token.actAsId    = undefined
+          token.actAsRole  = undefined
+          token.actAsName  = undefined
+          token.actAsImage = undefined
+          token.realId     = undefined
+          token.realName   = undefined
+        }
+
         return token
       }
       if (account?.provider === "google" && user?.email) {
@@ -92,8 +119,22 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
     session({ session, token }) {
       if (session.user) {
-        session.user.id    = token.id    as string
-        session.user.role  = token.role  as Role
+        if (token.actAsId) {
+          // Sessão efetiva = usuário impersonado (dados reais dele nas queries),
+          // com a identidade real do admin exposta para o banner/auditoria.
+          session.user.id            = token.actAsId   as string
+          session.user.role          = token.actAsRole as Role
+          session.user.name          = (token.actAsName ?? "") as string
+          session.user.image         = (token.actAsImage ?? null) as string | null
+          session.user.impersonating = {
+            realId:   token.realId   as string,
+            realName: token.realName as string,
+          }
+        } else {
+          session.user.id            = token.id   as string
+          session.user.role          = token.role as Role
+          session.user.impersonating = null
+        }
         session.user.phone = token.phone as string | null
       }
       return session

@@ -7,7 +7,7 @@ import { Input }          from "@/components/ui/input"
 import { Label }          from "@/components/ui/label"
 import { Checkbox }       from "@/components/ui/checkbox"
 import {
-  AlertCircle, Mail, Lock, Eye, EyeOff,
+  AlertCircle, CheckCircle2, Mail, Lock, Eye, EyeOff,
   Headphones, ShieldCheck, ArrowRight,
 } from "lucide-react"
 import Link               from "next/link"
@@ -22,14 +22,27 @@ const ERROR_MESSAGES: Record<string, string> = {
   student_login_disabled:  "Alunos não fazem login diretamente. Peça ao responsável para acessar o sistema.",
 }
 
-export function LoginForm({ error }: { error?: string }) {
+const SUCCESS_MESSAGES: Record<string, string> = {
+  password_reset: "Senha redefinida com sucesso! Faça login com sua nova senha.",
+}
+
+export function LoginForm({ error, success }: { error?: string; success?: string }) {
   const [showPassword, setShowPassword] = useState(false)
-  const message = error ? (ERROR_MESSAGES[error] ?? "Erro ao fazer login. Tente novamente.") : null
+  const message      = error   ? (ERROR_MESSAGES[error] ?? "Erro ao fazer login. Tente novamente.") : null
+  const successMessage = success ? (SUCCESS_MESSAGES[success] ?? null) : null
 
   return (
     <div className="space-y-5">
 
       <form action={loginAction} className="space-y-4">
+
+        {/* Sucesso */}
+        {successMessage && (
+          <div className="flex items-center gap-2 text-sm text-green-700 dark:text-green-400 bg-green-100 dark:bg-green-900/30 px-3 py-2.5 rounded-lg">
+            <CheckCircle2 className="w-4 h-4 shrink-0" />
+            {successMessage}
+          </div>
+        )}
 
         {/* E-mail ou Telefone */}
         <div className="space-y-1.5">

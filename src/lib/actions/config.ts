@@ -2,6 +2,7 @@
 
 import { auth }           from "@/lib/auth"
 import { setConfigValue, getConfigValue } from "@/lib/config"
+import { MESSAGE_TEMPLATES, setMessageTemplate, resetMessageTemplate } from "@/lib/notifications/templates"
 import { revalidatePath } from "next/cache"
 import { redirect }       from "next/navigation"
 import { z }              from "zod"
@@ -28,6 +29,43 @@ export async function setRoomCountAction(formData: FormData) {
 export async function getRoomCountAction(): Promise<number> {
   const val = await getConfigValue("room_count", "3")
   return Math.max(1, parseInt(val, 10) || 3)
+}
+
+// ─── Notificações WhatsApp ─────────────────────────────────────────────────────
+
+export async function setWhatsAppEnabledAction(enabled: boolean) {
+  await requireAdmin()
+  await setConfigValue("whatsapp_enabled", String(enabled))
+  revalidatePath("/admin/config")
+}
+
+// ─── Templates de mensagens ─────────────────────────────────────────────────────
+
+export async function saveMessageTemplateAction(formData: FormData) {
+  await requireAdmin()
+
+  const id    = String(formData.get("template_id") ?? "")
+  const value = String(formData.get("template_value") ?? "").trim()
+
+  const def = MESSAGE_TEMPLATES.find(t => t.id === id)
+  if (!def) err("Template inválido")
+  if (!value) err("A mensagem não pode ficar vazia")
+
+  await setMessageTemplate(id, value)
+  revalidatePath("/admin/config/mensagens")
+  redirect("/admin/config/mensagens?success=Mensagem+atualizada+com+sucesso")
+}
+
+export async function resetMessageTemplateAction(formData: FormData) {
+  await requireAdmin()
+
+  const id  = String(formData.get("template_id") ?? "")
+  const def = MESSAGE_TEMPLATES.find(t => t.id === id)
+  if (!def) err("Template inválido")
+
+  await resetMessageTemplate(id)
+  revalidatePath("/admin/config/mensagens")
+  redirect("/admin/config/mensagens?success=Mensagem+restaurada+para+o+padr%C3%A3o")
 }
 
 // ─── Horário de Funcionamento ─────────────────────────────────────────────────

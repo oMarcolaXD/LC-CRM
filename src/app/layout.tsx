@@ -4,6 +4,7 @@ import { Geist_Mono } from "next/font/google";
 import { Providers }    from "@/components/providers";
 import { PwaRegister }  from "@/components/shared/pwa-register";
 import { EasterEggLua } from "@/components/shared/easter-egg-lua";
+import { ImpersonationBanner } from "@/components/shared/impersonation-banner";
 import { Toaster }      from "sonner";
 import "./globals.css";
 
@@ -87,6 +88,7 @@ export default function RootLayout({
       >
         <Providers>
           <PwaRegister />
+          <ImpersonationBanner />
           {children}
           <EasterEggLua />
           <Toaster richColors position="top-right" />

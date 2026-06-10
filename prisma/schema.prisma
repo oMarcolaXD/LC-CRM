@@ -108,8 +108,24 @@ model User {
   authoredNotes  StudentNote[]
   cancellationRequests LessonCancellationRequest[] @relation("CancellationRequests")
   cancellationReviews  LessonCancellationRequest[] @relation("CancellationReviews")
+  passwordResetTokens  PasswordResetToken[]
 
   @@map("users")
+}
+
+// ─── Recuperação de senha ───────────────────────────────────────────────────
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@map("password_reset_tokens")
 }
 
 // ─── Perfis ───────────────────────────────────────────────────────────────────

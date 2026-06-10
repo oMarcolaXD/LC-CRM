@@ -22,7 +22,7 @@ registrar lá em `Dev Logs/`.
 - **Zod** para validação + **React Hook Form** + `@hookform/resolvers`
 - **date-fns** com locale pt-BR
 - **Recharts** para gráficos
-- **Resend** (email) + Z-API (WhatsApp)
+- **Resend** (email) + Evolution API (WhatsApp, hospedada no Railway)
 - **Mercado Pago** para pagamentos
 
 ## Comandos
@@ -95,7 +95,7 @@ Ver `.env.example` para todas as variáveis necessárias:
 - `DATABASE_URL` + `DIRECT_URL` — Supabase PostgreSQL
 - `AUTH_SECRET` — Auth.js
 - `RESEND_API_KEY` — email
-- `ZAPI_*` — WhatsApp
+- `EVOLUTION_*` — WhatsApp (Evolution API)
 - `MERCADOPAGO_*` — pagamentos
 
 ## Progresso das Etapas

@@ -5,6 +5,7 @@ import { auth }              from "@/lib/auth"
 import { revalidatePath }    from "next/cache"
 import { redirect }          from "next/navigation"
 import { notify }            from "@/lib/notifications"
+import { getMessageTemplate, renderTemplate } from "@/lib/notifications/templates"
 import { sendWelcomeEmail }  from "@/lib/email"
 import { format }            from "date-fns"
 import { ptBR }              from "date-fns/locale"
@@ -579,11 +580,20 @@ export async function sendConfirmationToGuardianAction(lessonId: string) {
     const guardian    = student.guardian
     if (!guardian) continue
 
+    const guardianTemplate = await getMessageTemplate("lesson_confirmed_guardian")
+    const guardianMessage  = renderTemplate(guardianTemplate, {
+      aluno:      student.name,
+      materia:    lesson.subject?.name ?? "–",
+      professor:  lesson.teacher.user.name,
+      data_hora:  scheduledAt,
+      modalidade: lesson.modality === "ONLINE" ? "Online" : "Presencial",
+    })
+
     await notify({
       userId:  guardian.userId,
       type:    "LESSON_CONFIRMED",
       title:   "Confirmação de aula",
-      message: `A aula de ${lesson.subject?.name ?? "–"} de ${student.name} com ${lesson.teacher.user.name} está confirmada para ${scheduledAt}.`,
+      message: guardianMessage,
       email:   guardian.user?.email ?? undefined,
       phone:   guardian.user?.phone ?? undefined,
       data: {
@@ -613,11 +623,18 @@ export async function sendConfirmationToTeacherAction(lessonId: string) {
 
   const scheduledAt = format(lesson.scheduledAt, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
 
+  const teacherTemplate = await getMessageTemplate("lesson_confirmed_teacher")
+  const teacherMessage  = renderTemplate(teacherTemplate, {
+    materia:    lesson.subject?.name ?? "–",
+    data_hora:  scheduledAt,
+    modalidade: lesson.modality === "ONLINE" ? "Online" : "Presencial",
+  })
+
   await notify({
     userId:  lesson.teacher.userId,
     type:    "LESSON_CONFIRMED",
     title:   "Confirmação de aula",
-    message: `Sua aula de ${lesson.subject?.name ?? "–"} está confirmada para ${scheduledAt}.`,
+    message: teacherMessage,
     email:   lesson.teacher.user.email ?? undefined,
     phone:   lesson.teacher.user.phone ?? undefined,
     data: {

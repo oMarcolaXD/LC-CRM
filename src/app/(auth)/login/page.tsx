@@ -3,7 +3,7 @@ import { LoginForm }   from "./login-form"
 import { GraduationCap, Users, BarChart3, BookOpen, Heart } from "lucide-react"
 
 interface LoginPageProps {
-  searchParams: Promise<{ error?: string }>
+  searchParams: Promise<{ error?: string; success?: string }>
 }
 
 const FEATURES = [
@@ -14,7 +14,7 @@ const FEATURES = [
 ]
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {
-  const { error } = await searchParams
+  const { error, success } = await searchParams
 
   return (
     <div className="h-screen flex overflow-hidden">
@@ -183,7 +183,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
             Entre com seus dados para acessar o sistema.
           </p>
 
-          <LoginForm error={error} />
+          <LoginForm error={error} success={success} />
 
         </div>
       </div>
