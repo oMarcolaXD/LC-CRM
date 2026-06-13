@@ -9,6 +9,16 @@ import type { Role } from "@prisma/client"
 
 export { ROLE_HOME }
 
+// Diagnóstico: identifica QUAL banco o app está usando (só o ref do projeto, sem expor a senha)
+function dbRef(): string {
+  try {
+    const m = (process.env.DATABASE_URL || "").match(/:\/\/([^:@/]+)/)
+    return m?.[1] ?? "unknown"
+  } catch {
+    return "unknown"
+  }
+}
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
   providers: [
@@ -48,13 +58,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         }
 
         if (!user) {
-          console.error("[authorize] usuario NAO encontrado para:", input)
+          console.error(`[authorize] usuario NAO encontrado para: ${input} | db=${dbRef()}`)
           return null
         }
 
         const valid = await bcrypt.compare(parsed.data.password, user.password)
         if (!valid) {
-          console.error("[authorize] senha NAO confere para:", user.email ?? user.phone)
+          console.error(`[authorize] senha NAO confere para: ${user.email ?? user.phone} | db=${dbRef()} | hashPrefix=${(user.password ?? "").slice(0, 7)}`)
           return null
         }
 
