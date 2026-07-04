@@ -11,8 +11,11 @@ import { Button }   from "@/components/ui/button"
 import { Input }    from "@/components/ui/input"
 import { Label }    from "@/components/ui/label"
 import {
+  Popover, PopoverContent, PopoverTrigger,
+} from "@/components/ui/popover"
+import {
   CalendarDays, Loader2, CheckCircle2, XCircle,
-  MonitorPlay, School, Plus, Trash2, Wand2, Users,
+  MonitorPlay, School, Plus, Trash2, Wand2, Users, ChevronsUpDown,
 } from "lucide-react"
 
 interface Subject { id: string; name: string }
@@ -73,6 +76,81 @@ function generatePastDates(weekdays: number[], count: number): string[] {
     cursor.setDate(cursor.getDate() - 1)
   }
   return dates.reverse()
+}
+
+// ── Combobox de parceiro (busca por nome) ────────────────────────────────────
+
+function PartnerCombobox({
+  value,
+  onChange,
+  students,
+}: {
+  value:    string
+  onChange: (id: string) => void
+  students: Student[]
+}) {
+  const [open,  setOpen]  = useState(false)
+  const [query, setQuery] = useState("")
+
+  const selected = students.find(s => s.id === value) ?? null
+  const q        = query.toLowerCase().trim()
+  const filtered = q ? students.filter(s => s.name.toLowerCase().includes(q)) : students
+
+  function pick(id: string) {
+    onChange(id)
+    setOpen(false)
+    setQuery("")
+  }
+
+  return (
+    <Popover open={open} onOpenChange={(v) => { setOpen(v); if (!v) setQuery("") }}>
+      <PopoverTrigger
+        className={`h-8 w-full flex items-center gap-1.5 rounded-lg border bg-background px-2 text-xs transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+          value ? "border-primary/40 text-primary" : "border-input text-muted-foreground"
+        }`}
+      >
+        <Users className="w-3.5 h-3.5 shrink-0" />
+        <span className="truncate flex-1 text-left">
+          {selected ? `Em grupo com ${selected.name}` : "Sozinho (individual)"}
+        </span>
+        <ChevronsUpDown className="w-3 h-3 shrink-0 opacity-60" />
+      </PopoverTrigger>
+      <PopoverContent align="start" sideOffset={4} className="w-64 p-0">
+        <div className="p-2 border-b border-border">
+          <input
+            autoFocus
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            placeholder="Buscar aluno..."
+            className="w-full h-8 rounded-md border border-input bg-background px-2 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
+          />
+        </div>
+        <div className="max-h-56 overflow-y-auto p-1">
+          <button
+            type="button"
+            onClick={() => pick("")}
+            className={`w-full text-left px-2 py-1.5 rounded-md text-xs transition-colors hover:bg-muted ${!value ? "font-medium text-primary" : ""}`}
+          >
+            Sozinho (individual)
+          </button>
+          {filtered.length === 0 ? (
+            <p className="px-2 py-2 text-xs text-muted-foreground">Nenhum aluno encontrado</p>
+          ) : (
+            filtered.map(s => (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => pick(s.id)}
+                className={`w-full text-left px-2 py-1.5 rounded-md text-xs transition-colors hover:bg-muted ${value === s.id ? "font-medium text-primary" : ""}`}
+              >
+                {s.name}
+              </button>
+            ))
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  )
 }
 
 export function BatchPastLessonsDialog({
@@ -333,22 +411,14 @@ export function BatchPastLessonsDialog({
                         </select>
                       </div>
 
-                      {/* Linha 3: dupla (opcional) */}
+                      {/* Linha 3: aula em grupo (opcional) — busca por nome */}
                       {partnerOptions.length > 0 && (
-                        <div className="flex items-center gap-2 pl-7">
-                          <Users className={`w-3.5 h-3.5 shrink-0 ${row.partnerId ? "text-primary" : "text-muted-foreground"}`} />
-                          <select
+                        <div className="pl-7">
+                          <PartnerCombobox
                             value={row.partnerId}
-                            onChange={e => updateRow(i, "partnerId", e.target.value)}
-                            className={`h-8 flex-1 rounded-lg border bg-background px-2 text-xs focus:outline-none focus:ring-2 focus:ring-ring ${
-                              row.partnerId ? "border-primary/40 text-primary" : "border-input"
-                            }`}
-                          >
-                            <option value="">Sozinho (individual)</option>
-                            {partnerOptions.map(s => (
-                              <option key={s.id} value={s.id}>Em grupo com {s.name}</option>
-                            ))}
-                          </select>
+                            onChange={(id) => updateRow(i, "partnerId", id)}
+                            students={partnerOptions}
+                          />
                         </div>
                       )}
                     </div>

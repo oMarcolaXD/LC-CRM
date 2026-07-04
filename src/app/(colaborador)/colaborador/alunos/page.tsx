@@ -17,41 +17,38 @@ export default async function ColaboradorAlunosPage({ searchParams }: AlunosPage
     : status === "todos"  ? undefined
     : { OR: [{ userId: null }, { user: { active: true } }] } // "ativos": no account OR active=true
 
-  const [students, subjectRows] = await Promise.all([
-    prisma.student.findMany({
-      where: whereClause,
-      include: {
-        user: true,
-        guardian: { include: { user: true } },
-        packages: {
-          where:   { status: { in: ["ACTIVE", "EXHAUSTED"] } },
-          orderBy: [
-            { status: "asc" },        // ACTIVE sorts before EXHAUSTED in enum definition
-            { purchaseDate: "desc" }, // most recent within same status
-          ],
-          take:    1,
-        },
-        participations: {
-          where:   { lesson: { scheduledAt: { gte: new Date() }, status: { in: ["SCHEDULED", "CONFIRMED"] } } },
-          orderBy: { lesson: { scheduledAt: "asc" } },
-          take:    1,
-          include: { lesson: { include: { subject: true } } },
-        },
-        payments: {
-          orderBy: { dueDate: "desc" },
-          take:    1,
-        },
-        _count: {
-          select: {
-            packages:       true,
-            participations: true,
-          },
+  const students = await prisma.student.findMany({
+    where: whereClause,
+    include: {
+      user: true,
+      guardian: { include: { user: true } },
+      packages: {
+        where:   { status: { in: ["ACTIVE", "EXHAUSTED"] } },
+        orderBy: [
+          { status: "asc" },        // ACTIVE sorts before EXHAUSTED in enum definition
+          { purchaseDate: "desc" }, // most recent within same status
+        ],
+        take:    1,
+      },
+      participations: {
+        where:   { lesson: { scheduledAt: { gte: new Date() }, status: { in: ["SCHEDULED", "CONFIRMED"] } } },
+        orderBy: { lesson: { scheduledAt: "asc" } },
+        take:    1,
+        include: { lesson: { include: { subject: true } } },
+      },
+      payments: {
+        orderBy: { dueDate: "desc" },
+        take:    1,
+      },
+      _count: {
+        select: {
+          packages:       true,
+          participations: true,
         },
       },
-      orderBy: { name: "asc" },
-    }),
-    prisma.subject.findMany({ orderBy: { name: "asc" } }),
-  ])
+    },
+    orderBy: { name: "asc" },
+  })
 
   // Counts for tabs — students with no userId count as active
   const [totalAtivos, totalInativos] = await Promise.all([
@@ -88,8 +85,7 @@ export default async function ColaboradorAlunosPage({ searchParams }: AlunosPage
     })),
   })) as unknown as StudentRow[]
 
-  const grades   = [...new Set(students.map(s => s.grade).filter(Boolean))].sort() as string[]
-  const subjects = subjectRows.map(s => s.name)
+  const grades = [...new Set(students.map(s => s.grade).filter(Boolean))].sort() as string[]
 
   return (
     <div className="space-y-6">
@@ -111,7 +107,6 @@ export default async function ColaboradorAlunosPage({ searchParams }: AlunosPage
       <StudentsBoard
         students={serialized}
         grades={grades}
-        subjects={subjects}
         newStudentHref="/colaborador/alunos/novo"
         importHref="/colaborador/alunos/importar"
         detailBasePath="/colaborador/alunos"

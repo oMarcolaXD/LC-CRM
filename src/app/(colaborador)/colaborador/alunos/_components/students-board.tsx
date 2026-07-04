@@ -202,7 +202,6 @@ function ListRow({ student, detailBasePath }: { student: StudentRow; detailBaseP
 interface StudentsBoardProps {
   students:       StudentRow[]
   grades:         string[]
-  subjects:       string[]
   newStudentHref: string
   importHref:     string
   detailBasePath: string
@@ -214,7 +213,6 @@ interface StudentsBoardProps {
 export function StudentsBoard({
   students,
   grades,
-  subjects,
   newStudentHref,
   importHref,
   detailBasePath,
@@ -222,20 +220,15 @@ export function StudentsBoard({
   totalAtivos = 0,
   totalInativos = 0,
 }: StudentsBoardProps) {
-  const [search,        setSearch]        = useState("")
-  const [gradeFilter,   setGradeFilter]   = useState("todos")
-  const [subjectFilter, setSubjectFilter] = useState("todos")
-  const [sortBy,        setSortBy]        = useState<SortOption>("nome")
-  const [visao,         setVisao]         = useState<"quadro" | "lista">("quadro")
+  const [search,      setSearch]      = useState("")
+  const [gradeFilter, setGradeFilter] = useState("todos")
+  const [sortBy,      setSortBy]      = useState<SortOption>("nome")
+  const [visao,       setVisao]       = useState<"quadro" | "lista">("quadro")
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim()
     return students.filter(s => {
       if (gradeFilter !== "todos" && s.grade !== gradeFilter) return false
-      if (subjectFilter !== "todos") {
-        const subj = s.participations[0]?.lesson.subject?.name
-        if (subj !== subjectFilter) return false
-      }
       if (q) {
         const matchName     = (s.name?.trim() || s.user?.name || "").toLowerCase().includes(q)
         const matchGuardian = s.guardian?.user.name?.toLowerCase().includes(q) ?? false
@@ -245,7 +238,7 @@ export function StudentsBoard({
       }
       return true
     })
-  }, [students, gradeFilter, subjectFilter, search])
+  }, [students, gradeFilter, search])
 
   const sorted = useMemo(() => {
     const nameOf   = (s: StudentRow) => (s.name?.trim() || s.user?.name || "").toLowerCase()
@@ -319,16 +312,6 @@ export function StudentsBoard({
           <SelectContent>
             <SelectItem value="todos">Todas as séries</SelectItem>
             {grades.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}
-          </SelectContent>
-        </Select>
-
-        <Select value={subjectFilter} onValueChange={(v) => setSubjectFilter(v ?? "todos")}>
-          <SelectTrigger className="w-44 h-9">
-            <SelectValue placeholder="Matéria" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todos">Todas as matérias</SelectItem>
-            {subjects.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
           </SelectContent>
         </Select>
 

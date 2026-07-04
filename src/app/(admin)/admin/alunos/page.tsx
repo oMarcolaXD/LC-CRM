@@ -4,40 +4,37 @@ import { StudentsBoard } from "@/app/(colaborador)/colaborador/alunos/_component
 import type { StudentRow } from "@/app/(colaborador)/colaborador/alunos/_components/student-board-card"
 
 export default async function AdminAlunosPage() {
-  const [students, subjectRows] = await Promise.all([
-    prisma.student.findMany({
-      include: {
-        user: true,
-        guardian: { include: { user: true } },
-        packages: {
-          where:   { status: { in: ["ACTIVE", "EXHAUSTED"] } },
-          orderBy: [
-            { status: "asc" },        // ACTIVE sorts before EXHAUSTED in enum definition
-            { purchaseDate: "desc" }, // most recent within same status
-          ],
-          take:    1,
-        },
-        participations: {
-          where:   { lesson: { scheduledAt: { gte: new Date() }, status: { in: ["SCHEDULED", "CONFIRMED"] } } },
-          orderBy: { lesson: { scheduledAt: "asc" } },
-          take:    1,
-          include: { lesson: { include: { subject: true } } },
-        },
-        payments: {
-          orderBy: { dueDate: "desc" },
-          take:    1,
-        },
-        _count: {
-          select: {
-            packages:       true,
-            participations: true,
-          },
+  const students = await prisma.student.findMany({
+    include: {
+      user: true,
+      guardian: { include: { user: true } },
+      packages: {
+        where:   { status: { in: ["ACTIVE", "EXHAUSTED"] } },
+        orderBy: [
+          { status: "asc" },        // ACTIVE sorts before EXHAUSTED in enum definition
+          { purchaseDate: "desc" }, // most recent within same status
+        ],
+        take:    1,
+      },
+      participations: {
+        where:   { lesson: { scheduledAt: { gte: new Date() }, status: { in: ["SCHEDULED", "CONFIRMED"] } } },
+        orderBy: { lesson: { scheduledAt: "asc" } },
+        take:    1,
+        include: { lesson: { include: { subject: true } } },
+      },
+      payments: {
+        orderBy: { dueDate: "desc" },
+        take:    1,
+      },
+      _count: {
+        select: {
+          packages:       true,
+          participations: true,
         },
       },
-      orderBy: { name: "asc" },
-    }),
-    prisma.subject.findMany({ orderBy: { name: "asc" } }),
-  ])
+    },
+    orderBy: { name: "asc" },
+  })
 
   // Data da última aula por aluno (para ordenação "aulas mais recentes")
   const studentIds  = students.map(s => s.id)
@@ -67,8 +64,7 @@ export default async function AdminAlunosPage() {
     })),
   })) as unknown as StudentRow[]
 
-  const grades   = [...new Set(students.map(s => s.grade).filter(Boolean))].sort() as string[]
-  const subjects = subjectRows.map(s => s.name)
+  const grades = [...new Set(students.map(s => s.grade).filter(Boolean))].sort() as string[]
 
   return (
     <div className="space-y-6">
@@ -80,7 +76,6 @@ export default async function AdminAlunosPage() {
       <StudentsBoard
         students={serialized}
         grades={grades}
-        subjects={subjects}
         newStudentHref="/admin/usuarios/novo"
         importHref="/colaborador/alunos/importar"
         detailBasePath="/colaborador/alunos"
