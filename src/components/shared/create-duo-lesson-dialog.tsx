@@ -94,10 +94,10 @@ export function CreateDuoLessonDialog({ open, onClose, students, teachers, defau
           modality,
           teacherOnsite: modality === "ONLINE" ? teacherOnsite : undefined,
         })
-        toast.success(`Aula em dupla criada para ${selectedStudentIds.length} alunos`)
+        toast.success(`Aula em grupo (pacote) criada para ${selectedStudentIds.length} alunos`)
         handleClose()
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Erro ao criar aula em dupla")
+        toast.error(e instanceof Error ? e.message : "Erro ao criar aula em grupo")
       }
     })
   }
@@ -112,7 +112,7 @@ export function CreateDuoLessonDialog({ open, onClose, students, teachers, defau
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Users className="w-4 h-4 text-primary" />
-            Marcar Aula em Dupla
+            Aula em Grupo (pacote)
           </DialogTitle>
         </DialogHeader>
 
@@ -317,7 +317,7 @@ export function CreateDuoLessonDialog({ open, onClose, students, teachers, defau
           <Button onClick={submit} disabled={pending}>
             {pending
               ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Criando...</>
-              : <><Users className="w-4 h-4 mr-2" /> Marcar Aula em Dupla</>
+              : <><Users className="w-4 h-4 mr-2" /> Criar Aula em Grupo (pacote)</>
             }
           </Button>
         </DialogFooter>

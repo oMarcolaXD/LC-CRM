@@ -344,9 +344,9 @@ export function BatchPastLessonsDialog({
                               row.partnerId ? "border-primary/40 text-primary" : "border-input"
                             }`}
                           >
-                            <option value="">Sozinho (sem dupla)</option>
+                            <option value="">Sozinho (individual)</option>
                             {partnerOptions.map(s => (
-                              <option key={s.id} value={s.id}>Em dupla com {s.name}</option>
+                              <option key={s.id} value={s.id}>Em grupo com {s.name}</option>
                             ))}
                           </select>
                         </div>

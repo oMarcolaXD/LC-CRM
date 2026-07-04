@@ -655,10 +655,10 @@ function SlotTypeChooser({
   onClose: () => void
 }) {
   const options: { type: SlotType; label: string; desc: string; tip: string; icon: LucideIcon; color: string }[] = [
-    { type: "individual", label: "Individual", desc: "1 aluno · desconta do pacote",       tip: "Uma aula para 1 aluno. Desconta 1 aula do pacote dele.",                              icon: User,          color: "text-primary" },
-    { type: "dupla",      label: "Dupla",      desc: "2–4 alunos · desconta do pacote",     tip: "2 a 4 alunos juntos. Desconta 1 aula do pacote de CADA aluno (sem cobrança avulsa).", icon: Users,         color: "text-primary" },
-    { type: "grupo",      label: "Grupo",      desc: "2–4 alunos · cobrança avulsa",        tip: "2 a 4 alunos juntos, mas NÃO usa o pacote. Você define um valor por aluno e gera uma cobrança avulsa.", icon: Users,         color: "text-violet-600" },
-    { type: "aulao",      label: "Aulão",      desc: "turma · aula extra",                  tip: "Aula extra para uma turma maior, com título e vagas. Pode ser gratuita ou paga à parte.", icon: GraduationCap, color: "text-violet-600" },
+    { type: "individual", label: "Individual",     desc: "1 aluno · desconta do pacote",    tip: "Uma aula para 1 aluno. Desconta 1 aula do pacote dele.",                              icon: User,          color: "text-primary" },
+    { type: "dupla",      label: "Grupo (pacote)", desc: "2–4 alunos · desconta do pacote", tip: "2 a 4 alunos juntos. Desconta 1 aula do pacote de CADA aluno (sem cobrança avulsa).", icon: Users,         color: "text-primary" },
+    { type: "grupo",      label: "Grupo (avulso)", desc: "2–4 alunos · cobrança avulsa",    tip: "2 a 4 alunos juntos, mas NÃO usa o pacote. Você define um valor por aluno e gera uma cobrança avulsa.", icon: Users,         color: "text-violet-600" },
+    { type: "aulao",      label: "Aulão",          desc: "turma · aula extra",              tip: "Aula extra para uma turma maior, com título e vagas. Pode ser gratuita ou paga à parte.", icon: GraduationCap, color: "text-violet-600" },
   ]
 
   return (
@@ -698,8 +698,8 @@ function SlotTypeChooser({
         <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-900 px-3 py-2 text-[11px] leading-snug text-amber-800 dark:text-amber-300">
           <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
           <span>
-            <strong>Dupla</strong> desconta do pacote de cada aluno.{" "}
-            <strong>Grupo</strong> não usa o pacote — cobra um valor avulso por aluno.
+            <strong>Grupo (pacote)</strong> desconta do pacote de cada aluno.{" "}
+            <strong>Grupo (avulso)</strong> não usa o pacote — cobra um valor por aluno.
           </span>
         </div>
       </DialogContent>
@@ -1485,7 +1485,7 @@ export function AgendaGrid({
                 onClick={() => { setPrefill(null); setShowDuoDialog(true) }}
               >
                 <Users className="w-3.5 h-3.5" />
-                Dupla
+                Grupo (pacote)
               </Button>
             )}
             {allStudents && allStudents.length >= 2 && (

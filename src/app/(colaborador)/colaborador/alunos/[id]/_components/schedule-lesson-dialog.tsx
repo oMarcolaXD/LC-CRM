@@ -79,7 +79,7 @@ export function ScheduleLessonDialog({ studentId, studentName, teachers, hasBala
       return
     }
     if (isDuo && duoIds.length < 1) {
-      toast.error("Selecione ao menos mais um aluno para a dupla")
+      toast.error("Selecione ao menos mais um aluno para o grupo")
       return
     }
     start(async () => {
@@ -93,7 +93,7 @@ export function ScheduleLessonDialog({ studentId, studentName, teachers, hasBala
             time,
             modality,
           })
-          toast.success("Aula em dupla agendada com sucesso")
+          toast.success("Aula em grupo (pacote) agendada com sucesso")
         } else {
           await createLessonDirectAction({ teacherId, studentId, subjectId, date, time, modality })
           toast.success("Aula agendada com sucesso")
@@ -142,7 +142,7 @@ export function ScheduleLessonDialog({ studentId, studentName, teachers, hasBala
                   }`}
                 >
                   <Users className="w-4 h-4" />
-                  {isDuo ? "Aula em dupla (ativada)" : "Aula em dupla"}
+                  {isDuo ? "Aula em grupo — pacote (ativada)" : "Aula em grupo (pacote)"}
                 </button>
 
                 {isDuo && (

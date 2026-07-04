@@ -130,7 +130,7 @@ export function CreateGroupLessonDialog({ open, onClose, students, teachers, def
             <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
             <span>
               Esta opção <strong>não desconta do pacote</strong> dos alunos — gera uma cobrança
-              avulsa com o valor por aluno abaixo. Para descontar do pacote, use <strong>&ldquo;Dupla&rdquo;</strong>.
+              avulsa com o valor por aluno abaixo. Para descontar do pacote, use <strong>&ldquo;Grupo (pacote)&rdquo;</strong>.
             </span>
           </div>
 
