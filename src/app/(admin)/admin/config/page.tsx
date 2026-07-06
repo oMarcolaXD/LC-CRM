@@ -52,7 +52,7 @@ export default async function AdminConfigPage({ searchParams }: ConfigPageProps)
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
 
         {/* ── Configuração de Salas ─────────────────────────────── */}
         <Card>

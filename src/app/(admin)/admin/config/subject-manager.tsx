@@ -132,7 +132,7 @@ export function SubjectManager({ subjects }: { subjects: Subject[] }) {
       {subjects.length === 0 ? (
         <p className="text-sm text-muted-foreground text-center py-4">Nenhuma matéria cadastrada</p>
       ) : (
-        <ul className="divide-y divide-border/50">
+        <ul className="divide-y divide-border/50 max-h-80 overflow-y-auto pr-1">
           {subjects.map((s) => <SubjectRow key={s.id} subject={s} />)}
         </ul>
       )}
