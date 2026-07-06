@@ -15,8 +15,10 @@ import {
 } from "@/components/ui/popover"
 import {
   CalendarDays, Loader2, CheckCircle2, XCircle,
-  MonitorPlay, School, Plus, Trash2, Wand2, Users, ChevronsUpDown,
+  MonitorPlay, School, Plus, Trash2, Wand2, Users, ChevronsUpDown, CreditCard,
 } from "lucide-react"
+
+const fmtN = (n: number) => (n % 1 === 0 ? String(n) : n.toFixed(1).replace(".", ","))
 
 interface Subject { id: string; name: string }
 interface Teacher { id: string; name: string; subjects: Subject[] }
@@ -34,12 +36,13 @@ interface LessonRow {
 }
 
 interface Props {
-  studentId:     string
-  packageId:     string
-  studentName:   string
-  totalLessons:  number
-  teachers:      Teacher[]
-  otherStudents?: Student[]
+  studentId:        string
+  packageId:        string
+  studentName:      string
+  totalLessons:     number
+  remainingLessons?: number   // quantas ainda faltam lançar (default = total)
+  teachers:         Teacher[]
+  otherStudents?:   Student[]
 }
 
 // 07:00 to 22:00 in 30-min steps
@@ -154,8 +157,11 @@ function PartnerCombobox({
 }
 
 export function BatchPastLessonsDialog({
-  studentId, packageId, studentName, totalLessons, teachers, otherStudents = [],
+  studentId, packageId, studentName, totalLessons, remainingLessons, teachers, otherStudents = [],
 }: Props) {
+  // Quantas faltam lançar (default = total, para compatibilidade)
+  const toRegister = Math.max(0, remainingLessons ?? totalLessons)
+  const alreadyDone = Math.max(0, totalLessons - toRegister)
   const router = useRouter()
   const [open,    setOpen]   = useState(false)
   const [pending, start]     = useTransition()
@@ -170,10 +176,12 @@ export function BatchPastLessonsDialog({
       setModality("PRESENCIAL")
       setQuickDays([])
       setDefaultTime("08:00")
-      const fullCount = Math.floor(totalLessons)
-      const hasHalf   = totalLessons % 1 >= 0.5
+      // Abre só com o que FALTA lançar (não repete o que já foi registrado)
+      const fullCount = Math.floor(toRegister)
+      const hasHalf   = toRegister % 1 >= 0.5
       const rows = Array.from({ length: fullCount }, () => emptyRow(teachers, 60))
       if (hasHalf) rows.push(emptyRow(teachers, 30))
+      if (rows.length === 0) rows.push(emptyRow(teachers, 60))  // ao menos 1 linha
       setLessons(rows)
     }
     setOpen(v)
@@ -251,6 +259,17 @@ export function BatchPastLessonsDialog({
           </DialogHeader>
 
           <div className="space-y-4 py-2">
+            {/* Selo do pacote — deixa claro o vínculo/desconto */}
+            <div className="flex items-start gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-xs leading-snug">
+              <CreditCard className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
+              <span>
+                Estas aulas <strong>descontam deste pacote</strong> ({fmtN(totalLessons)} aulas).{" "}
+                {alreadyDone > 0
+                  ? <>Já lançadas: <strong>{fmtN(alreadyDone)}</strong> · faltam <strong>{fmtN(toRegister)}</strong>.</>
+                  : <>Faltam <strong>{fmtN(toRegister)}</strong> a lançar.</>}
+              </span>
+            </div>
+
             {/* Global: modalidade */}
             <div className="space-y-1.5">
               <Label className="text-xs">Modalidade</Label>

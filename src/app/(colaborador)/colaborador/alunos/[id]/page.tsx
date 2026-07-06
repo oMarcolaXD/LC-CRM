@@ -1,7 +1,9 @@
 import { prisma }        from "@/lib/prisma"
+import type { Prisma }   from "@prisma/client"
 import { auth }          from "@/lib/auth"
 import { notFound }      from "next/navigation"
 import Link             from "next/link"
+import { HistoryPagination } from "@/components/shared/history-pagination"
 import { format, formatDistanceToNow, subDays, differenceInMonths } from "date-fns"
 import { ptBR }         from "date-fns/locale"
 import { buttonVariants } from "@/components/ui/button"
@@ -83,18 +85,29 @@ const PAYMENT_STATUS = {
 
 interface Props {
   params: Promise<{ id: string }>
-  searchParams: Promise<{ tab?: string; success?: string; aulas?: string; pagamentos?: string }>
+  searchParams: Promise<{ tab?: string; success?: string; aulas?: string; pagamentos?: string; page?: string }>
 }
+
+const HISTORY_PER_PAGE = 15
 
 export default async function StudentDetailPage({ params, searchParams }: Props) {
   const { id }  = await params
-  const { tab, success, aulas, pagamentos } = await searchParams
+  const { tab, success, aulas, pagamentos, page: pageParam } = await searchParams
   const session = await auth()
   const isAdmin = session?.user?.role === "ADMIN"
 
   // Step 1 — lightweight fetch for cursor-based prev/next
   const base = await prisma.student.findUnique({ where: { id }, select: { name: true } })
   if (!base) notFound()
+
+  // Histórico paginado (respeita a aba selecionada)
+  const historyPage   = Math.max(1, Number(pageParam) || 1)
+  const historyStatus: "COMPLETED" | "MISSED" | undefined =
+    tab === "realizadas" ? "COMPLETED" : tab === "faltas" ? "MISSED" : undefined
+  const historyWhere: Prisma.LessonWhereInput = {
+    participants: { some: { studentId: id } },
+    ...(historyStatus ? { status: historyStatus } : {}),
+  }
 
   // Step 2 — all queries in a single transaction (1 connection, sequential)
   const [
@@ -109,6 +122,8 @@ export default async function StudentDetailPage({ params, searchParams }: Props)
     totalStudents,
     teachersRaw,
     allStudentsRaw,
+    historyLessons,
+    historyCount,
   ] = await prisma.$transaction([
     prisma.student.findUnique({
       where: { id },
@@ -176,7 +191,24 @@ export default async function StudentDetailPage({ params, searchParams }: Props)
       orderBy: { name: "asc" },
       take:    200,
     }),
+    // Histórico paginado (aba + página)
+    prisma.lesson.findMany({
+      where: historyWhere,
+      select: {
+        id: true, scheduledAt: true, status: true,
+        subjectId: true, modality: true, duration: true,
+        topicsCovered: true, teacherNotes: true, studentRating: true,
+        subject: { select: { name: true } },
+        teacher: { select: { id: true, user: { select: { name: true } } } },
+      },
+      orderBy: { scheduledAt: "desc" },
+      skip:    (historyPage - 1) * HISTORY_PER_PAGE,
+      take:    HISTORY_PER_PAGE,
+    }),
+    prisma.lesson.count({ where: historyWhere }),
   ])
+
+  const historyTotalPages = Math.ceil(historyCount / HISTORY_PER_PAGE)
 
   if (!student) notFound()
 
@@ -204,6 +236,16 @@ export default async function StudentDetailPage({ params, searchParams }: Props)
     subjects: t.subjects.map(s => ({ id: s.subject.id, name: s.subject.name })),
   }))
 
+  // Pacotes ativos (para o selo/seletor de pacote no "Registrar aula")
+  const activePackages = student.packages
+    .map((p, idx) => ({ p, idx }))
+    .filter(({ p }) => p.status === "ACTIVE" && Number(p.remainingLessons) > 0)
+    .map(({ p, idx }) => ({
+      id:        p.id,
+      label:     `PKT-${String(idx + 1).padStart(3, "0")}`,
+      remaining: Number(p.remainingLessons),
+    }))
+
   // Teachers map from recent 20 lessons
   const teachersMap = new Map<string, { name: string; count: number; lastAt: Date }>()
   for (const l of recentLessons) {
@@ -225,12 +267,8 @@ export default async function StudentDetailPage({ params, searchParams }: Props)
     status: l.status,
   }))
 
-  // Filtered lessons for table
-  const filteredLessons = tab === "realizadas"
-    ? recentLessons.filter(l => l.status === "COMPLETED")
-    : tab === "faltas"
-    ? recentLessons.filter(l => l.status === "MISSED")
-    : recentLessons
+  // Filtered lessons for table — vem paginado do banco (respeita a aba)
+  const filteredLessons = historyLessons
 
   // Payments serialized for client dialog (Decimal → number, Date → ISO string)
   const paymentsForReceipt = student.payments.map(p => ({
@@ -634,6 +672,7 @@ export default async function StudentDetailPage({ params, searchParams }: Props)
                         packageId={pkg.id}
                         studentName={student.name}
                         totalLessons={Number(pkg.totalLessons)}
+                        remainingLessons={Number(pkg.remainingLessons)}
                         teachers={teachersForDialog}
                         otherStudents={allStudentsRaw}
                       />
@@ -672,6 +711,7 @@ export default async function StudentDetailPage({ params, searchParams }: Props)
                     studentId={id}
                     teachers={teachersForDialog}
                     allStudents={allStudentsRaw}
+                    packages={activePackages}
                   />
                 </div>
               </div>
@@ -767,6 +807,17 @@ export default async function StudentDetailPage({ params, searchParams }: Props)
                   </table>
                 </div>
               )}
+
+              <HistoryPagination
+                currentPage={historyPage}
+                totalPages={historyTotalPages}
+                hrefForPage={(p) => {
+                  const sp = new URLSearchParams()
+                  if (tab) sp.set("tab", tab)
+                  sp.set("page", String(p))
+                  return `?${sp.toString()}`
+                }}
+              />
             </CardContent>
           </Card>
         </div>

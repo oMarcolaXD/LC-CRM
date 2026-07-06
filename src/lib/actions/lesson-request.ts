@@ -348,6 +348,7 @@ export async function createLessonDirectAction(data: {
   teacherOnsite?: boolean  // override explícito para aulas online
   statusOverride?: "COMPLETED" | "MISSED"  // forçar status em aulas passadas
   topicsCovered?: string
+  packageId?:     string   // pacote específico a debitar (senão usa o ativo mais recente)
 }) {
   await requireCollaboratorOrAdmin()
 
@@ -359,17 +360,20 @@ export async function createLessonDirectAction(data: {
     where:   { id: data.studentId },
     include: {
       user:     true,
-      packages: {
-        where:   { status: "ACTIVE", remainingLessons: { gt: 0 } },
-        orderBy: { purchaseDate: "desc" },
-        take:    1,
-      },
+      // Se um pacote foi escolhido, usa exatamente ele; senão, o ativo mais recente com saldo
+      packages: data.packageId
+        ? { where: { id: data.packageId } }
+        : {
+            where:   { status: "ACTIVE", remainingLessons: { gt: 0 } },
+            orderBy: { purchaseDate: "desc" },
+            take:    1,
+          },
     },
   })
   if (!student) throw new Error("Aluno não encontrado")
 
   const pkg = student.packages[0]
-  if (!pkg) throw new Error("Aluno sem saldo de aulas disponível")
+  if (!pkg) throw new Error(data.packageId ? "Pacote não encontrado" : "Aluno sem saldo de aulas disponível")
 
   const cost         = lessonCost(duration)
   const pkgRemaining = Number(pkg.remainingLessons)

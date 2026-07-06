@@ -297,7 +297,9 @@ export function PackageDialog({ studentId, studentName, mode }: Props) {
                     <Label className="text-xs">Método de pagamento <span className="text-muted-foreground">(opcional)</span></Label>
                     <Select value={paymentMethod} onValueChange={(v) => setPaymentMethod(v ?? "")}>
                       <SelectTrigger className="h-9 text-sm">
-                        <SelectValue placeholder="Selecione o método" />
+                        <SelectValue>
+                          {(v: unknown) => PAYMENT_METHODS.find(m => m.value === v)?.label ?? "Selecione o método"}
+                        </SelectValue>
                       </SelectTrigger>
                       <SelectContent>
                         {PAYMENT_METHODS.map(m => (

@@ -9,10 +9,6 @@ import { Badge }                   from "@/components/ui/badge"
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog"
-import {
-  Select, SelectContent, SelectItem,
-  SelectTrigger, SelectValue,
-} from "@/components/ui/select"
 import { Input }  from "@/components/ui/input"
 import { Label }  from "@/components/ui/label"
 import { toast }  from "sonner"
@@ -199,31 +195,32 @@ export function ScheduleLessonDialog({ studentId, studentName, teachers, hasBala
             {/* Professor */}
             <div className="space-y-1.5">
               <Label className="text-xs">Professor *</Label>
-              <Select value={teacherId} onValueChange={(v) => handleTeacherChange(v ?? "")}>
-                <SelectTrigger className="h-9">
-                  <SelectValue placeholder="Selecionar professor" />
-                </SelectTrigger>
-                <SelectContent>
-                  {teachers.map(t => (
-                    <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <select
+                value={teacherId}
+                onChange={e => handleTeacherChange(e.target.value)}
+                className="flex h-9 w-full rounded-lg border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value="">Selecionar professor</option>
+                {teachers.map(t => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
+              </select>
             </div>
 
             {/* Matéria */}
             <div className="space-y-1.5">
               <Label className="text-xs">Matéria *</Label>
-              <Select value={subjectId} onValueChange={(v) => setSubject(v ?? "")} disabled={!teacherId || subjects.length === 0}>
-                <SelectTrigger className="h-9">
-                  <SelectValue placeholder={teacherId ? "Selecionar matéria" : "Selecione um professor primeiro"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {subjects.map(s => (
-                    <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <select
+                value={subjectId}
+                onChange={e => setSubject(e.target.value)}
+                disabled={!teacherId || subjects.length === 0}
+                className="flex h-9 w-full rounded-lg border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+              >
+                <option value="">{teacherId ? "Selecionar matéria" : "Selecione um professor primeiro"}</option>
+                {subjects.map(s => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
             </div>
 
             {/* Data + Hora */}

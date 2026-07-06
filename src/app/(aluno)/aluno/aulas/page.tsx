@@ -6,9 +6,12 @@ import { PageHeader }     from "@/components/shared/page-header"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge }          from "@/components/ui/badge"
 import { LinkButton }     from "@/components/shared/link-button"
+import { HistoryPagination } from "@/components/shared/history-pagination"
 import { CalendarDays, Clock, MapPin, Monitor, Star, BookOpen, Users } from "lucide-react"
 import { format }         from "date-fns"
 import { ptBR }           from "date-fns/locale"
+
+const PER_PAGE = 15
 
 const STATUS_CONFIG = {
   SCHEDULED:  { label: "Agendada",   variant: "secondary"   as const, color: "text-blue-600"   },
@@ -25,18 +28,20 @@ const REQUEST_CONFIG = {
 }
 
 interface AulasPageProps {
-  searchParams: Promise<{ success?: string }>
+  searchParams: Promise<{ success?: string; page?: string }>
 }
 
 export default async function AulasPage({ searchParams }: AulasPageProps) {
   const session = await auth()
   if (!session?.user) redirect("/login")
-  const { success } = await searchParams
+  const { success, page: pageParam } = await searchParams
 
   const { student } = await getActiveStudent(session.user.id)
   if (!student) redirect("/aluno/sem-aluno")
 
-  const [lessons, requests] = await Promise.all([
+  const page = Math.max(1, Number(pageParam) || 1)
+
+  const [lessons, totalLessons, requests] = await Promise.all([
     prisma.lesson.findMany({
       where:   { participants: { some: { studentId: student.id } } },
       include: {
@@ -45,7 +50,11 @@ export default async function AulasPage({ searchParams }: AulasPageProps) {
         participants: { include: { student: { include: { user: true } } } },
       },
       orderBy: { scheduledAt: "desc" },
-      take:    50,
+      skip:    (page - 1) * PER_PAGE,
+      take:    PER_PAGE,
+    }),
+    prisma.lesson.count({
+      where: { participants: { some: { studentId: student.id } } },
     }),
     prisma.lessonRequest.findMany({
       where:   { studentId: student.id, status: "PENDING" },
@@ -53,6 +62,8 @@ export default async function AulasPage({ searchParams }: AulasPageProps) {
       orderBy: { requestedAt: "desc" },
     }),
   ])
+
+  const totalPages = Math.ceil(totalLessons / PER_PAGE)
 
   return (
     <div className="space-y-6">
@@ -98,9 +109,17 @@ export default async function AulasPage({ searchParams }: AulasPageProps) {
       {/* Histórico de aulas */}
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="font-sub text-base flex items-center gap-2">
-            <BookOpen className="w-4 h-4 text-primary" /> Histórico de Aulas
-          </CardTitle>
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <CardTitle className="font-sub text-base flex items-center gap-2">
+              <BookOpen className="w-4 h-4 text-primary" /> Histórico de Aulas
+            </CardTitle>
+            {totalLessons > 0 && (
+              <p className="text-xs text-muted-foreground">
+                {totalLessons} aula{totalLessons !== 1 ? "s" : ""}
+                {totalPages > 1 && ` · página ${page} de ${totalPages}`}
+              </p>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           {lessons.length === 0 ? (
@@ -179,6 +198,12 @@ export default async function AulasPage({ searchParams }: AulasPageProps) {
               })}
             </div>
           )}
+
+          <HistoryPagination
+            currentPage={page}
+            totalPages={totalPages}
+            hrefForPage={(p) => `?page=${p}`}
+          />
         </CardContent>
       </Card>
     </div>

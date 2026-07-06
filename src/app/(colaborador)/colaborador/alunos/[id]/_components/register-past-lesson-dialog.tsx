@@ -12,7 +12,7 @@ import { Input }    from "@/components/ui/input"
 import { Label }    from "@/components/ui/label"
 import {
   History, Loader2, CheckCircle2, XCircle, MonitorPlay, School,
-  Users, Plus, Trash2, DollarSign,
+  Users, Plus, Trash2, DollarSign, CreditCard, AlertCircle,
 } from "lucide-react"
 
 const TIME_OPTIONS = Array.from({ length: 31 }, (_, i) => {
@@ -23,11 +23,13 @@ const TIME_OPTIONS = Array.from({ length: 31 }, (_, i) => {
 interface Subject { id: string; name: string }
 interface Teacher { id: string; name: string; subjects: Subject[] }
 interface Student { id: string; name: string }
+interface PackageOption { id: string; label: string; remaining: number }
 
 interface RegisterPastLessonDialogProps {
   studentId:   string
   teachers:    Teacher[]
   allStudents: Student[]
+  packages?:   PackageOption[]
 }
 
 interface GroupEntry { studentId: string; price: string; paid: boolean }
@@ -36,6 +38,7 @@ export function RegisterPastLessonDialog({
   studentId,
   teachers,
   allStudents,
+  packages = [],
 }: RegisterPastLessonDialogProps) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
@@ -51,6 +54,10 @@ export function RegisterPastLessonDialog({
   const [modality,  setModality]  = useState<"PRESENCIAL" | "ONLINE">("PRESENCIAL")
   const [topics,    setTopics]    = useState("")
   const [status,    setStatus]    = useState<"COMPLETED" | "MISSED">("COMPLETED")
+  const [packageId, setPackageId] = useState(packages[0]?.id ?? "")
+
+  const selectedPackage = packages.find(p => p.id === packageId) ?? null
+  const fmtRemaining = (n: number) => (n % 1 === 0 ? String(n) : n.toFixed(1).replace(".", ","))
 
   // Grupo
   const [isGroup,      setIsGroup]  = useState(false)
@@ -80,6 +87,7 @@ export function RegisterPastLessonDialog({
     setTeacherId(firstTeacher?.id ?? "")
     setSubjectId(firstTeacher?.subjects[0]?.id ?? "")
     setDuration("60"); setModality("PRESENCIAL"); setTopics(""); setStatus("COMPLETED")
+    setPackageId(packages[0]?.id ?? "")
     setIsGroup(false); setPrice1(""); setPaid1(false)
     setGroupEntries([{ studentId: otherStudents[0]?.id ?? "", price: "", paid: false }])
   }
@@ -171,6 +179,7 @@ export function RegisterPastLessonDialog({
           duration:       parseInt(duration) || 60,
           statusOverride: status,
           topicsCovered:  topics || undefined,
+          packageId:      packageId || undefined,
         })
         toast.success(status === "COMPLETED" ? "Aula registrada como realizada" : "Falta registrada")
         setOpen(false)
@@ -327,6 +336,41 @@ export function RegisterPastLessonDialog({
                   </button>
                 )}
               </div>
+            )}
+
+            {/* Pacote debitado — só no modo individual */}
+            {!isGroup && (
+              packages.length === 0 ? (
+                <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-snug text-amber-800">
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                  <span>Este aluno não tem pacote ativo com saldo — não será possível registrar aula individual.</span>
+                </div>
+              ) : (
+                <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-2">
+                  <div className="flex items-center gap-1.5 text-xs">
+                    <CreditCard className="w-3.5 h-3.5 text-primary shrink-0" />
+                    <span className="text-muted-foreground">Vai descontar do pacote:</span>
+                    {packages.length === 1 && selectedPackage && (
+                      <span className="font-medium text-primary">
+                        {selectedPackage.label} · {fmtRemaining(selectedPackage.remaining)} restante{selectedPackage.remaining !== 1 ? "s" : ""}
+                      </span>
+                    )}
+                  </div>
+                  {packages.length > 1 && (
+                    <select
+                      value={packageId}
+                      onChange={e => setPackageId(e.target.value)}
+                      className="w-full h-9 rounded-lg border border-input bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      {packages.map(p => (
+                        <option key={p.id} value={p.id}>
+                          {p.label} — {fmtRemaining(p.remaining)} aula{p.remaining !== 1 ? "s" : ""} restante{p.remaining !== 1 ? "s" : ""}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              )
             )}
 
             {/* Data e Horário */}

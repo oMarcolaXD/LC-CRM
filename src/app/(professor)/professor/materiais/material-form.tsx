@@ -80,7 +80,11 @@ export function MaterialForm({ students, subjects }: MaterialFormProps) {
         <div className="space-y-1">
           <Label className="text-xs">Matéria (opcional)</Label>
           <Select value={subjectId} onValueChange={(v) => setSubjectId(v ?? "")}>
-            <SelectTrigger><SelectValue placeholder="Todas as matérias" /></SelectTrigger>
+            <SelectTrigger>
+              <SelectValue>
+                {(v: unknown) => subjects.find(x => x.id === v)?.name ?? "Todas as matérias"}
+              </SelectValue>
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="">Todas as matérias</SelectItem>
               {subjects.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
@@ -92,7 +96,11 @@ export function MaterialForm({ students, subjects }: MaterialFormProps) {
       <div className="space-y-1">
         <Label className="text-xs">Aluno (opcional)</Label>
         <Select value={studentId} onValueChange={(v) => setStudentId(v ?? "")}>
-          <SelectTrigger><SelectValue placeholder="Todos os alunos" /></SelectTrigger>
+          <SelectTrigger>
+            <SelectValue>
+              {(v: unknown) => students.find(x => x.id === v)?.name ?? "Todos os alunos"}
+            </SelectValue>
+          </SelectTrigger>
           <SelectContent>
             <SelectItem value="">Todos os alunos</SelectItem>
             {students.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}

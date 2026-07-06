@@ -140,7 +140,9 @@ export function EditPaymentDialog({ payment, studentName }: Props) {
               <Label className="text-xs">Status</Label>
               <Select value={status} onValueChange={v => setStatus(v as typeof status)}>
                 <SelectTrigger className="h-9 text-sm">
-                  <SelectValue />
+                  <SelectValue>
+                    {(v: unknown) => (v === "PAID" ? "Pago" : v === "OVERDUE" ? "Vencido" : "Pendente")}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="PENDING">Pendente</SelectItem>
@@ -166,7 +168,9 @@ export function EditPaymentDialog({ payment, studentName }: Props) {
               <Label className="text-xs">Método <span className="text-muted-foreground">(opcional)</span></Label>
               <Select value={method} onValueChange={v => setMethod(v ?? "")}>
                 <SelectTrigger className="h-9 text-sm">
-                  <SelectValue placeholder="Selecione" />
+                  <SelectValue>
+                    {(v: unknown) => (v ? String(v) : "Não definido")}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="">Não definido</SelectItem>

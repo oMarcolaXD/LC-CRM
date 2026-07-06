@@ -307,7 +307,9 @@ export function StudentsBoard({
 
         <Select value={gradeFilter} onValueChange={(v) => setGradeFilter(v ?? "todos")}>
           <SelectTrigger className="w-36 h-9">
-            <SelectValue placeholder="Série" />
+            <SelectValue>
+              {(v: unknown) => (!v || v === "todos" ? "Todas as séries" : String(v))}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="todos">Todas as séries</SelectItem>
@@ -319,7 +321,9 @@ export function StudentsBoard({
         <Select value={sortBy} onValueChange={(v) => setSortBy((v as SortOption) ?? "nome")}>
           <SelectTrigger className="w-48 h-9">
             <ArrowDownWideNarrow className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-            <SelectValue placeholder="Ordenar por" />
+            <SelectValue>
+              {(v: unknown) => (v ? SORT_LABELS[v as SortOption] : "Ordenar por")}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             {(Object.keys(SORT_LABELS) as SortOption[]).map(k => (
