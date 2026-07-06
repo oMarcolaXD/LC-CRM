@@ -5,12 +5,13 @@ import { Button }             from "@/components/ui/button"
 import { Input }              from "@/components/ui/input"
 import { Label }              from "@/components/ui/label"
 import { setRoomCountAction } from "@/lib/actions/config"
-import { getOperationalConfig } from "@/lib/config"
+import { getOperationalConfig, getBookingPolicy } from "@/lib/config"
 import { SubjectManager }     from "./subject-manager"
 import { OperationalConfigForm } from "./operational-config"
+import { BookingPolicyForm }  from "./booking-policy-config"
 import {
   DoorOpen, BookOpen, Settings, Info, AlertCircle, CheckCircle2,
-  Clock,
+  Clock, CalendarClock,
 } from "lucide-react"
 
 async function getRoomCount() {
@@ -23,10 +24,11 @@ interface ConfigPageProps {
 }
 
 export default async function AdminConfigPage({ searchParams }: ConfigPageProps) {
-  const [roomCount, subjects, opConfig, { error, success }] = await Promise.all([
+  const [roomCount, subjects, opConfig, bookingPolicy, { error, success }] = await Promise.all([
     getRoomCount(),
     prisma.subject.findMany({ orderBy: { name: "asc" } }),
     getOperationalConfig(),
+    getBookingPolicy(),
     searchParams,
   ])
 
@@ -134,6 +136,24 @@ export default async function AdminConfigPage({ searchParams }: ConfigPageProps)
             startTime={opStart}
             endTime={opEnd}
             closedDates={opConfig.closedDates}
+          />
+        </CardContent>
+      </Card>
+
+      {/* ── Regras de Agendamento (Responsáveis) ─────────────────────── */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="font-sub text-base flex items-center gap-2">
+            <CalendarClock className="w-4 h-4 text-primary" />
+            Regras de Agendamento (Responsáveis)
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <BookingPolicyForm
+            maxDaysAhead={bookingPolicy.maxDaysAhead}
+            minHoursAhead={bookingPolicy.minHoursAhead}
+            cancelMinHours={bookingPolicy.cancelMinHours}
+            rescheduleMinHours={bookingPolicy.rescheduleMinHours}
           />
         </CardContent>
       </Card>

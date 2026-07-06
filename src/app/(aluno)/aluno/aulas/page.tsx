@@ -2,11 +2,13 @@ import { auth }              from "@/lib/auth"
 import { prisma }            from "@/lib/prisma"
 import { redirect }          from "next/navigation"
 import { getActiveStudent }  from "@/lib/get-active-student"
+import { getBookingPolicy }   from "@/lib/config"
 import { PageHeader }     from "@/components/shared/page-header"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge }          from "@/components/ui/badge"
 import { LinkButton }     from "@/components/shared/link-button"
 import { HistoryPagination } from "@/components/shared/history-pagination"
+import { LessonSelfActions } from "./_components/lesson-self-actions"
 import { CalendarDays, Clock, MapPin, Monitor, Star, BookOpen, Users } from "lucide-react"
 import { format }         from "date-fns"
 import { ptBR }           from "date-fns/locale"
@@ -41,7 +43,7 @@ export default async function AulasPage({ searchParams }: AulasPageProps) {
 
   const page = Math.max(1, Number(pageParam) || 1)
 
-  const [lessons, totalLessons, requests] = await Promise.all([
+  const [lessons, totalLessons, requests, policy] = await Promise.all([
     prisma.lesson.findMany({
       where:   { participants: { some: { studentId: student.id } } },
       include: {
@@ -61,9 +63,11 @@ export default async function AulasPage({ searchParams }: AulasPageProps) {
       include: { teacher: { include: { user: true } }, subject: true },
       orderBy: { requestedAt: "desc" },
     }),
+    getBookingPolicy(),
   ])
 
   const totalPages = Math.ceil(totalLessons / PER_PAGE)
+  const now        = new Date()
 
   return (
     <div className="space-y-6">
@@ -135,6 +139,10 @@ export default async function AulasPage({ searchParams }: AulasPageProps) {
                 const mates    = lesson.participants
                   .filter(p => p.studentId !== student.id)
                   .map(p => p.student.name ?? "Aluno")
+                const canManage =
+                  !isGroup &&
+                  (lesson.status === "SCHEDULED" || lesson.status === "CONFIRMED") &&
+                  lesson.scheduledAt.getTime() > now.getTime()
                 return (
                   <div key={lesson.id} className="flex gap-4 p-4 rounded-xl border border-border bg-card hover:bg-muted/30 transition-colors">
                     {/* Data */}
@@ -193,6 +201,22 @@ export default async function AulasPage({ searchParams }: AulasPageProps) {
                         )}
                       </div>
                     </div>
+
+                    {canManage && (
+                      <LessonSelfActions
+                        lessonId={lesson.id}
+                        teacherId={lesson.teacherId}
+                        teacherName={lesson.teacher.user.name}
+                        subjectName={lesson.subject?.name ?? "Aula"}
+                        scheduledAt={lesson.scheduledAt.toISOString()}
+                        policy={{
+                          cancelMinHours:     policy.cancelMinHours,
+                          rescheduleMinHours: policy.rescheduleMinHours,
+                          maxDaysAhead:       policy.maxDaysAhead,
+                          minHoursAhead:      policy.minHoursAhead,
+                        }}
+                      />
+                    )}
                   </div>
                 )
               })}

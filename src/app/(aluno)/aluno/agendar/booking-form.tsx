@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Badge }    from "@/components/ui/badge"
 import { requestLessonAction } from "./actions"
 import { DAY_SHORT } from "@/lib/availability"
-import { CalendarDays, Clock, Loader2, AlertCircle, ChevronLeft, ChevronRight, Wifi, MapPin, LayoutGrid, Users } from "lucide-react"
+import { CalendarDays, Clock, Loader2, AlertCircle, ChevronLeft, ChevronRight, Wifi, MapPin, LayoutGrid } from "lucide-react"
 import { format, addDays, startOfDay } from "date-fns"
 import { ptBR } from "date-fns/locale"
 
@@ -74,8 +74,6 @@ export function BookingForm({
   const [selectedSlot,   setSelectedSlot]   = useState("")
   const [weekOffset,     setWeekOffset]     = useState(0)
   const [loading,        setLoading]        = useState(false)
-  const [isGroupRequest, setIsGroupRequest] = useState(false)
-  const [groupNote,      setGroupNote]      = useState("")
 
   const selectedTeacher = useMemo(
     () => teachers.find((t) => t.id === teacherId) ?? null,
@@ -153,8 +151,6 @@ export function BookingForm({
       <input type="hidden" name="preferredAt"    value={preferredAt} />
       <input type="hidden" name="modality"       value={modality} />
       <input type="hidden" name="notes"          value={notes} />
-      <input type="hidden" name="isGroupRequest" value={isGroupRequest ? "on" : ""} />
-      <input type="hidden" name="groupNote"      value={groupNote} />
 
       {/* 1. Matéria */}
       <div className="space-y-2">
@@ -339,45 +335,6 @@ export function BookingForm({
         <Label>Observações (opcional)</Label>
         <Textarea value={notes} onChange={(e) => setNotes(e.target.value)}
           placeholder="Ex: tenho dúvida em equações do 2º grau..." rows={2} />
-      </div>
-
-      {/* 7. Aula em grupo */}
-      <div className="space-y-3 rounded-xl border border-border p-4 bg-muted/20">
-        <button
-          type="button"
-          onClick={() => { setIsGroupRequest(v => !v); if (isGroupRequest) setGroupNote("") }}
-          className="flex items-center gap-3 w-full text-left"
-        >
-          <div className={`flex items-center justify-center w-10 h-10 rounded-xl transition-colors ${
-            isGroupRequest ? "bg-primary text-white" : "bg-muted text-muted-foreground"
-          }`}>
-            <Users className="w-5 h-5" />
-          </div>
-          <div className="flex-1">
-            <p className="text-sm font-medium">Quero aula em grupo</p>
-            <p className="text-xs text-muted-foreground">
-              {isGroupRequest
-                ? "Informe os colegas abaixo — o colaborador irá organizar"
-                : "Aulas em grupo têm preço diferenciado e são agendadas pela escola"
-              }
-            </p>
-          </div>
-          <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
-            isGroupRequest ? "border-primary bg-primary" : "border-muted-foreground"
-          }`}>
-            {isGroupRequest && <div className="w-2 h-2 rounded-full bg-white" />}
-          </div>
-        </button>
-
-        {isGroupRequest && (
-          <Textarea
-            value={groupNote}
-            onChange={(e) => setGroupNote(e.target.value)}
-            placeholder="Ex: quero aula com Maria Silva e João Souza"
-            rows={2}
-            className="text-sm"
-          />
-        )}
       </div>
 
       <div className="flex items-center gap-3 flex-wrap">

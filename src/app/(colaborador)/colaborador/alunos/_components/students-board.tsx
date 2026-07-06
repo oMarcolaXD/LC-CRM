@@ -18,6 +18,9 @@ import {
 import { StudentBoardCard }            from "./student-board-card"
 import type { StudentRow, BoardColumn } from "./student-board-card"
 
+// Normaliza texto para busca: remove acentos e caixa (ex.: "José" → "jose")
+const norm = (s: string) => s.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase()
+
 type SortOption = "nome" | "mais-aulas" | "recentes" | "maior-pacote"
 
 const SORT_LABELS: Record<SortOption, string> = {
@@ -226,12 +229,12 @@ export function StudentsBoard({
   const [visao,       setVisao]       = useState<"quadro" | "lista">("quadro")
 
   const filtered = useMemo(() => {
-    const q = search.toLowerCase().trim()
+    const q = norm(search.trim())
     return students.filter(s => {
       if (gradeFilter !== "todos" && s.grade !== gradeFilter) return false
       if (q) {
-        const matchName     = (s.name?.trim() || s.user?.name || "").toLowerCase().includes(q)
-        const matchGuardian = s.guardian?.user.name?.toLowerCase().includes(q) ?? false
+        const matchName     = norm(s.name?.trim() || s.user?.name || "").includes(q)
+        const matchGuardian = s.guardian?.user.name ? norm(s.guardian.user.name).includes(q) : false
         const matchPhone    = (s.user?.phone ?? "").includes(q)
                            || (s.guardian?.user.phone ?? "").includes(q)
         if (!matchName && !matchGuardian && !matchPhone) return false

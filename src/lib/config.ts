@@ -62,3 +62,35 @@ export function isOperational(date: Date, cfg: OperationalConfig): boolean {
   if (timeMin >= cfg.endMin)             return false
   return true
 }
+
+// ─── Regras de agendamento (responsáveis) ─────────────────────────────────────
+
+export interface BookingPolicy {
+  maxDaysAhead:       number  // dias à frente que o responsável pode agendar (>= 1)
+  minHoursAhead:      number  // antecedência mínima em horas p/ agendar (0 = sem limite)
+  cancelMinHours:     number  // só permite cancelar até X h antes da aula (0 = sem limite)
+  rescheduleMinHours: number  // só permite remarcar até X h antes da aula (0 = sem limite)
+}
+
+export const DEFAULT_BOOKING_POLICY: BookingPolicy = {
+  maxDaysAhead:       30,
+  minHoursAhead:      0,
+  cancelMinHours:     24,
+  rescheduleMinHours: 24,
+}
+
+export async function getBookingPolicy(): Promise<BookingPolicy> {
+  const [maxDays, minHours, cancelH, reschedH] = await Promise.all([
+    getConfigValue("booking_max_days_ahead", String(DEFAULT_BOOKING_POLICY.maxDaysAhead)),
+    getConfigValue("booking_min_hours_ahead", String(DEFAULT_BOOKING_POLICY.minHoursAhead)),
+    getConfigValue("cancel_min_hours",        String(DEFAULT_BOOKING_POLICY.cancelMinHours)),
+    getConfigValue("reschedule_min_hours",    String(DEFAULT_BOOKING_POLICY.rescheduleMinHours)),
+  ])
+
+  return {
+    maxDaysAhead:       Math.max(1, parseInt(maxDays, 10)  || DEFAULT_BOOKING_POLICY.maxDaysAhead),
+    minHoursAhead:      Math.max(0, parseInt(minHours, 10) || 0),
+    cancelMinHours:     Math.max(0, parseInt(cancelH, 10)  || 0),
+    rescheduleMinHours: Math.max(0, parseInt(reschedH, 10) || 0),
+  }
+}

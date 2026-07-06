@@ -2,6 +2,7 @@ export type NotificationType =
   | "LESSON_REQUEST"        // aluno solicitou aula
   | "LESSON_CONFIRMED"      // aula confirmada
   | "LESSON_CANCELLED"      // aula cancelada
+  | "LESSON_RESCHEDULED"    // aula remarcada pelo responsável
   | "LESSON_COMPLETED"      // aula realizada
   | "LESSON_REMINDER_24H"   // lembrete 24h antes
   | "LESSON_REMINDER_1H"    // lembrete 1h antes

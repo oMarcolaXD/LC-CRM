@@ -91,3 +91,37 @@ export async function removeClosedDateAction(formData: FormData) {
   revalidatePath("/admin/config")
   redirect("/admin/config?success=Data+de+fechamento+removida")
 }
+
+// ─── Regras de agendamento (responsáveis) ─────────────────────────────────────
+
+const bookingPolicySchema = z.object({
+  maxDaysAhead:       z.coerce.number().int().min(1).max(365),
+  minHoursAhead:      z.coerce.number().int().min(0).max(720),
+  cancelMinHours:     z.coerce.number().int().min(0).max(720),
+  rescheduleMinHours: z.coerce.number().int().min(0).max(720),
+})
+
+export async function setBookingPolicyAction(formData: FormData) {
+  await requireAdmin()
+
+  const parsed = bookingPolicySchema.safeParse({
+    maxDaysAhead:       formData.get("booking_max_days_ahead"),
+    minHoursAhead:      formData.get("booking_min_hours_ahead"),
+    cancelMinHours:     formData.get("cancel_min_hours"),
+    rescheduleMinHours: formData.get("reschedule_min_hours"),
+  })
+  if (!parsed.success) {
+    err("Valores inválidos — use números inteiros dentro dos limites permitidos")
+  }
+
+  const { maxDaysAhead, minHoursAhead, cancelMinHours, rescheduleMinHours } = parsed.data
+
+  await Promise.all([
+    setConfigValue("booking_max_days_ahead",  String(maxDaysAhead)),
+    setConfigValue("booking_min_hours_ahead", String(minHoursAhead)),
+    setConfigValue("cancel_min_hours",        String(cancelMinHours)),
+    setConfigValue("reschedule_min_hours",    String(rescheduleMinHours)),
+  ])
+  revalidatePath("/admin/config")
+  redirect("/admin/config?success=Regras+de+agendamento+atualizadas")
+}

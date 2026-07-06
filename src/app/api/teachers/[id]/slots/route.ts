@@ -3,6 +3,7 @@ import { prisma }                    from "@/lib/prisma"
 import { auth }                      from "@/lib/auth"
 import { getAvailableSlotsForDate, getAvailableDates } from "@/lib/availability"
 import type { Availability }         from "@/lib/availability"
+import { getBookingPolicy }          from "@/lib/config"
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth()
@@ -17,6 +18,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!teacher) return NextResponse.json({ error: "Professor não encontrado" }, { status: 404 })
 
   const availability = (teacher.availability ?? {}) as unknown as Availability
+  const policy       = await getBookingPolicy()
+  const now          = new Date()
 
   // Se pediram slots de uma data específica
   if (dateStr) {
@@ -34,16 +37,28 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       select: { scheduledAt: true },
     })
 
-    const slots = getAvailableSlotsForDate(
+    let slots = getAvailableSlotsForDate(
       date,
       availability,
       bookedLessons.map((l) => l.scheduledAt),
     )
+
+    // Remove horários que violam a antecedência mínima definida pelo admin
+    if (policy.minHoursAhead > 0) {
+      const minMs = policy.minHoursAhead * 60 * 60 * 1000
+      slots = slots.filter((hhmm) => {
+        const [h, m] = hhmm.split(":").map(Number)
+        const slotAt = new Date(date)
+        slotAt.setHours(h, m, 0, 0)
+        return slotAt.getTime() - now.getTime() >= minMs
+      })
+    }
+
     return NextResponse.json({ slots })
   }
 
-  // Retorna datas disponíveis nos próximos 30 dias
-  const availableDates = getAvailableDates(availability, 30)
+  // Retorna datas disponíveis dentro do horizonte definido pelo admin
+  const availableDates = getAvailableDates(availability, policy.maxDaysAhead)
   return NextResponse.json({
     dates: availableDates.map((d) => d.toISOString().slice(0, 10)),
   })

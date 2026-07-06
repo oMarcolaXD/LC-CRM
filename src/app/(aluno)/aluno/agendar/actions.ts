@@ -8,6 +8,7 @@ import { redirect }            from "next/navigation"
 import { notifyLessonRequest } from "@/lib/notifications"
 import { isWithinAvailability, hasConflict } from "@/lib/availability"
 import type { Availability }   from "@/lib/availability"
+import { getBookingPolicy }    from "@/lib/config"
 import { format }              from "date-fns"
 import { ptBR }                from "date-fns/locale"
 
@@ -16,9 +17,11 @@ export async function requestLessonAction(formData: FormData) {
   if (!session?.user) redirect("/login")
 
   const raw = Object.fromEntries(formData)
+  // Responsáveis não agendam aulas em grupo/dupla — isso é feito apenas pelo
+  // colaborador. Forçamos individual mesmo que o payload traga o contrário.
   const parsed = lessonRequestSchema.safeParse({
     ...raw,
-    isGroupRequest: raw.isGroupRequest === "on" || raw.isGroupRequest === "true",
+    isGroupRequest: false,
   })
   if (!parsed.success) {
     redirect(`/aluno/agendar?error=${encodeURIComponent(parsed.error.issues[0]?.message ?? "Dados inválidos")}`)
@@ -55,6 +58,23 @@ export async function requestLessonAction(formData: FormData) {
 
   const { teacherId, subjectId, preferredAt, modality, notes, isGroupRequest, groupNote } = parsed.data
   const requestDate = new Date(preferredAt)
+
+  // Valida limites de agendamento definidos pelo admin
+  const policy = await getBookingPolicy()
+
+  if (policy.minHoursAhead > 0) {
+    const minMs = policy.minHoursAhead * 60 * 60 * 1000
+    if (requestDate.getTime() - now.getTime() < minMs) {
+      redirect(`/aluno/agendar?error=${encodeURIComponent(`É necessário agendar com pelo menos ${policy.minHoursAhead}h de antecedência`)}`)
+    }
+  }
+
+  const horizon = new Date(now)
+  horizon.setHours(23, 59, 59, 999)
+  horizon.setDate(horizon.getDate() + policy.maxDaysAhead)
+  if (requestDate.getTime() > horizon.getTime()) {
+    redirect(`/aluno/agendar?error=${encodeURIComponent(`Só é possível agendar até ${policy.maxDaysAhead} dias à frente`)}`)
+  }
 
   // Busca professor com disponibilidade e aulas já marcadas
   const teacher = await prisma.teacher.findUnique({
