@@ -28,6 +28,7 @@ import { RequestCancellationButton }         from "./_components/request-cancell
 import { AddPaymentDialog }                   from "./_components/add-payment-dialog"
 import { DeletePaymentButton }               from "./_components/delete-payment-button"
 import { ReceiptDialog }                     from "./_components/receipt-dialog"
+import { PaymentStatusSelector }             from "./_components/payment-status-selector"
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -75,11 +76,6 @@ const LESSON_STATUS = {
   MISSED:     { label: "Faltou",     cls: "bg-orange-100 text-orange-700 border-orange-200" },
 } as const
 
-const PAYMENT_STATUS = {
-  PAID:    { label: "Paga",      cls: "bg-green-100 text-green-700"  },
-  PENDING: { label: "Pendente",  cls: "bg-yellow-100 text-yellow-700" },
-  OVERDUE: { label: "Vencida",   cls: "bg-red-100 text-red-700"      },
-} as const
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
@@ -867,9 +863,7 @@ export default async function StudentDetailPage({ params, searchParams }: Props)
                       </p>
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
-                      <span className={`text-[11px] font-medium px-1.5 py-0.5 rounded-full ${PAYMENT_STATUS[pay.status].cls}`}>
-                        {PAYMENT_STATUS[pay.status].label}
-                      </span>
+                      <PaymentStatusSelector paymentId={pay.id} currentStatus={pay.status} />
                       <DeletePaymentButton paymentId={pay.id} />
                     </div>
                   </div>

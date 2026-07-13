@@ -675,3 +675,26 @@ export async function deleteLessonAction(lessonId: string) {
     revalidatePath(`/colaborador/alunos/${p.studentId}`)
   }
 }
+
+export async function updatePaymentStatusAction(id: string, status: "PENDING" | "PAID" | "OVERDUE") {
+  await requireCollaboratorOrAdmin()
+
+  const payment = await prisma.payment.findUnique({
+    where: { id },
+    select: { studentId: true },
+  })
+  if (!payment) throw new Error("Pagamento não encontrado")
+
+  await prisma.payment.update({
+    where: { id },
+    data: {
+      status,
+      paidAt: status === "PAID" ? new Date() : null,
+    },
+  })
+
+  revalidatePath(`/colaborador/alunos/${payment.studentId}`)
+  revalidatePath(`/admin/usuarios/${payment.studentId}`)
+  revalidatePath("/colaborador/financeiro")
+  revalidatePath("/admin/financeiro/pagamentos")
+}
