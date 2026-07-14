@@ -190,6 +190,10 @@ model Teacher {
   // do responsável / API de slots). Controlado pelo admin, por professor.
   externalBooking Boolean   @default(false)
 
+  // Janela de pagamento do repasse (dias do mês). Ex: paga entre o dia 5 e 10.
+  payDayStart  Int?
+  payDayEnd    Int?
+
   subjects  TeacherSubject[]
   lessons   Lesson[]
   requests  LessonRequest[]
@@ -433,6 +437,10 @@ model Payment {
   description   String?
   createdAt     DateTime      @default(now())
 
+  // Taxa de cartão/maquininha estimada desta cobrança (snapshot no momento da
+  // criação/edição). Receita líquida = amount - feeAmount. Ver src/lib/fees.ts
+  feeAmount     Decimal?      @db.Decimal(10, 2)
+
   // Parcelamento (boleto / cartão de crédito) — cada parcela é uma cobrança
   installmentNumber  Int?     // nº desta parcela (1..N)
   installmentTotal   Int?     // total de parcelas do grupo
@@ -463,6 +471,22 @@ model TeacherPayout {
 
   @@unique([teacherId, month, year])
   @@map("teacher_payouts")
+}
+
+// Taxas de cartão/maquininha por método + faixa de nº de parcelas.
+// Ex: "Cartão de crédito" 2–6x = 4,99%; 7–12x = 5,99%; "Boleto" = R$3,50 fixo.
+model CardFeeRate {
+  id              String   @id @default(cuid())
+  method          String   // casa com Payment.method ("Cartão de crédito", "Boleto", "Pix", ...)
+  minInstallments Int      @default(1)
+  maxInstallments Int      @default(1)
+  percent         Decimal  @default(0) @db.Decimal(5, 2)   // ex: 4.99
+  fixed           Decimal  @default(0) @db.Decimal(10, 2)  // ex: 3.50 (boleto)
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+
+  @@index([method])
+  @@map("card_fee_rates")
 }
 
 // ─── Metas Mensais ────────────────────────────────────────────────────────────

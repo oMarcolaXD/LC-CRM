@@ -10,6 +10,7 @@ import {
 import { Button }   from "@/components/ui/button"
 import { Input }    from "@/components/ui/input"
 import { Label }    from "@/components/ui/label"
+import { FeeEstimate } from "@/components/shared/fee-estimate"
 import { Plus, Loader2, RotateCcw } from "lucide-react"
 
 type PaymentStatus = "PAID" | "PENDING" | "OVERDUE"
@@ -333,6 +334,13 @@ export function AddPaymentDialog({ studentId }: AddPaymentDialogProps) {
                 </p>
               </div>
             )}
+
+            {/* Taxa de cartão estimada */}
+            <FeeEstimate
+              method={method}
+              amount={parseFloat(amount.replace(",", ".")) || 0}
+              installmentTotal={isInstallment ? installmentCount : 1}
+            />
 
             {/* Referente a */}
             <div className="space-y-1.5">

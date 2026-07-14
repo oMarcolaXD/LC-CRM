@@ -13,6 +13,7 @@ import { Label }   from "@/components/ui/label"
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select"
+import { FeeEstimate } from "@/components/shared/fee-estimate"
 import { Pencil, Loader2, Trash2, AlertTriangle } from "lucide-react"
 
 interface Props {
@@ -214,6 +215,12 @@ export function EditPaymentDialog({ payment, studentName }: Props) {
                 className="h-9"
               />
             </div>
+
+            <FeeEstimate
+              method={method}
+              amount={parseFloat(amount) || 0}
+              installmentTotal={payment.installmentTotal ?? 1}
+            />
 
             {/* Zona de perigo */}
             <div className="border-t pt-4 space-y-3">

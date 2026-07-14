@@ -12,6 +12,20 @@ import { parseBrazilDateTime } from "@/lib/datetime"
 import bcrypt                from "bcryptjs"
 import { z }                 from "zod"
 import { randomUUID }        from "crypto"
+import { calcFee, type FeeRate } from "@/lib/fees"
+
+/** Carrega as regras de taxa de cartão ativas (para snapshot em Payment.feeAmount). */
+async function loadFeeRates(): Promise<FeeRate[]> {
+  const rows = await prisma.cardFeeRate.findMany({ where: { active: true } })
+  return rows.map((r) => ({
+    method:          r.method,
+    minInstallments: r.minInstallments,
+    maxInstallments: r.maxInstallments,
+    percent:         Number(r.percent),
+    fixed:           Number(r.fixed),
+    active:          r.active,
+  }))
+}
 
 function generateRandomPassword(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789@#!"
@@ -462,6 +476,7 @@ export async function addStudentPaymentAction(input: {
   if (!parsed.success) throw new Error(parsed.error.issues[0]?.message ?? "Dados inválidos")
 
   const { studentId, dueDate, paidAt, status, method, description, installments } = parsed.data
+  const feeRates = await loadFeeRates()
 
   if (installments && installments.length >= 2) {
     // Parcelamento: uma cobrança (PENDING) por parcela, ligadas por grupo.
@@ -475,6 +490,7 @@ export async function addStudentPaymentAction(input: {
         paidAt:             null,
         status:             "PENDING" as const,
         method:             method || null,
+        feeAmount:          calcFee(feeRates, method, total, inst.amount),
         description:        description || null,
         installmentNumber:  i + 1,
         installmentTotal:   total,
@@ -490,6 +506,7 @@ export async function addStudentPaymentAction(input: {
         paidAt:      paidAt ? new Date(paidAt) : (status === "PAID" ? new Date() : null),
         status,
         method:      method || null,
+        feeAmount:   calcFee(feeRates, method, 1, parsed.data.amount),
         description: description || null,
       },
     })

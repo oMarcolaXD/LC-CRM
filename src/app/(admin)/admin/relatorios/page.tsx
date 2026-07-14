@@ -6,7 +6,7 @@ import { SimpleBarChart }  from "@/components/charts/bar-chart"
 import { DonutChart }      from "@/components/charts/donut-chart"
 import {
   TrendingUp, BookOpen, Users, GraduationCap,
-  Star, DollarSign, AlertCircle, CheckCircle2,
+  Star, DollarSign, AlertCircle, CheckCircle2, Percent, Coins,
 } from "lucide-react"
 import { format, subMonths, startOfMonth, endOfMonth } from "date-fns"
 import { ptBR } from "date-fns/locale"
@@ -31,7 +31,7 @@ async function getReportData() {
     totalStudents, totalTeachers,
     subjects, teachers, topAlunosRaw, ratingData,
   ] = await Promise.all([
-    prisma.payment.groupBy({ by: ["status"], _sum: { amount: true }, _count: { _all: true } }),
+    prisma.payment.groupBy({ by: ["status"], _sum: { amount: true, feeAmount: true }, _count: { _all: true } }),
     prisma.lesson.groupBy({ by: ["status"], _count: { _all: true } }),
     prisma.student.count(),
     prisma.teacher.count(),
@@ -62,6 +62,8 @@ async function getReportData() {
 
   // Extrai stats de pagamento do groupBy
   const receitaTotal    = Number(paymentGroups.find(g => g.status === "PAID")?._sum.amount ?? 0)
+  const taxasTotal      = Number(paymentGroups.find(g => g.status === "PAID")?._sum.feeAmount ?? 0)
+  const receitaLiquida  = receitaTotal - taxasTotal
   const aReceber        = Number(paymentGroups.find(g => g.status === "PENDING")?._sum.amount ?? 0)
   const inadimplencia   = Number(paymentGroups.find(g => g.status === "OVERDUE")?._sum.amount ?? 0)
   const totalPagamentos = paymentGroups.reduce((acc, g) => acc + g._count._all, 0)
@@ -155,6 +157,8 @@ async function getReportData() {
   return {
     receitaMeses,
     receitaTotal,
+    taxasTotal,
+    receitaLiquida,
     aReceber,
     inadimplencia,
     taxaAdimplencia,
@@ -181,7 +185,9 @@ export default async function RelatoriosPage() {
         </h2>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[
-            { title: "Receita Total",     value: brl(d.receitaTotal),    icon: TrendingUp,    color: "text-green-600",   bg: "bg-green-50"    },
+            { title: "Receita Bruta",     value: brl(d.receitaTotal),    icon: TrendingUp,    color: "text-green-600",   bg: "bg-green-50"    },
+            { title: "Taxas de Cartão",   value: brl(d.taxasTotal),      icon: Percent,       color: "text-amber-600",   bg: "bg-amber-50"    },
+            { title: "Receita Líquida",   value: brl(d.receitaLiquida),  icon: Coins,         color: "text-green-700",   bg: "bg-green-50"    },
             { title: "A Receber",         value: brl(d.aReceber),        icon: DollarSign,    color: "text-primary",     bg: "bg-primary/10"  },
             { title: "Inadimplência",     value: brl(d.inadimplencia),   icon: AlertCircle,   color: "text-destructive", bg: "bg-destructive/10" },
             { title: "Taxa de Adimplência",value:`${d.taxaAdimplencia}%`,icon: CheckCircle2,  color: "text-green-600",   bg: "bg-green-50"    },

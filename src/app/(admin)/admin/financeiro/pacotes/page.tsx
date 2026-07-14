@@ -3,11 +3,12 @@ import { PageHeader }     from "@/components/shared/page-header"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge }          from "@/components/ui/badge"
 import { Button }         from "@/components/ui/button"
+import { LinkButton }     from "@/components/shared/link-button"
 import { Input }          from "@/components/ui/input"
 import { Label }          from "@/components/ui/label"
 import { createPackageAction } from "@/lib/actions/financeiro"
 import { PackageStatusButton } from "./package-status-button"
-import { BookOpen, Plus, AlertCircle } from "lucide-react"
+import { BookOpen, Plus, AlertCircle, BarChart3 } from "lucide-react"
 import { format }         from "date-fns"
 import { ptBR }           from "date-fns/locale"
 
@@ -47,7 +48,11 @@ export default async function PacotesPage({ searchParams }: PacotesPageProps) {
   return (
     <div className="space-y-6">
       <PageHeader title="PACOTES DE AULAS" backHref="/admin/financeiro"
-        description="Crie e gerencie os pacotes de aulas dos alunos" />
+        description="Crie e gerencie os pacotes de aulas dos alunos">
+        <LinkButton href="/admin/financeiro/pacotes/analise" variant="outline" size="sm">
+          <BarChart3 className="w-4 h-4 mr-1" /> Análise de vendas
+        </LinkButton>
+      </PageHeader>
 
       {success && <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm">{decodeURIComponent(success)}</div>}
       {error   && <div className="bg-destructive/10 border border-destructive/20 text-destructive px-4 py-3 rounded-lg text-sm flex items-center gap-2"><AlertCircle className="w-4 h-4 shrink-0" />{decodeURIComponent(error)}</div>}

@@ -6,10 +6,41 @@ import { revalidatePath } from "next/cache"
 import { redirect }      from "next/navigation"
 import { z }             from "zod"
 import { randomUUID }    from "crypto"
+import { calcFee, type FeeRate } from "@/lib/fees"
 
 async function requireAdmin() {
   const session = await auth()
   if (session?.user?.role !== "ADMIN") throw new Error("Sem permissão")
+}
+
+// ─── Taxas de cartão (helpers) ────────────────────────────────────────────────
+
+/** Converte uma linha do banco (Decimal) para o formato numérico puro de fees.ts */
+function toFeeRate(r: {
+  method: string; minInstallments: number; maxInstallments: number
+  percent: unknown; fixed: unknown; active: boolean
+}): FeeRate {
+  return {
+    method:          r.method,
+    minInstallments: r.minInstallments,
+    maxInstallments: r.maxInstallments,
+    percent:         Number(r.percent),
+    fixed:           Number(r.fixed),
+    active:          r.active,
+  }
+}
+
+/** Carrega as regras de taxa ativas (uso interno nas actions). */
+async function loadFeeRates(): Promise<FeeRate[]> {
+  const rows = await prisma.cardFeeRate.findMany({ where: { active: true } })
+  return rows.map(toFeeRate)
+}
+
+/** Exposto aos modais (client) para exibir a taxa estimada em tempo real. */
+export async function getActiveFeeRatesAction(): Promise<FeeRate[]> {
+  const session = await auth()
+  if (!session?.user || !["ADMIN", "COLLABORATOR"].includes(session.user.role)) return []
+  return loadFeeRates()
 }
 
 // ─── Criar Pacote para Aluno ──────────────────────────────────────────────────
@@ -74,6 +105,8 @@ export async function createStudentPackageAction(data: {
   const status          = data.isClosed ? "EXHAUSTED" : "ACTIVE"
   const remainingLessons = data.isClosed ? 0 : data.totalLessons
 
+  const feeRates = await loadFeeRates()
+
   await prisma.$transaction(async (tx) => {
     const pkg = await tx.lessonPackage.create({
       data: {
@@ -107,6 +140,7 @@ export async function createStudentPackageAction(data: {
             paidAt:             null,
             status:             "PENDING" as const,
             method:             method || null,
+            feeAmount:          calcFee(feeRates, method, total, inst.amount),
             description:        `${description} (${i + 1}/${total})`,
             installmentNumber:  i + 1,
             installmentTotal:   total,
@@ -123,6 +157,7 @@ export async function createStudentPackageAction(data: {
             dueDate:     new Date(dueDate),
             paidAt:      paidAtDate ?? undefined,
             method:      method || undefined,
+            feeAmount:   calcFee(feeRates, method, 1, amount),
             status:      paidAtDate ? "PAID" : "PENDING",
             description,
           },
@@ -155,8 +190,12 @@ export async function createPaymentAction(formData: FormData) {
     redirect(`/admin/financeiro/pagamentos?error=${encodeURIComponent(parsed.error.issues[0]?.message ?? "Dados inválidos")}`)
   }
   const { studentId, amount, dueDate, description, method } = parsed.data
+  const feeRates = await loadFeeRates()
   await prisma.payment.create({
-    data: { studentId, amount, dueDate: new Date(dueDate), description, method, status: "PENDING" },
+    data: {
+      studentId, amount, dueDate: new Date(dueDate), description, method, status: "PENDING",
+      feeAmount: calcFee(feeRates, method, 1, amount),
+    },
   })
   revalidatePath("/admin/financeiro/pagamentos")
   redirect("/admin/financeiro/pagamentos?success=Cobrança+criada")
@@ -176,41 +215,156 @@ export async function markPaymentOverdueAction(id: string) {
   revalidatePath("/admin/financeiro/pagamentos")
 }
 
-// ─── Calcular/Gerar Repasse do Professor ─────────────────────────────────────
-export async function generatePayoutAction(teacherId: string, month: number, year: number) {
-  await requireAdmin()
+// ─── Repasse do Professor — cálculo automático ────────────────────────────────
 
+/**
+ * Calcula (sem persistir) o repasse de um professor num mês/ano: soma as horas
+ * das aulas COMPLETED × hourlyRate. Reutilizado na tela de repasses e ao marcar
+ * como pago. Retorna também `hourlyRate` para exibição.
+ */
+export async function computePayout(teacherId: string, month: number, year: number) {
   const start = new Date(year, month - 1, 1)
   const end   = new Date(year, month, 0, 23, 59, 59)
 
-  const lessons = await prisma.lesson.findMany({
-    where:   { teacherId, status: "COMPLETED", scheduledAt: { gte: start, lte: end } },
-    include: { teacher: true },
-  })
+  const [teacher, lessons] = await Promise.all([
+    prisma.teacher.findUnique({ where: { id: teacherId }, select: { hourlyRate: true } }),
+    prisma.lesson.findMany({
+      where:  { teacherId, status: "COMPLETED", scheduledAt: { gte: start, lte: end } },
+      select: { duration: true },
+    }),
+  ])
 
-  if (lessons.length === 0) {
-    redirect(`/admin/financeiro/professores?error=Nenhuma+aula+realizada+neste+período`)
-  }
-
-  const rate       = Number(lessons[0].teacher.hourlyRate)
+  const hourlyRate = Number(teacher?.hourlyRate ?? 0)
   const totalUnits = lessons.reduce((sum, l) => sum + l.duration / 60, 0)
-  const total      = totalUnits * rate
+  const totalAmount = totalUnits * hourlyRate
+
+  return { totalLessons: totalUnits, totalAmount, hourlyRate, lessonCount: lessons.length }
+}
+
+/**
+ * Marca (ou desmarca) o repasse de um professor como pago. Como o valor é
+ * calculado sob demanda, o registro TeacherPayout é criado/atualizado aqui, no
+ * momento do pagamento — o admin não precisa "calcular" nada antes.
+ */
+export async function setPayoutPaidAction(
+  teacherId: string, month: number, year: number, paid: boolean,
+) {
+  await requireAdmin()
+  const { totalLessons, totalAmount } = await computePayout(teacherId, month, year)
 
   await prisma.teacherPayout.upsert({
     where:  { teacherId_month_year: { teacherId, month, year } },
-    update: { totalLessons: totalUnits, totalAmount: total },
-    create: { teacherId, month, year, totalLessons: totalUnits, totalAmount: total, status: "PENDING" },
+    update: { totalLessons, totalAmount, status: paid ? "PAID" : "PENDING", paidAt: paid ? new Date() : null },
+    create: { teacherId, month, year, totalLessons, totalAmount, status: paid ? "PAID" : "PENDING", paidAt: paid ? new Date() : null },
   })
 
   revalidatePath("/admin/financeiro/professores")
-  redirect("/admin/financeiro/professores?success=Repasse+calculado+com+sucesso")
+  revalidatePath("/admin/financeiro")
 }
 
-// ─── Marcar Repasse como Pago ─────────────────────────────────────────────────
-export async function markPayoutPaidAction(id: string) {
+/**
+ * Repasses pendentes com dia de pagamento próximo/na janela (mês corrente).
+ * Usado nos avisos in-app do hub financeiro e da tela de repasses. Considera
+ * "próximo" quando hoje já passou de (payDayStart − 3).
+ */
+export async function getPayoutAlerts() {
+  const now   = new Date()
+  const month = now.getMonth() + 1
+  const year  = now.getFullYear()
+  const today = now.getDate()
+
+  const teachers = await prisma.teacher.findMany({
+    where:   { payDayStart: { not: null } },
+    include: { user: { select: { name: true } } },
+  })
+
+  const paidThisMonth = await prisma.teacherPayout.findMany({
+    where:  { month, year, status: "PAID" },
+    select: { teacherId: true },
+  })
+  const paidSet = new Set(paidThisMonth.map((p) => p.teacherId))
+
+  const alerts: {
+    teacherId: string; name: string; totalAmount: number
+    payDayStart: number; payDayEnd: number; overdue: boolean
+  }[] = []
+
+  for (const t of teachers) {
+    if (paidSet.has(t.id)) continue
+    const start = t.payDayStart!
+    const end   = t.payDayEnd ?? t.payDayStart!
+    if (today < start - 3) continue                 // ainda longe da janela
+    const { totalAmount } = await computePayout(t.id, month, year)
+    if (totalAmount <= 0) continue
+    alerts.push({
+      teacherId:   t.id,
+      name:        t.user.name,
+      totalAmount,
+      payDayStart: start,
+      payDayEnd:   end,
+      overdue:     today > end,
+    })
+  }
+
+  return alerts.sort((a, b) => a.payDayEnd - b.payDayEnd)
+}
+
+/** Define a janela de dias de pagamento do repasse de um professor. */
+export async function updateTeacherPayWindowAction(
+  teacherId: string, payDayStart: number | null, payDayEnd: number | null,
+) {
   await requireAdmin()
-  await prisma.teacherPayout.update({ where: { id }, data: { status: "PAID", paidAt: new Date() } })
+  const clamp = (v: number | null) => (v == null ? null : Math.min(31, Math.max(1, Math.round(v))))
+  await prisma.teacher.update({
+    where: { id: teacherId },
+    data:  { payDayStart: clamp(payDayStart), payDayEnd: clamp(payDayEnd) },
+  })
   revalidatePath("/admin/financeiro/professores")
+  revalidatePath("/admin/financeiro")
+}
+
+// ─── Config de Taxas de Cartão (CRUD) ─────────────────────────────────────────
+
+const feeRateSchema = z.object({
+  method:          z.string().min(1),
+  minInstallments: z.coerce.number().int().min(1).max(24),
+  maxInstallments: z.coerce.number().int().min(1).max(24),
+  percent:         z.coerce.number().min(0).max(100),
+  fixed:           z.coerce.number().min(0),
+  active:          z.coerce.boolean().optional(),
+}).refine((d) => d.maxInstallments >= d.minInstallments, {
+  message: "Nº máximo de parcelas deve ser ≥ mínimo", path: ["maxInstallments"],
+})
+
+export async function createFeeRateAction(input: {
+  method: string; minInstallments: number; maxInstallments: number
+  percent: number; fixed: number; active?: boolean
+}) {
+  await requireAdmin()
+  const parsed = feeRateSchema.safeParse(input)
+  if (!parsed.success) throw new Error(parsed.error.issues[0]?.message ?? "Dados inválidos")
+  await prisma.cardFeeRate.create({ data: { ...parsed.data, active: parsed.data.active ?? true } })
+  revalidatePath("/admin/financeiro/taxas")
+}
+
+export async function updateFeeRateAction(input: {
+  id: string; method: string; minInstallments: number; maxInstallments: number
+  percent: number; fixed: number; active?: boolean
+}) {
+  await requireAdmin()
+  const parsed = feeRateSchema.safeParse(input)
+  if (!parsed.success) throw new Error(parsed.error.issues[0]?.message ?? "Dados inválidos")
+  await prisma.cardFeeRate.update({
+    where: { id: input.id },
+    data:  { ...parsed.data, active: parsed.data.active ?? true },
+  })
+  revalidatePath("/admin/financeiro/taxas")
+}
+
+export async function deleteFeeRateAction(id: string) {
+  await requireAdmin()
+  await prisma.cardFeeRate.delete({ where: { id } })
+  revalidatePath("/admin/financeiro/taxas")
 }
 
 // ─── Editar Pacote do Aluno ───────────────────────────────────────────────────
@@ -263,6 +417,15 @@ export async function updatePaymentAction(data: {
     throw new Error("Sem permissão")
   }
 
+  // Recalcula a taxa: método/valor podem ter mudado. Usa o nº de parcelas do
+  // grupo (registrado na própria cobrança) para ratear o valor fixo.
+  const existing = await prisma.payment.findUnique({
+    where:  { id: data.id },
+    select: { installmentTotal: true },
+  })
+  const feeRates = await loadFeeRates()
+  const feeAmount = calcFee(feeRates, data.method || null, existing?.installmentTotal ?? 1, data.amount)
+
   await prisma.payment.update({
     where: { id: data.id },
     data: {
@@ -271,6 +434,7 @@ export async function updatePaymentAction(data: {
       description: data.description || null,
       method:      data.method      || null,
       status:      data.status,
+      feeAmount,
       paidAt:      data.paidAt ? new Date(data.paidAt) : (data.status === "PAID" ? new Date() : null),
     },
   })

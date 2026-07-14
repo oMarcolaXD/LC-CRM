@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/select"
 import { toast }    from "sonner"
 import { createStudentPackageAction } from "@/lib/actions/financeiro"
+import { FeeEstimate } from "@/components/shared/fee-estimate"
 
 interface Props {
   studentId:   string
@@ -464,6 +465,13 @@ export function PackageDialog({ studentId, studentName, mode }: Props) {
                       {paymentPaidAt && ` em ${new Date(paymentPaidAt + "T12:00:00").toLocaleDateString("pt-BR")}`}
                     </p>
                   )}
+
+                  {/* Taxa de cartão estimada */}
+                  <FeeEstimate
+                    method={paymentMethod}
+                    amount={parseFloat(paymentAmount.replace(",", ".")) || 0}
+                    installmentTotal={isInstallment ? installmentCount : 1}
+                  />
                 </div>
               )}
             </div>
