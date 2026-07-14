@@ -88,35 +88,58 @@ function gerarAulasMes(
 
 async function main() {
   console.log("🌱 Limpando dados antigos...")
-  await prisma.activityLog.deleteMany()
-  await prisma.notification.deleteMany()
-  await prisma.teacherPayout.deleteMany()
-  await prisma.payment.deleteMany()
-  await prisma.homework.deleteMany()
-  await prisma.lesson.deleteMany()
-  await prisma.lessonRequest.deleteMany()
-  await prisma.lessonPackage.deleteMany()
-  await prisma.teacherSubject.deleteMany()
-  await prisma.material.deleteMany()
-  await prisma.studentNote.deleteMany()
-  await prisma.student.deleteMany()
-  await prisma.guardian.deleteMany()
-  await prisma.teacher.deleteMany()
-  await prisma.subject.deleteMany()
-  await prisma.user.deleteMany()
+  
+  // Helper para retry em caso de erro de prepared statement
+  const withRetry = async (fn: () => Promise<any>, maxRetries = 3, delay = 500) => {
+    for (let i = 0; i < maxRetries; i++) {
+      try {
+        return await fn()
+      } catch (error: any) {
+        if (i === maxRetries - 1) throw error
+        if (error.message?.includes("prepared statement") || error.message?.includes("does not exist")) {
+          console.warn(`⚠️  Erro de conexão, tentando novamente em ${delay}ms...`)
+          await new Promise(r => setTimeout(r, delay))
+          continue
+        }
+        throw error
+      }
+    }
+  }
+  
+  // Deletar em sequência com pequeno delay
+  await withRetry(() => prisma.activityLog.deleteMany())
+  await withRetry(() => prisma.notification.deleteMany())
+  await withRetry(() => prisma.teacherPayout.deleteMany())
+  await withRetry(() => prisma.payment.deleteMany())
+  await withRetry(() => prisma.homework.deleteMany())
+  await withRetry(() => prisma.lesson.deleteMany())
+  await withRetry(() => prisma.lessonRequest.deleteMany())
+  await withRetry(() => prisma.lessonPackage.deleteMany())
+  await withRetry(() => prisma.teacherSubject.deleteMany())
+  await withRetry(() => prisma.material.deleteMany())
+  await withRetry(() => prisma.studentNote.deleteMany())
+  await withRetry(() => prisma.student.deleteMany())
+  await withRetry(() => prisma.guardian.deleteMany())
+  await withRetry(() => prisma.teacher.deleteMany())
+  await withRetry(() => prisma.subject.deleteMany())
+  await withRetry(() => prisma.user.deleteMany())
   console.log("✅ Banco limpo")
 
   // ─── Matérias ──────────────────────────────────────────────────────────────
-  await Promise.all([
-    prisma.subject.create({ data: { id: "sub-mat", name: "Matemática",  level: "Todos"                } }),
-    prisma.subject.create({ data: { id: "sub-por", name: "Português",   level: "Todos"                } }),
-    prisma.subject.create({ data: { id: "sub-fis", name: "Física",      level: "Ensino Médio/Superior" } }),
-    prisma.subject.create({ data: { id: "sub-qui", name: "Química",     level: "Ensino Médio/Superior" } }),
-    prisma.subject.create({ data: { id: "sub-bio", name: "Biologia",    level: "Ensino Médio/Superior" } }),
-    prisma.subject.create({ data: { id: "sub-his", name: "História",    level: "Todos"                } }),
-    prisma.subject.create({ data: { id: "sub-geo", name: "Geografia",   level: "Todos"                } }),
-    prisma.subject.create({ data: { id: "sub-ing", name: "Inglês",      level: "Todos"                } }),
-  ])
+  // Criar sequencialmente para evitar erros de prepared statement no Supabase
+  const subjects = [
+    { id: "sub-mat", name: "Matemática",  level: "Todos"                },
+    { id: "sub-por", name: "Português",   level: "Todos"                },
+    { id: "sub-fis", name: "Física",      level: "Ensino Médio/Superior" },
+    { id: "sub-qui", name: "Química",     level: "Ensino Médio/Superior" },
+    { id: "sub-bio", name: "Biologia",    level: "Ensino Médio/Superior" },
+    { id: "sub-his", name: "História",    level: "Todos"                },
+    { id: "sub-geo", name: "Geografia",   level: "Todos"                },
+    { id: "sub-ing", name: "Inglês",      level: "Todos"                },
+  ]
+  for (const s of subjects) {
+    await prisma.subject.create({ data: s })
+  }
   console.log("✅ 8 matérias")
 
   // ─── Admin ─────────────────────────────────────────────────────────────────

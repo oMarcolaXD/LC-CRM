@@ -373,18 +373,27 @@ export function BatchPastLessonsDialog({
                         >
                           {TIME_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
                         </select>
-                        <button
-                          type="button"
-                          onClick={() => updateRow(i, "duration", row.duration === 60 ? "30" : "60")}
-                          title={row.duration === 60 ? "Aula inteira (60 min) — clique para meia aula" : "Meia aula (30 min) — clique para aula inteira"}
-                          className={`h-8 px-2 rounded-lg border text-xs font-bold shrink-0 transition-colors ${
+                        <select
+                          value={row.duration}
+                          onChange={e => updateRow(i, "duration", e.target.value)}
+                          title="Duração da aula"
+                          className={`h-8 w-24 rounded-lg border px-1.5 text-xs font-semibold shrink-0 focus:outline-none focus:ring-2 focus:ring-ring transition-colors ${
                             row.duration === 30
-                              ? "bg-amber-100 text-amber-700 border-amber-300"
+                              ? "bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-900"
+                              : row.duration > 60
+                              ? "bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-900"
                               : "bg-muted text-muted-foreground border-border"
                           }`}
                         >
-                          {row.duration === 30 ? "½" : "1"}
-                        </button>
+                          <option value="30" className="bg-background text-foreground">0,5 aula</option>
+                          <option value="60" className="bg-background text-foreground">1 aula</option>
+                          <option value="90" className="bg-background text-foreground">1,5 aula</option>
+                          <option value="120" className="bg-background text-foreground">2 aulas</option>
+                          <option value="150" className="bg-background text-foreground">2,5 aulas</option>
+                          <option value="180" className="bg-background text-foreground">3 aulas</option>
+                          <option value="210" className="bg-background text-foreground">3,5 aulas</option>
+                          <option value="240" className="bg-background text-foreground">4 aulas</option>
+                        </select>
                         <button
                           type="button"
                           onClick={() => updateRow(i, "status", row.status === "COMPLETED" ? "MISSED" : "COMPLETED")}
