@@ -527,7 +527,7 @@ export async function createRecurringLessonsAction(data: {
   duration?:      number
   teacherOnsite?: boolean
   packageId?:     string
-}): Promise<{ created: number; skippedConflict: number; skippedNoBalance: number }> {
+}): Promise<{ created: number; conflicts: { date: string; reason: string }[]; skippedNoBalance: number }> {
   await requireCollaboratorOrAdmin()
 
   const occurrences = Math.min(Math.max(2, Math.floor(data.occurrences)), 52)
@@ -572,13 +572,15 @@ export async function createRecurringLessonsAction(data: {
   let   remaining = startBal
 
   const toCreate: { date: Date; isPast: boolean }[] = []
-  let skippedConflict  = 0
+  const conflicts: { date: string; reason: string }[] = []
   let skippedNoBalance = 0
+  const teacherFirstName = teacher.user.name.split(" ")[0]
 
   for (const date of weeklyOccurrences(first, occurrences)) {
     if (remaining < cost) { skippedNoBalance++; continue }
 
-    const isPast = date < now
+    const isPast    = date < now
+    const slotLabel = format(date, "dd/MM 'às' HH:mm", { locale: ptBR })
 
     // Conflitos só valem para aulas futuras (passadas são registro histórico)
     if (!isPast) {
@@ -600,7 +602,10 @@ export async function createRecurringLessonsAction(data: {
           const s = l.scheduledAt.getTime(); const e = s + (l.duration ?? 60) * 60_000
           return s < reqEnd && e > reqStart
         })
-        if (roomConflicts.length >= roomCount) { skippedConflict++; continue }
+        if (roomConflicts.length >= roomCount) {
+          conflicts.push({ date: slotLabel, reason: `todas as ${roomCount} sala${roomCount !== 1 ? "s" : ""} estão ocupadas` })
+          continue
+        }
       }
 
       const teacherLessons = await prisma.lesson.findMany({
@@ -609,13 +614,19 @@ export async function createRecurringLessonsAction(data: {
           status:      { in: ["CONFIRMED", "SCHEDULED"] },
           scheduledAt: { gte: dayStart, lte: dayEnd },
         },
-        select: { scheduledAt: true, duration: true },
+        select: { scheduledAt: true, duration: true, subject: { select: { name: true } } },
       })
-      const teacherConflict = teacherLessons.some((l) => {
+      const clash = teacherLessons.find((l) => {
         const s = l.scheduledAt.getTime(); const e = s + (l.duration ?? 60) * 60_000
         return s < reqEnd && e > reqStart
       })
-      if (teacherConflict) { skippedConflict++; continue }
+      if (clash) {
+        conflicts.push({
+          date:   slotLabel,
+          reason: `${teacherFirstName} já tem ${clash.subject?.name ?? "outra aula"} às ${format(clash.scheduledAt, "HH:mm")}`,
+        })
+        continue
+      }
     }
 
     toCreate.push({ date, isPast })
@@ -624,7 +635,7 @@ export async function createRecurringLessonsAction(data: {
 
   if (toCreate.length === 0) {
     throw new Error(
-      skippedConflict > 0
+      conflicts.length > 0
         ? "Todos os horários da série têm conflito. Nenhuma aula foi criada."
         : "Aluno sem saldo suficiente para agendar a série.",
     )
@@ -632,43 +643,46 @@ export async function createRecurringLessonsAction(data: {
 
   const totalCost = toCreate.length * cost
 
-  await prisma.$transaction(async (tx) => {
-    let recurrenceGroupId: string | undefined
-    if (toCreate.length > 1) {
-      const group = await tx.recurrenceGroup.create({
-        data: {
-          rule:     "WEEKLY",
-          startsAt: toCreate[0].date,
-          endsAt:   toCreate[toCreate.length - 1].date,
-        },
-      })
-      recurrenceGroupId = group.id
-    }
+  // Cria o grupo de recorrência primeiro (fora da transação em lote) para que o
+  // id possa ser referenciado por todas as aulas. A criação das aulas + baixa no
+  // pacote roda numa única transação em lote (array-form) — evita o timeout da
+  // transação interativa que ocorria com muitas aulas sobre o pooler do Supabase.
+  let recurrenceGroupId: string | null = null
+  if (toCreate.length > 1) {
+    const group = await prisma.recurrenceGroup.create({
+      data: {
+        rule:     "WEEKLY",
+        startsAt: toCreate[0].date,
+        endsAt:   toCreate[toCreate.length - 1].date,
+      },
+    })
+    recurrenceGroupId = group.id
+  }
 
-    for (const { date, isPast } of toCreate) {
-      await tx.lesson.create({
+  await prisma.$transaction([
+    ...toCreate.map(({ date, isPast }) =>
+      prisma.lesson.create({
         data: {
-          teacherId:         data.teacherId,
-          subjectId:         data.subjectId,
-          scheduledAt:       date,
+          teacherId:    data.teacherId,
+          subjectId:    data.subjectId,
+          scheduledAt:  date,
           duration,
-          modality:          data.modality,
-          status:            isPast ? "COMPLETED" : "CONFIRMED",
+          modality:     data.modality,
+          status:       isPast ? "COMPLETED" : "CONFIRMED",
           teacherOnsite,
-          recurrenceGroupId: recurrenceGroupId ?? null,
-          participants:      { create: { studentId: data.studentId } },
+          recurrenceGroupId,
+          participants: { create: { studentId: data.studentId } },
         },
-      })
-    }
-
-    await tx.lessonPackage.update({
+      }),
+    ),
+    prisma.lessonPackage.update({
       where: { id: pkg.id },
       data:  {
         remainingLessons: { decrement: totalCost },
         status: startBal - totalCost <= 0 ? "EXHAUSTED" : "ACTIVE",
       },
-    })
-  })
+    }),
+  ])
 
   // Notifica o aluno de cada aula futura confirmada (uma por ocorrência).
   // Aulas passadas (registro histórico) não geram notificação.
@@ -695,7 +709,7 @@ export async function createRecurringLessonsAction(data: {
   revalidatePath("/professor/agenda")
   revalidatePath(`/colaborador/alunos/${data.studentId}`)
 
-  return { created: toCreate.length, skippedConflict, skippedNoBalance }
+  return { created: toCreate.length, conflicts, skippedNoBalance }
 }
 
 // ─── Criar aula em grupo ──────────────────────────────────────────────────────

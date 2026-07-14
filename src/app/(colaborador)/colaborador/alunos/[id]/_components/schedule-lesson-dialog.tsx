@@ -4,7 +4,7 @@ import { useState, useTransition } from "react"
 import { useRouter }               from "next/navigation"
 import { format }                  from "date-fns"
 import { ptBR as ptBRLocale }       from "date-fns/locale"
-import { Plus, Loader2, CalendarDays, Wifi, MapPin, Users, X, Repeat } from "lucide-react"
+import { Plus, Loader2, CalendarDays, Wifi, MapPin, Users, X, Repeat, AlertTriangle } from "lucide-react"
 import { Button }                  from "@/components/ui/button"
 import { Badge }                   from "@/components/ui/badge"
 import {
@@ -41,6 +41,7 @@ export function ScheduleLessonDialog({ studentId, studentName, teachers, hasBala
   const [duoIds, setDuoIds]     = useState<string[]>([])
   const [isRecurring, setIsRecurring] = useState(false)
   const [occurrences, setOccurrences] = useState(4)
+  const [conflicts, setConflicts]     = useState<{ date: string; reason: string }[]>([])
   const [pending, start]        = useTransition()
 
   const selectedTeacher = teachers.find(t => t.id === teacherId)
@@ -101,9 +102,16 @@ export function ScheduleLessonDialog({ studentId, studentName, teachers, hasBala
             occurrences,
           })
           const parts = [`${r.created} aula${r.created !== 1 ? "s" : ""} criada${r.created !== 1 ? "s" : ""}`]
-          if (r.skippedConflict > 0)  parts.push(`${r.skippedConflict} com conflito`)
           if (r.skippedNoBalance > 0) parts.push(`${r.skippedNoBalance} sem saldo`)
-          toast.success(`Série recorrente: ${parts.join(" · ")}`)
+          setOpen(false)
+          router.refresh()
+          if (r.conflicts.length > 0) {
+            setConflicts(r.conflicts)
+            toast.warning(`Série criada, mas ${r.conflicts.length} horário${r.conflicts.length !== 1 ? "s têm" : " tem"} conflito`)
+          } else {
+            toast.success(`Série recorrente: ${parts.join(" · ")}`)
+          }
+          return
         } else {
           await createLessonDirectAction({ teacherId, studentId, subjectId, date, time, modality })
           toast.success("Aula agendada com sucesso")
@@ -307,7 +315,7 @@ export function ScheduleLessonDialog({ studentId, studentName, teachers, hasBala
                       Desconta 1 aula do pacote por ocorrência — cria só o que couber no saldo.
                     </p>
                     <div className="flex items-center gap-2">
-                      <Label className="text-xs whitespace-nowrap">Quantas aulas</Label>
+                      <Label className="text-xs whitespace-nowrap">Quantas semanas</Label>
                       <Input
                         type="number"
                         min={2}
@@ -331,6 +339,39 @@ export function ScheduleLessonDialog({ studentId, studentName, teachers, hasBala
               {pending && <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />}
               {isRecurring && !isDuo ? "Agendar série" : "Agendar"}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Aviso de conflitos da série recorrente */}
+      <Dialog open={conflicts.length > 0} onOpenChange={(v) => { if (!v) setConflicts([]) }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-500" />
+              {conflicts.length} horário{conflicts.length !== 1 ? "s" : ""} não agendado{conflicts.length !== 1 ? "s" : ""}
+            </DialogTitle>
+          </DialogHeader>
+
+          <p className="text-xs text-muted-foreground">
+            As demais aulas da série foram criadas normalmente. Os horários abaixo foram
+            pulados por conflito — reagende-os manualmente em outro horário:
+          </p>
+
+          <ul className="space-y-1.5 max-h-64 overflow-y-auto">
+            {conflicts.map((c, i) => (
+              <li key={i} className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs">
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
+                <span>
+                  <strong className="text-foreground">{c.date}</strong>
+                  <span className="text-muted-foreground"> — {c.reason}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+
+          <DialogFooter>
+            <Button onClick={() => setConflicts([])}>Entendi</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
