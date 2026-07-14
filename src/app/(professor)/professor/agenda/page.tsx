@@ -12,12 +12,27 @@ export default async function ProfessorAgendaPage() {
     where: { user: { email: session?.user?.email ?? "" } },
   })
 
-  const lessons = await (teacher ? prisma.lesson.findMany({
-    where:   { teacherId: teacher.id },
-    include: { participants: { include: { student: { include: { user: true } } } }, subject: true },
-    orderBy: { scheduledAt: "asc" },
-    take:    60,
-  }) : Promise.resolve([]))
+  // Próximas aulas (agendadas/confirmadas) + histórico recente.
+  // IMPORTANTE: buscar em duas queries — ordenar tudo por scheduledAt asc com
+  // take limitado fazia as aulas futuras ficarem de fora quando o professor
+  // tinha muitos registros históricos, resultando em "nenhuma aula agendada".
+  const [upcomingLessons, pastLessons] = teacher
+    ? await Promise.all([
+        prisma.lesson.findMany({
+          where:   { teacherId: teacher.id, status: { in: ["SCHEDULED", "CONFIRMED"] } },
+          include: { participants: { include: { student: { include: { user: true } } } }, subject: true },
+          orderBy: { scheduledAt: "asc" },
+        }),
+        prisma.lesson.findMany({
+          where:   { teacherId: teacher.id, status: { in: ["COMPLETED", "CANCELLED", "MISSED"] } },
+          include: { participants: { include: { student: { include: { user: true } } } }, subject: true },
+          orderBy: { scheduledAt: "desc" },
+          take:    30,
+        }),
+      ])
+    : [[], []]
+
+  const lessons = [...upcomingLessons, ...pastLessons]
 
   // Serialise lessons for client component (Date → ISO string)
   const serialisedLessons = lessons.map((l) => ({

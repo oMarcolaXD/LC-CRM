@@ -35,6 +35,7 @@ import { CreateDuoLessonDialog }     from "@/components/shared/create-duo-lesson
 import { CreateAulaoDialog }        from "@/components/shared/create-aulao-dialog"
 import { CreateCommitmentDialog }   from "@/components/shared/create-commitment-dialog"
 import { AuloesSection }            from "./auloes-section"
+import { parseBrazilDateTime }      from "@/lib/datetime"
 
 // ─── Constantes de layout ────────────────────────────────────────────────────
 
@@ -453,7 +454,7 @@ function QuickScheduleModal({
   onClose:  () => void
 }) {
   const teacher      = teachers.find(t => t.id === schedule.teacherId)
-  const scheduledAt  = new Date(`${date}T${schedule.time}:00`)
+  const scheduledAt  = parseBrazilDateTime(date, schedule.time)
   const isHistorical = scheduledAt < new Date()
 
   const isOnlineOnly = teacher?.teachingMode === "ONLINE_ONLY"

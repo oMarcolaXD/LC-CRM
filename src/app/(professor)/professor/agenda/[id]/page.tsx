@@ -7,7 +7,7 @@ import { Badge }        from "@/components/ui/badge"
 import { AddHomeworkForm }     from "./add-homework-form"
 import { format }       from "date-fns"
 import { ptBR }         from "date-fns/locale"
-import { CalendarDays, User, BookOpen, Monitor, MapPin, PenLine, CheckCircle2, Clock, CalendarPlus, Users } from "lucide-react"
+import { CalendarDays, User, BookOpen, Monitor, MapPin, PenLine, CheckCircle2, Clock, CalendarPlus, Users, Info } from "lucide-react"
 
 function buildGoogleCalendarUrl(lesson: {
   scheduledAt:  Date
@@ -117,6 +117,16 @@ export default async function LessonDetailPage({ params }: LessonDetailProps) {
               <CalendarPlus className="w-4 h-4" />
               Adicionar ao Google Agenda
             </a>
+          )}
+
+          {!isCompleted && (
+            <div className="flex items-start gap-2 rounded-xl bg-brand-blue/5 border border-brand-blue/20 px-4 py-3">
+              <Info className="w-4 h-4 text-brand-blue mt-0.5 shrink-0" />
+              <p className="text-sm text-muted-foreground">
+                A confirmação de que a aula ocorreu é feita pelo <strong>colaborador</strong>.
+                Você não precisa marcar nada aqui — basta dar a aula e, se quiser, registrar as lições de casa abaixo.
+              </p>
+            </div>
           )}
         </CardContent>
       </Card>

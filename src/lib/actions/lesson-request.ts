@@ -8,6 +8,7 @@ import { getRoomCount, getOperationalConfig, isOperational } from "@/lib/config"
 import { startOfDay, endOfDay, addWeeks, addMonths, parseISO, isAfter } from "date-fns"
 import { format }              from "date-fns"
 import { ptBR }                from "date-fns/locale"
+import { parseBrazilDateTime } from "@/lib/datetime"
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -360,7 +361,7 @@ export async function createLessonDirectAction(data: {
   await requireCollaboratorOrAdmin()
 
   const duration    = data.duration ?? 60
-  const scheduledAt = new Date(`${data.date}T${data.time}:00`)
+  const scheduledAt = parseBrazilDateTime(data.date, data.time)
   const isHistorical = scheduledAt < new Date()
 
   const student = await prisma.student.findUnique({
@@ -533,7 +534,7 @@ export async function createRecurringLessonsAction(data: {
   const occurrences = Math.min(Math.max(2, Math.floor(data.occurrences)), 52)
   const duration    = data.duration ?? 60
   const cost         = lessonCost(duration)
-  const first        = new Date(`${data.date}T${data.time}:00`)
+  const first        = parseBrazilDateTime(data.date, data.time)
 
   const student = await prisma.student.findUnique({
     where:   { id: data.studentId },
@@ -735,7 +736,7 @@ export async function createGroupLessonAction(data: {
   }
 
   const duration    = data.duration ?? 60
-  const scheduledAt = new Date(`${data.date}T${data.time}:00`)
+  const scheduledAt = parseBrazilDateTime(data.date, data.time)
   const isHistorical = scheduledAt < new Date()
 
   const [teacher, subject] = await Promise.all([
@@ -898,7 +899,7 @@ export async function createDuoLessonAction(data: {
 
   const duration     = data.duration ?? 60
   const cost         = lessonCost(duration)
-  const scheduledAt  = new Date(`${data.date}T${data.time}:00`)
+  const scheduledAt  = parseBrazilDateTime(data.date, data.time)
   const isHistorical = scheduledAt < new Date()
 
   const [teacher, subject] = await Promise.all([
@@ -1089,7 +1090,7 @@ export async function createBatchPastLessonsAction(data: {
 
   await prisma.$transaction([
     ...data.lessons.map(({ date, time, status, teacherId, subjectId, duration, partnerId }) => {
-      const scheduledAt = new Date(`${date}T${time}:00`)
+      const scheduledAt = parseBrazilDateTime(date, time)
       const isDuo = !!partnerId && partnerId !== data.studentId
       return prisma.lesson.create({
         data: {
@@ -1149,7 +1150,7 @@ export async function updateLessonDirectAction(data: {
   const session = await auth()
   if (!["ADMIN", "COLLABORATOR"].includes(session?.user?.role ?? "")) throw new Error("Sem permissão")
 
-  const scheduledAt  = new Date(`${data.date}T${data.time}:00`)
+  const scheduledAt  = parseBrazilDateTime(data.date, data.time)
   const teacherOnsite = data.modality === "PRESENCIAL"
 
   await prisma.lesson.update({
@@ -1194,7 +1195,7 @@ export async function createAulaoAction(data: {
   await requireCollaboratorOrAdmin()
 
   const duration     = data.duration ?? 90
-  const scheduledAt  = new Date(`${data.date}T${data.time}:00`)
+  const scheduledAt  = parseBrazilDateTime(data.date, data.time)
   const isHistorical = scheduledAt < new Date()
   const studentIds   = data.studentIds ?? []
 
@@ -1412,7 +1413,7 @@ export async function rescheduleAndApproveRequestAction(
 
   await prisma.lessonRequest.update({
     where: { id: requestId },
-    data:  { preferredAt: new Date(`${newDate}T${newTime}:00`) },
+    data:  { preferredAt: parseBrazilDateTime(newDate, newTime) },
   })
 
   await approveRequestAction(requestId, modality, teacherOnsite)
@@ -1430,7 +1431,7 @@ export async function createTeacherCommitmentAction(data: {
   await requireCollaboratorOrAdmin()
 
   const duration    = data.duration ?? 60
-  const scheduledAt = new Date(`${data.date}T${data.time}:00`)
+  const scheduledAt = parseBrazilDateTime(data.date, data.time)
   const dayStart    = startOfDay(scheduledAt)
   const dayEnd      = endOfDay(scheduledAt)
 

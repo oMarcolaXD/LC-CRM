@@ -10,6 +10,7 @@ import { DAY_SHORT } from "@/lib/availability"
 import { CalendarDays, Clock, Loader2, AlertCircle, ChevronLeft, ChevronRight, Wifi, MapPin, LayoutGrid, Repeat } from "lucide-react"
 import { format, addDays, startOfDay } from "date-fns"
 import { ptBR } from "date-fns/locale"
+import { parseBrazilDateTime } from "@/lib/datetime"
 
 type TeacherMode = "ONLINE_ONLY" | "PRESENCIAL" | "HYBRID"
 type EducationLevel = "EF2" | "EM" | "SUPERIOR" | "VESTIBULAR"
@@ -398,7 +399,7 @@ export function BookingForm({
         </SubmitButton>
         {preferredAt && (
           <Badge variant="outline" className="text-xs font-normal">
-            {format(new Date(`${selectedDate}T${selectedSlot}:00`), "EEEE, dd/MM 'às' HH:mm", { locale: ptBR })}
+            {format(parseBrazilDateTime(selectedDate, selectedSlot), "EEEE, dd/MM 'às' HH:mm", { locale: ptBR })}
           </Badge>
         )}
       </div>

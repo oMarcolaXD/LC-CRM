@@ -9,6 +9,7 @@ import { isWithinAvailability, hasConflict } from "@/lib/availability"
 import type { Availability } from "@/lib/availability"
 import { format }         from "date-fns"
 import { ptBR }           from "date-fns/locale"
+import { parseBrazilDateTime } from "@/lib/datetime"
 
 function lessonCost(durationMinutes: number): number {
   return durationMinutes / 60
@@ -168,7 +169,7 @@ export async function guardianRescheduleLessonAction(
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(time)) {
     throw new Error("Data ou horário inválidos")
   }
-  const newDate = new Date(`${date}T${time}:00`)
+  const newDate = parseBrazilDateTime(date, time)
   if (isNaN(newDate.getTime())) throw new Error("Data ou horário inválidos")
 
   // Novo horário respeita os limites de agendamento

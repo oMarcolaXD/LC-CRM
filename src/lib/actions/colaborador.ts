@@ -8,6 +8,7 @@ import { notify }            from "@/lib/notifications"
 import { sendWelcomeEmail }  from "@/lib/email"
 import { format }            from "date-fns"
 import { ptBR }              from "date-fns/locale"
+import { parseBrazilDateTime } from "@/lib/datetime"
 import bcrypt                from "bcryptjs"
 import { z }                 from "zod"
 import { randomUUID }        from "crypto"
@@ -190,7 +191,7 @@ export async function createStudentWithGuardianAction(formData: FormData) {
 
     // ── Aulas já realizadas ──────────────────────────────────────────────────
     for (const row of parsedLessons) {
-      const scheduledAt = new Date(`${row.date}T${row.time}:00`)
+      const scheduledAt = parseBrazilDateTime(row.date, row.time)
       await tx.lesson.create({
         data: {
           teacherId:     row.teacherId,
