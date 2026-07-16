@@ -9,6 +9,7 @@ import {
   differenceInHours, differenceInDays,
 } from "date-fns"
 import { ptBR } from "date-fns/locale"
+import { toBrazilDate, nowBrazil } from "@/lib/datetime"
 
 function brl(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })
@@ -17,7 +18,7 @@ function brl(v: number) {
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
 async function getColabData(userId?: string) {
-  const now = new Date()
+  const now = nowBrazil()
   const dow = getDay(now)
 
   const [
@@ -91,7 +92,7 @@ async function getColabData(userId?: string) {
   function teacherPriority(t: typeof teachers[0]): { tier: number; span: number } {
     const lessonHours = todayLessons
       .filter((l) => l.teacherId === t.id && ["SCHEDULED", "CONFIRMED"].includes(l.status))
-      .map((l) => l.scheduledAt.getHours())
+      .map((l) => toBrazilDate(l.scheduledAt).getHours())
       .sort((a, b) => a - b)
 
     if (lessonHours.length > 0) {
@@ -121,14 +122,14 @@ async function getColabData(userId?: string) {
       todayLessons.some(
         (l) =>
           l.teacherId === teacherId &&
-          l.scheduledAt.getHours() === hour &&
+          toBrazilDate(l.scheduledAt).getHours() === hour &&
           ["SCHEDULED", "CONFIRMED"].includes(l.status)
       )
     )
       return "busy"
     if (
       todayRequests.some(
-        (r) => r.teacherId === teacherId && r.preferredAt.getHours() === hour
+        (r) => r.teacherId === teacherId && toBrazilDate(r.preferredAt).getHours() === hour
       )
     )
       return "request"

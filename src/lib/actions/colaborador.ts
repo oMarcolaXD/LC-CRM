@@ -6,9 +6,8 @@ import { revalidatePath }    from "next/cache"
 import { redirect }          from "next/navigation"
 import { notify }            from "@/lib/notifications"
 import { sendWelcomeEmail }  from "@/lib/email"
-import { format }            from "date-fns"
 import { ptBR }              from "date-fns/locale"
-import { parseBrazilDateTime } from "@/lib/datetime"
+import { parseBrazilDateTime, formatBR } from "@/lib/datetime"
 import bcrypt                from "bcryptjs"
 import { z }                 from "zod"
 import { randomUUID }        from "crypto"
@@ -576,7 +575,7 @@ export async function sendConfirmationsBatchAction(items: {
         email:   guardian?.user.email   ?? student?.user?.email   ?? undefined,
         data: {
           "Matéria":  lesson.subject?.name ?? "–",
-          "Horário":  format(lesson.scheduledAt, "HH:mm"),
+          "Horário":  formatBR(lesson.scheduledAt, "HH:mm"),
         },
       })
     } else {
@@ -589,7 +588,7 @@ export async function sendConfirmationsBatchAction(items: {
         email:   lesson.teacher.user.email ?? undefined,
         data: {
           "Matéria":  lesson.subject?.name ?? "–",
-          "Horário":  format(lesson.scheduledAt, "HH:mm"),
+          "Horário":  formatBR(lesson.scheduledAt, "HH:mm"),
         },
       })
     }
@@ -619,7 +618,7 @@ export async function sendConfirmationToGuardianAction(lessonId: string) {
   })
   if (!lesson) throw new Error("Aula não encontrada")
 
-  const scheduledAt = format(lesson.scheduledAt, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
+  const scheduledAt = formatBR(lesson.scheduledAt, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
 
   for (const p of lesson.participants) {
     const { student } = p
@@ -658,7 +657,7 @@ export async function sendConfirmationToTeacherAction(lessonId: string) {
   })
   if (!lesson) throw new Error("Aula não encontrada")
 
-  const scheduledAt = format(lesson.scheduledAt, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
+  const scheduledAt = formatBR(lesson.scheduledAt, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
 
   await notify({
     userId:  lesson.teacher.userId,

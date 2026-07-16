@@ -8,11 +8,12 @@ import {
   format, differenceInHours, differenceInDays, subMonths, startOfMonth,
 } from "date-fns"
 import { ptBR } from "date-fns/locale"
+import { formatBR, nowBrazil } from "@/lib/datetime"
 
 function relDate(date: Date, now: Date): string {
   const h = differenceInHours(now, date)
   const d = differenceInDays(now, date)
-  if (h < 2)   return `hoje ${format(date, "HH")}h`
+  if (h < 2)   return `hoje ${formatBR(date, "HH")}h`
   if (h < 24)  return `há ${h}h`
   if (d === 1) return "ontem"
   if (d < 7)   return `há ${d} dias`
@@ -20,7 +21,7 @@ function relDate(date: Date, now: Date): string {
 }
 
 async function getMeusAlunos(email: string): Promise<AlunoProf[] | null> {
-  const now = new Date()
+  const now = nowBrazil()
   const sixMonthsAgo = startOfMonth(subMonths(now, 5))
 
   const teacher = await prisma.teacher.findFirst({

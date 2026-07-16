@@ -11,6 +11,7 @@ import {
   differenceInHours, differenceInDays, differenceInMinutes,
 } from "date-fns"
 import { ptBR } from "date-fns/locale"
+import { formatBR, toBrazilDate, nowBrazil } from "@/lib/datetime"
 
 function brl(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })
@@ -18,7 +19,7 @@ function brl(v: number) {
 function relDate(date: Date, now: Date): string {
   const h = differenceInHours(now, date)
   const d = differenceInDays(now, date)
-  if (h < 2)  return `hoje ${format(date, "HH")}h`
+  if (h < 2)  return `hoje ${formatBR(date, "HH")}h`
   if (h < 24) return `há ${h}h`
   if (d === 1) return "ontem"
   return `há ${d} dias`
@@ -35,7 +36,7 @@ function relAgo(date: Date, now: Date): string {
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
 async function getProfData(email: string) {
-  const now = new Date()
+  const now = nowBrazil()
 
   const months = Array.from({ length: 6 }, (_, i) => {
     const d = subMonths(now, 5 - i)
@@ -111,13 +112,13 @@ async function getProfData(email: string) {
   const minutesUntil = nextLesson ? differenceInMinutes(nextLesson.scheduledAt, now) : null
 
   const timelineItems = todayLessons.map(l => {
-    const lh   = l.scheduledAt.getHours() + l.scheduledAt.getMinutes() / 60
+    const lh   = toBrazilDate(l.scheduledAt).getHours() + toBrazilDate(l.scheduledAt).getMinutes() / 60
     const le   = lh + (l.duration ?? 60) / 60
     const isNext = nextLesson?.id === l.id
     return {
       left:    `${((lh - SH) / SPAN) * 100}%`,
       width:   `${((le - lh)  / SPAN) * 100}%`,
-      time:    format(l.scheduledAt, "HH:mm"),
+      time:    formatBR(l.scheduledAt, "HH:mm"),
       aluno:   (l.participants[0]?.student.name ?? "Aluno").split(" ")[0],
       materia: l.subject?.name ?? "–",
       modo:    (l.modality === "PRESENCIAL" ? "sede" : "online") as "sede" | "online",
@@ -160,8 +161,8 @@ async function getProfData(email: string) {
 
     hero = {
       lessonId:     nextLesson.id,
-      hora:         format(nextLesson.scheduledAt, "HH:mm"),
-      horaFim:      format(endH, "HH:mm"),
+      hora:         formatBR(nextLesson.scheduledAt, "HH:mm"),
+      horaFim:      formatBR(endH, "HH:mm"),
       subjectName:  nextLesson.subject?.name ?? "–",
       studentName:  stName,
       studentGrade: stGrade,
@@ -616,7 +617,7 @@ export default async function ProfessorDashboard() {
           {/* Ganhos */}
           <div className="flex flex-1 flex-col overflow-hidden rounded-[10px] border border-border bg-card">
             <div className="p-[12px_14px_8px]">
-              <p className="text-[13px] font-semibold tracking-[-0.01em]">Meus ganhos · {format(new Date(), "MMMM", { locale: ptBR })}</p>
+              <p className="text-[13px] font-semibold tracking-[-0.01em]">Meus ganhos · {format(nowBrazil(), "MMMM", { locale: ptBR })}</p>
               <p className="mt-0.5 text-[11px] text-muted-foreground">
                 {d.aulasMes} aulas · próximo pagamento em ~{d.diasAtePagamento} dias
               </p>

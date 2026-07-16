@@ -5,6 +5,7 @@ import Link            from "next/link"
 import { ArrowLeft, CheckCircle2 } from "lucide-react"
 import { format }      from "date-fns"
 import { ptBR }        from "date-fns/locale"
+import { formatBR, nowBrazil } from "@/lib/datetime"
 
 function brl(v: number) { return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) }
 
@@ -30,7 +31,7 @@ export default async function ReciboPage({ params }: ReciboPageProps) {
   if (!payment || payment.status !== "PAID") notFound()
 
   const receiptNumber = payment.id.slice(-8).toUpperCase()
-  const emittedAt     = format(new Date(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
+  const emittedAt     = formatBR(nowBrazil(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
   const paidAt        = payment.paidAt
     ? format(payment.paidAt, "dd/MM/yyyy", { locale: ptBR })
     : "–"

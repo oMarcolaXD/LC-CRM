@@ -16,6 +16,7 @@ import {
   startOfWeek, endOfWeek, startOfMonth, endOfMonth, addMinutes,
 } from "date-fns"
 import { ptBR } from "date-fns/locale"
+import { formatBR, toBrazilDate, nowBrazil } from "@/lib/datetime"
 
 interface AgendaPageProps {
   searchParams: Promise<{ date?: string; view?: string }>
@@ -57,7 +58,8 @@ function mapToLessonSlot(
   },
 ): LessonSlot {
   const d          = l.scheduledAt
-  const min        = d.getHours() * 60 + d.getMinutes()
+  const br         = toBrazilDate(d)
+  const min        = br.getHours() * 60 + br.getMinutes()
   const first      = l.participants[0]
   const lessonType = l.lessonType as LessonSlot["lessonType"]
   const isSpecial  = lessonType === "AULAO" || lessonType === "COMPROMISSO"
@@ -77,7 +79,7 @@ function mapToLessonSlot(
     status:        l.status as LessonSlot["status"],
     modality:      l.modality as LessonSlot["modality"],
     teacherOnsite: l.teacherOnsite,
-    time:          format(d, "HH:mm"),
+    time:          formatBR(d, "HH:mm"),
     studentName,
     subjectName:   l.subject?.name ?? "–",
     guardianName:  first?.student.guardian?.user.name ?? null,
@@ -94,8 +96,8 @@ function mapToLessonSlot(
 export default async function ColaboradorAgendaPage({ searchParams }: AgendaPageProps) {
   const { date: rawDate, view: rawView } = await searchParams
 
-  const parsed   = rawDate ? parseISO(rawDate) : new Date()
-  const dateObj  = isValid(parsed) ? parsed : new Date()
+  const parsed   = rawDate ? parseISO(rawDate) : nowBrazil()
+  const dateObj  = isValid(parsed) ? parsed : nowBrazil()
   const dateStr  = format(dateObj, "yyyy-MM-dd")
   const dayStart = startOfDay(dateObj)
   const dayEnd   = endOfDay(dateObj)
@@ -234,8 +236,8 @@ export default async function ColaboradorAgendaPage({ searchParams }: AgendaPage
         teacherName: l.teacher.user.name,
         teacherId:   l.teacherId,
         subjectName: l.subject?.name ?? "–",
-        time:        format(l.scheduledAt, "HH:mm"),
-        endTime:     format(endDt,         "HH:mm"),
+        time:        formatBR(l.scheduledAt, "HH:mm"),
+        endTime:     formatBR(endDt,        "HH:mm"),
         enrolled:          l.participants.length,
         capacity:          l.capacity ?? null,
         status:            l.status,
@@ -256,7 +258,7 @@ export default async function ColaboradorAgendaPage({ searchParams }: AgendaPage
       if (!first) continue
       const student  = first.student
       const guardian = student.guardian
-      const time     = format(lesson.scheduledAt, "HH:mm")
+      const time     = formatBR(lesson.scheduledAt, "HH:mm")
       const modality = lesson.modality === "ONLINE" ? "online" : "sede"
       const studentFirst  = student.name.split(" ")[0]
       const guardianName  = guardian?.user.name ?? student.name ?? "Responsável"
@@ -309,7 +311,7 @@ export default async function ColaboradorAgendaPage({ searchParams }: AgendaPage
       const aulaList     = tLessons
         .sort((a, b) => a.scheduledAt.getTime() - b.scheduledAt.getTime())
         .map(l => {
-          const t = format(l.scheduledAt, "HH:mm")
+          const t = formatBR(l.scheduledAt, "HH:mm")
           const s = (l.participants[0]?.student.name ?? "aluno").split(" ")[0]
           return `${t} ${s}`
         })
@@ -334,21 +336,21 @@ export default async function ColaboradorAgendaPage({ searchParams }: AgendaPage
 
   const weekLessons: WeekLessonSlot[] = weekLessonsRaw.map(l => ({
     ...mapToLessonSlot(l),
-    date: format(l.scheduledAt, "yyyy-MM-dd"),
+    date: formatBR(l.scheduledAt, "yyyy-MM-dd"),
   }))
 
   const monthLessons: WeekLessonSlot[] = monthLessonsRaw.map(l => ({
     ...mapToLessonSlot(l),
-    date: format(l.scheduledAt, "yyyy-MM-dd"),
+    date: formatBR(l.scheduledAt, "yyyy-MM-dd"),
   }))
 
   function mapPending(r: typeof pendingRaw[0]): PendingRequestSlot {
     return {
       id:          r.id,
       teacherId:   r.teacherId,
-      startMin:    r.preferredAt.getHours() * 60 + r.preferredAt.getMinutes(),
-      time:        format(r.preferredAt, "HH:mm"),
-      date:        format(r.preferredAt, "yyyy-MM-dd"),
+      startMin:    toBrazilDate(r.preferredAt).getHours() * 60 + toBrazilDate(r.preferredAt).getMinutes(),
+      time:        formatBR(r.preferredAt, "HH:mm"),
+      date:        formatBR(r.preferredAt, "yyyy-MM-dd"),
       studentName: r.student.name ?? "Aluno",
       subjectName: r.subject?.name ?? "–",
       modality:    r.modality as "PRESENCIAL" | "ONLINE",

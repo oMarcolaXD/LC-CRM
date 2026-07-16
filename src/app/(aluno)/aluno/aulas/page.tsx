@@ -12,6 +12,7 @@ import { LessonSelfActions } from "./_components/lesson-self-actions"
 import { CalendarDays, Clock, MapPin, Monitor, Star, BookOpen, Users } from "lucide-react"
 import { format }         from "date-fns"
 import { ptBR }           from "date-fns/locale"
+import { formatBR, nowBrazil } from "@/lib/datetime"
 
 const PER_PAGE = 15
 
@@ -67,7 +68,7 @@ export default async function AulasPage({ searchParams }: AulasPageProps) {
   ])
 
   const totalPages = Math.ceil(totalLessons / PER_PAGE)
-  const now        = new Date()
+  const now        = nowBrazil()
 
   return (
     <div className="space-y-6">
@@ -98,7 +99,7 @@ export default async function AulasPage({ searchParams }: AulasPageProps) {
                 <div className="min-w-0">
                   <p className="font-medium text-sm truncate">{r.subject?.name ?? "Matéria não informada"}</p>
                   <p className="text-xs text-muted-foreground">
-                    Prof. {r.teacher.user.name} · {format(r.preferredAt, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                    Prof. {r.teacher.user.name} · {formatBR(r.preferredAt, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
                   </p>
                 </div>
                 <Badge variant={REQUEST_CONFIG[r.status].variant}>
@@ -154,7 +155,7 @@ export default async function AulasPage({ searchParams }: AulasPageProps) {
                         {format(lesson.scheduledAt, "MMM", { locale: ptBR })}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {format(lesson.scheduledAt, "HH:mm")}
+                        {formatBR(lesson.scheduledAt, "HH:mm")}
                       </p>
                     </div>
 

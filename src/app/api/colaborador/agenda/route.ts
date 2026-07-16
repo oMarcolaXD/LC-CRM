@@ -7,6 +7,7 @@ import {
   startOfWeek, endOfWeek,
   startOfMonth, endOfMonth,
 } from "date-fns"
+import { formatBR, toBrazilDate } from "@/lib/datetime"
 
 const lessonInclude = {
   participants: {
@@ -46,7 +47,7 @@ function mapLesson(l: RawLesson) {
     status:        l.status,
     modality:      l.modality,
     teacherOnsite: l.teacherOnsite,
-    time:          format(d, "HH:mm"),
+    time:          formatBR(d, "HH:mm"),
     studentName:   first?.student.name ?? (lessonType === "COMPROMISSO" ? "" : "Aluno"),
     subjectName:   l.subject?.name ?? "–",
     guardianName:  first?.student.guardian?.user.name ?? null,
@@ -70,8 +71,8 @@ function mapAulaoCard(l: RawLesson & { teacher: { user: { name: string } } }) {
     teacherName: l.teacher.user.name,
     teacherId:   l.teacherId,
     subjectName: l.subject?.name ?? "–",
-    time:        format(d,       "HH:mm"),
-    endTime:     format(endTime, "HH:mm"),
+    time:        formatBR(d,       "HH:mm"),
+    endTime:     formatBR(endTime, "HH:mm"),
     enrolled:    l.participants.length,
     capacity:    l.capacity ?? null,
     status:      l.status,
@@ -80,14 +81,15 @@ function mapAulaoCard(l: RawLesson & { teacher: { user: { name: string } } }) {
 }
 
 function mapPendingRequest(r: RawRequest) {
-  const d   = r.preferredAt
-  const min = d.getHours() * 60 + d.getMinutes()
+  const d    = r.preferredAt
+  const brD  = toBrazilDate(d)
+  const min  = brD.getHours() * 60 + brD.getMinutes()
   return {
     id:          r.id,
     teacherId:   r.teacherId,
     startMin:    min,
-    time:        format(d, "HH:mm"),
-    date:        format(d, "yyyy-MM-dd"),
+    time:        formatBR(d, "HH:mm"),
+    date:        formatBR(d, "yyyy-MM-dd"),
     studentName: r.student.name ?? "Aluno",
     subjectName: r.subject?.name ?? "–",
     modality:    r.modality,

@@ -6,6 +6,7 @@ import Link             from "next/link"
 import { HistoryPagination } from "@/components/shared/history-pagination"
 import { format, formatDistanceToNow, subDays, differenceInMonths } from "date-fns"
 import { ptBR }         from "date-fns/locale"
+import { formatBR }     from "@/lib/datetime"
 import { buttonVariants } from "@/components/ui/button"
 import { Badge }         from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -507,7 +508,7 @@ export default async function StudentDetailPage({ params, searchParams }: Props)
               <p className="text-sm font-semibold leading-tight">
                 {format(nextLesson.scheduledAt, "dd/MM", { locale: ptBR })}
                 {" · "}
-                {format(nextLesson.scheduledAt, "HH:mm")}
+                {formatBR(nextLesson.scheduledAt, "HH:mm")}
               </p>
               <p className="text-[11px] text-muted-foreground truncate">{nextLesson.subject?.name ?? "–"}</p>
             </>
@@ -758,7 +759,7 @@ export default async function StudentDetailPage({ params, searchParams }: Props)
                       {filteredLessons.map(l => (
                         <tr key={l.id} className="group hover:bg-muted/30 transition-colors">
                           <td className="py-2 pr-3 text-xs tabular-nums whitespace-nowrap">
-                            {format(l.scheduledAt, "dd/MM · HH:mm", { locale: ptBR })}
+                            {formatBR(l.scheduledAt, "dd/MM · HH:mm", { locale: ptBR })}
                           </td>
                           <td className="py-2 pr-3 text-xs font-medium whitespace-nowrap">{l.subject?.name ?? "–"}</td>
                           <td className="py-2 pr-3 text-xs text-muted-foreground hidden sm:table-cell whitespace-nowrap">
@@ -781,7 +782,7 @@ export default async function StudentDetailPage({ params, searchParams }: Props)
                                 lesson={{
                                   id:            l.id,
                                   date:          format(l.scheduledAt, "yyyy-MM-dd"),
-                                  time:          format(l.scheduledAt, "HH:mm"),
+                                  time:          formatBR(l.scheduledAt, "HH:mm"),
                                   status:        l.status,
                                   teacherId:     l.teacher?.id ?? "",
                                   subjectId:     l.subjectId ?? null,

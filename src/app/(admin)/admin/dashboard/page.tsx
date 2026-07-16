@@ -13,6 +13,7 @@ import {
   differenceInDays, startOfYear, endOfYear, subYears,
 } from "date-fns"
 import { ptBR } from "date-fns/locale"
+import { formatBR, nowBrazil } from "@/lib/datetime"
 
 function brl(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })
@@ -119,7 +120,7 @@ function getPeriodBounds(periodo: Periodo, now: Date): {
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
 async function getOpsData(periodo: Periodo) {
-  const now    = new Date()
+  const now    = nowBrazil()
   const bounds = getPeriodBounds(periodo, now)
   const { start, end, prevStart, prevEnd, periodLabel, chartPoints } = bounds
 
@@ -297,7 +298,7 @@ async function getOpsData(periodo: Periodo) {
 
   // ── Próximas aulas ───────────────────────────────────────────────────────────
   const proximas = proximasAulas.map((l) => ({
-    hora:       format(l.scheduledAt, "HH:mm"),
+    hora:       formatBR(l.scheduledAt, "HH:mm"),
     aluno:      l.participants[0]?.student.name ?? "Aluno",
     materia:    l.subject?.name ?? "–",
     prof:       l.teacher.user.name.split(" ")[0],

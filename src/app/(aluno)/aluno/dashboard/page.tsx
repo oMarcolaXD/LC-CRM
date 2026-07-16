@@ -7,6 +7,7 @@ import { DashboardGreeting } from "@/components/shared/dashboard-greeting"
 import Link                 from "next/link"
 import { format }           from "date-fns"
 import { ptBR }             from "date-fns/locale"
+import { formatBR, nowBrazil } from "@/lib/datetime"
 
 function brlFmt(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })
@@ -23,7 +24,7 @@ async function getRespData(guardianUserId: string) {
   if (!guardian || allStudents.length === 0) return null
 
   const studentIds = allStudents.map((s) => s.id)
-  const now        = new Date()
+  const now        = nowBrazil()
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
 
   const [
@@ -149,7 +150,7 @@ export default async function AlunoDashboard() {
     const ms   = next.scheduledAt.getTime() - now.getTime()
     const mins = Math.floor(ms / 60000)
     if (mins < 60)   return [`${fn} tem aula em ${mins} min`]
-    if (mins < 1440) return [`${fn} tem aula hoje às ${format(next.scheduledAt, "HH:mm")}`]
+    if (mins < 1440) return [`${fn} tem aula hoje às ${formatBR(next.scheduledAt, "HH:mm")}`]
     return [`${fn} tem aula em ${Math.floor(mins / 1440)} dia${Math.floor(mins / 1440) !== 1 ? "s" : ""}`]
   })
 
@@ -228,7 +229,7 @@ export default async function AlunoDashboard() {
               <div style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 8 }}>
                 <div style={{ width: 56, height: 56, borderRadius: 14, background: "linear-gradient(135deg, var(--primary), #ea580c)", color: "#fff", fontWeight: 600, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", lineHeight: 1, flexShrink: 0 }}>
                   <span style={{ fontSize: 11, opacity: 0.85 }}>{heroIsToday ? "HOJE" : format(heroLesson.scheduledAt, "dd/MM")}</span>
-                  <span style={{ fontSize: 16, fontFamily: "ui-monospace, monospace", marginTop: 2 }}>{format(heroLesson.scheduledAt, "HH:mm")}</span>
+                  <span style={{ fontSize: 16, fontFamily: "ui-monospace, monospace", marginTop: 2 }}>{formatBR(heroLesson.scheduledAt, "HH:mm")}</span>
                 </div>
                 <div style={{ lineHeight: 1.3 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -340,7 +341,7 @@ export default async function AlunoDashboard() {
                   </div>
                 </div>
                 <div style={{ fontSize: 14, fontWeight: 600, fontFamily: "ui-monospace, monospace", letterSpacing: "-0.01em" }}>
-                  {otherNextLesson ? format(otherNextLesson.scheduledAt, "EEE · HH:mm", { locale: ptBR }) : "—"}
+                  {otherNextLesson ? formatBR(otherNextLesson.scheduledAt, "EEE · HH:mm", { locale: ptBR }) : "—"}
                 </div>
               </div>
 
@@ -408,7 +409,7 @@ export default async function AlunoDashboard() {
                   return (
                     <div key={l.id} style={{ display: "grid", gridTemplateColumns: "110px 26px 1fr auto", alignItems: "center", gap: 14, padding: "12px 14px", borderTop: i ? "1px solid var(--border)" : "none" }}>
                       <span style={{ fontSize: 13, fontWeight: 500, fontFamily: "ui-monospace, monospace", color: isToday ? "var(--primary)" : "var(--text)" }}>
-                        {isToday ? `Hoje · ${format(l.scheduledAt, "HH:mm")}` : format(l.scheduledAt, "EEE · HH:mm", { locale: ptBR })}
+                        {isToday ? `Hoje · ${formatBR(l.scheduledAt, "HH:mm")}` : formatBR(l.scheduledAt, "EEE · HH:mm", { locale: ptBR })}
                       </span>
                       <div style={{ width: 26, height: 26, borderRadius: "50%", background: color, color: "#fff", fontSize: 10, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                         {initials(studentName)}
@@ -466,7 +467,7 @@ export default async function AlunoDashboard() {
                           {r.student.name.split(" ")[0]} · <span style={{ color: "var(--text-2)", fontWeight: 400 }}>{r.subject?.name ?? "Aula"}</span>
                         </div>
                         <div style={{ fontSize: 11, color: "var(--subtle)" }}>
-                          {timeLabel} · {format(r.preferredAt, "dd/MM HH:mm")}
+                          {timeLabel} · {formatBR(r.preferredAt, "dd/MM HH:mm")}
                         </div>
                       </div>
                       <span style={{ fontSize: 11, padding: "3px 9px", borderRadius: 4, fontFamily: "ui-monospace, monospace", background: bgColor, color: dotColor, flexShrink: 0 }}>

@@ -6,6 +6,7 @@ import { getRoomCount }  from "@/lib/config"
 import type { Availability } from "@/lib/availability"
 import { format, startOfDay, endOfDay, parseISO, isValid, getDay } from "date-fns"
 import { ptBR } from "date-fns/locale"
+import { formatBR, toBrazilDate, nowBrazil } from "@/lib/datetime"
 
 interface AgendaPageProps {
   searchParams: Promise<{ date?: string }>
@@ -25,8 +26,8 @@ function parseAvailSlots(availability: unknown, dow: number): AvailSlot[] {
 export default async function AdminAgendaPage({ searchParams }: AgendaPageProps) {
   const { date: rawDate } = await searchParams
 
-  const parsed   = rawDate ? parseISO(rawDate) : new Date()
-  const dateObj  = isValid(parsed) ? parsed : new Date()
+  const parsed   = rawDate ? parseISO(rawDate) : nowBrazil()
+  const dateObj  = isValid(parsed) ? parsed : nowBrazil()
   const dateStr  = format(dateObj, "yyyy-MM-dd")
   const dayStart = startOfDay(dateObj)
   const dayEnd   = endOfDay(dateObj)
@@ -85,7 +86,8 @@ export default async function AdminAgendaPage({ searchParams }: AgendaPageProps)
 
   const lessonSlots: LessonSlot[] = lessons.map(l => {
     const d       = l.scheduledAt
-    const min     = d.getHours() * 60 + d.getMinutes()
+    const br      = toBrazilDate(d)
+    const min     = br.getHours() * 60 + br.getMinutes()
     const first   = l.participants[0]
     const isGroup = l.participants.length > 1
     return {
@@ -97,7 +99,7 @@ export default async function AdminAgendaPage({ searchParams }: AgendaPageProps)
       status:        l.status as LessonSlot["status"],
       modality:      l.modality as LessonSlot["modality"],
       teacherOnsite: l.teacherOnsite,
-      time:          format(d, "HH:mm"),
+      time:          formatBR(d, "HH:mm"),
       studentName:   first?.student.name ?? "Aluno",
       subjectName:   l.subject?.name ?? "–",
       guardianName:  first?.student.guardian?.user.name ?? null,

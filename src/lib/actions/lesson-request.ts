@@ -8,7 +8,7 @@ import { getRoomCount, getOperationalConfig, isOperational } from "@/lib/config"
 import { startOfDay, endOfDay, addWeeks, addMonths, parseISO, isAfter } from "date-fns"
 import { format }              from "date-fns"
 import { ptBR }                from "date-fns/locale"
-import { parseBrazilDateTime } from "@/lib/datetime"
+import { parseBrazilDateTime, formatBR } from "@/lib/datetime"
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -624,7 +624,7 @@ export async function createRecurringLessonsAction(data: {
       if (clash) {
         conflicts.push({
           date:   slotLabel,
-          reason: `${teacherFirstName} já tem ${clash.subject?.name ?? "outra aula"} às ${format(clash.scheduledAt, "HH:mm")}`,
+          reason: `${teacherFirstName} já tem ${clash.subject?.name ?? "outra aula"} às ${formatBR(clash.scheduledAt, "HH:mm")}`,
         })
         continue
       }
