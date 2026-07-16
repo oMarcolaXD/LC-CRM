@@ -16,6 +16,11 @@ const lessonInclude = {
         include: {
           user:     true,
           guardian: { include: { user: true } },
+          packages: {
+            where:   { status: "ACTIVE" as const },
+            orderBy: { purchaseDate: "desc" as const },
+            take:    1,
+          },
         },
       },
     },
@@ -38,24 +43,32 @@ function mapLesson(l: RawLesson) {
   const brD       = toBrazilDate(d)
   const min       = brD.getHours() * 60 + brD.getMinutes()
   const first     = l.participants[0]
-  const isGroup   = l.participants.length > 1 || l.lessonType === "GROUP"
   const lessonType = l.lessonType as string
+  const isSpecial = lessonType === "AULAO" || lessonType === "COMPROMISSO"
+  const isGroup   = l.participants.length > 1 || lessonType === "GROUP"
+  const pkg       = first?.student.packages?.[0]
+  const packageStatus =
+    isSpecial                        ? "pago"     :
+    !pkg                             ? "pendente" :
+    Number(pkg.remainingLessons) > 0 ? "pago"     : "atrasado"
   return {
     id:            l.id,
     teacherId:     l.teacherId,
+    studentId:     first?.studentId ?? "",
     startMin:      min,
     duration:      l.duration ?? 60,
     status:        l.status,
     modality:      l.modality,
     teacherOnsite: l.teacherOnsite,
     time:          formatBR(d, "HH:mm"),
-    studentName:   first?.student.name ?? (lessonType === "COMPROMISSO" ? "" : "Aluno"),
+    studentName:   first?.student.name ?? (isSpecial ? "" : "Aluno"),
     subjectName:   l.subject?.name ?? "–",
     guardianName:  first?.student.guardian?.user.name ?? null,
     date:          formatBR(d, "yyyy-MM-dd"),
     isGroupLesson: isGroup,
     groupSize:     isGroup ? l.participants.length : null,
     groupMates:    l.participants.slice(1).map(p => p.student.name ?? "Aluno"),
+    packageStatus,
     lessonType:    lessonType,
     title:         l.title ?? null,
     capacity:      l.capacity ?? null,

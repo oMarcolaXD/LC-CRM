@@ -231,10 +231,28 @@ function LessonDetailModal({
           {/* ── Informações da aula ──────────────────────────── */}
           <div className="grid grid-cols-2 gap-x-6 gap-y-4 rounded-lg bg-muted/30 px-4 py-3">
             <div>
-              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-1">Aluno</p>
-              <p className="font-semibold text-[13px] leading-snug">{lesson.studentName}</p>
-              {lesson.guardianName && (
-                <p className="text-xs text-muted-foreground mt-0.5">↳ {lesson.guardianName}</p>
+              {lesson.lessonType === "AULAO" ? (
+                <>
+                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-1">Aulão</p>
+                  <p className="font-semibold text-[13px] leading-snug">{lesson.title ?? lesson.subjectName}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    <Users className="inline w-3 h-3 mr-0.5" />
+                    {lesson.groupSize ?? 0}{lesson.capacity ? `/${lesson.capacity}` : ""} inscrito{(lesson.groupSize ?? 0) === 1 ? "" : "s"}
+                  </p>
+                </>
+              ) : lesson.lessonType === "COMPROMISSO" ? (
+                <>
+                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-1">Compromisso</p>
+                  <p className="font-semibold text-[13px] leading-snug">{lesson.title ?? "Compromisso"}</p>
+                </>
+              ) : (
+                <>
+                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-1">Aluno</p>
+                  <p className="font-semibold text-[13px] leading-snug">{lesson.studentName}</p>
+                  {lesson.guardianName && (
+                    <p className="text-xs text-muted-foreground mt-0.5">↳ {lesson.guardianName}</p>
+                  )}
+                </>
               )}
             </div>
             <div>
