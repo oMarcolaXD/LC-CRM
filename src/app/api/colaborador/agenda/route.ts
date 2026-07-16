@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth }    from "@/lib/auth"
 import { prisma }  from "@/lib/prisma"
 import {
-  format, parseISO, isValid,
+  parseISO, isValid,
   startOfDay, endOfDay,
   startOfWeek, endOfWeek,
   startOfMonth, endOfMonth,
@@ -35,7 +35,8 @@ type RawRequest = Awaited<ReturnType<typeof prisma.lessonRequest.findMany<{ incl
 
 function mapLesson(l: RawLesson) {
   const d         = l.scheduledAt
-  const min       = d.getHours() * 60 + d.getMinutes()
+  const brD       = toBrazilDate(d)
+  const min       = brD.getHours() * 60 + brD.getMinutes()
   const first     = l.participants[0]
   const isGroup   = l.participants.length > 1 || l.lessonType === "GROUP"
   const lessonType = l.lessonType as string
@@ -51,7 +52,7 @@ function mapLesson(l: RawLesson) {
     studentName:   first?.student.name ?? (lessonType === "COMPROMISSO" ? "" : "Aluno"),
     subjectName:   l.subject?.name ?? "–",
     guardianName:  first?.student.guardian?.user.name ?? null,
-    date:          format(d, "yyyy-MM-dd"),
+    date:          formatBR(d, "yyyy-MM-dd"),
     isGroupLesson: isGroup,
     groupSize:     isGroup ? l.participants.length : null,
     groupMates:    l.participants.slice(1).map(p => p.student.name ?? "Aluno"),
