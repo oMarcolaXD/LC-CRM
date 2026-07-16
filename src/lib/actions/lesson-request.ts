@@ -1285,8 +1285,9 @@ export async function createAulaoAction(data: {
     dates = [scheduledAt]
   }
 
-  await prisma.$transaction(async (tx) => {
+  const baseLessonId = await prisma.$transaction(async (tx) => {
     let recurrenceGroupId: string | undefined
+    let firstLessonId: string | undefined
 
     if (data.recurrence) {
       const group = await tx.recurrenceGroup.create({
@@ -1303,7 +1304,7 @@ export async function createAulaoAction(data: {
       const scheduledAtFmt = format(date, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
       const isPast = date < new Date()
 
-      await tx.lesson.create({
+      const created = await tx.lesson.create({
         data: {
           teacherId:         data.teacherId,
           subjectId:         data.subjectId,
@@ -1322,6 +1323,7 @@ export async function createAulaoAction(data: {
             : undefined,
         },
       })
+      firstLessonId ??= created.id
 
       if (!data.isFree && students.length > 0) {
         for (const student of students) {
@@ -1337,6 +1339,8 @@ export async function createAulaoAction(data: {
         }
       }
     }
+
+    return firstLessonId
   })
 
   revalidatePath("/colaborador/agenda")
@@ -1344,6 +1348,8 @@ export async function createAulaoAction(data: {
   revalidatePath("/admin/agenda")
   revalidatePath("/professor/agenda")
   revalidatePath("/colaborador/auloes")
+
+  return { id: baseLessonId }
 }
 
 // ─── Aprovar em lote ─────────────────────────────────────────────────────────

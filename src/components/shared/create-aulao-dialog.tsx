@@ -21,6 +21,20 @@ interface TeacherOption {
   subjects:     { id: string; name: string }[]
 }
 
+export interface AulaoCreatedPayload {
+  id:         string
+  teacherId:  string
+  subjectId:  string
+  title:      string
+  date:       string // yyyy-MM-dd
+  time:       string // HH:mm
+  duration:   number
+  modality:   "PRESENCIAL" | "ONLINE"
+  capacity:   number | null
+  studentIds: string[]
+  recurring:  boolean
+}
+
 interface Props {
   open:        boolean
   onClose:     () => void
@@ -29,9 +43,11 @@ interface Props {
   defaultDate?:      string
   defaultTeacherId?: string
   defaultTime?:      string
+  /** Chamado logo após a criação, com os dados do aulão-base (para inserção otimista no grid). */
+  onCreated?:  (aulao: AulaoCreatedPayload) => void
 }
 
-export function CreateAulaoDialog({ open, onClose, students, teachers, defaultDate, defaultTeacherId, defaultTime }: Props) {
+export function CreateAulaoDialog({ open, onClose, students, teachers, defaultDate, defaultTeacherId, defaultTime, onCreated }: Props) {
   const today = defaultDate ?? format(new Date(), "yyyy-MM-dd")
 
   const [title,            setTitle]            = useState("")
@@ -102,7 +118,7 @@ export function CreateAulaoDialog({ open, onClose, students, teachers, defaultDa
 
     start(async () => {
       try {
-        await createAulaoAction({
+        const result = await createAulaoAction({
           teacherId,
           subjectId,
           title:           title.trim(),
@@ -118,6 +134,21 @@ export function CreateAulaoDialog({ open, onClose, students, teachers, defaultDa
           recurrence:      recurrence ? { rule: recurrence, endsAt: recurrenceEndsAt } : undefined,
         })
         toast.success("Aulão criado com sucesso")
+        if (result?.id) {
+          onCreated?.({
+            id:         result.id,
+            teacherId,
+            subjectId,
+            title:      title.trim(),
+            date,
+            time,
+            duration,
+            modality,
+            capacity:   capacityNum ?? null,
+            studentIds: selectedStudentIds,
+            recurring:  !!recurrence,
+          })
+        }
         handleClose()
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Erro ao criar aulão")

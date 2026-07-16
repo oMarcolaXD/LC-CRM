@@ -33,6 +33,7 @@ import {
 import { CreateGroupLessonDialog }  from "@/components/shared/create-group-lesson-dialog"
 import { CreateDuoLessonDialog }     from "@/components/shared/create-duo-lesson-dialog"
 import { CreateAulaoDialog }        from "@/components/shared/create-aulao-dialog"
+import type { AulaoCreatedPayload } from "@/components/shared/create-aulao-dialog"
 import { CreateCommitmentDialog }   from "@/components/shared/create-commitment-dialog"
 import { AuloesSection }            from "./auloes-section"
 import { parseBrazilDateTime }      from "@/lib/datetime"
@@ -1303,6 +1304,59 @@ export function AgendaGrid({
     pushUrl(d, view)
   }
 
+  // Inserção otimista do aulão recém-criado (o refetch em seguida reconcilia).
+  const handleAulaoCreated = (a: AulaoCreatedPayload) => {
+    // Só faz sentido inserir na visão de dia, no mesmo dia do aulão-base.
+    if (view !== "day" || a.date !== curDate) return
+    const [h, m]      = a.time.split(":").map(Number)
+    const startMin    = h * 60 + m
+    const teacher     = effectiveTeachers.find(t => t.id === a.teacherId)
+    const subjectName = teacher?.subjects?.find(s => s.id === a.subjectId)?.name ?? "–"
+    const groupSize   = a.studentIds.length
+    const endMin      = startMin + a.duration
+    const endTime     = `${String(Math.floor(endMin / 60) % 24).padStart(2, "0")}:${String(endMin % 60).padStart(2, "0")}`
+
+    const optimisticLesson: LessonSlot = {
+      id:            a.id,
+      teacherId:     a.teacherId,
+      studentId:     "",
+      startMin,
+      duration:      a.duration,
+      status:        "CONFIRMED",
+      modality:      a.modality,
+      teacherOnsite: a.modality === "PRESENCIAL",
+      time:          a.time,
+      studentName:   "",
+      subjectName,
+      guardianName:  null,
+      isGroupLesson: groupSize > 1,
+      groupSize:     groupSize > 0 ? groupSize : null,
+      groupMates:    [],
+      packageStatus: "pago",
+      lessonType:    "AULAO",
+      title:         a.title,
+      capacity:      a.capacity,
+    }
+    setLessons(prev => prev.some(l => l.id === a.id) ? prev : [...prev, optimisticLesson])
+
+    const optimisticAulao: AulaoCard = {
+      id:                a.id,
+      lessonType:        "AULAO",
+      title:             a.title,
+      teacherName:       teacher?.name ?? "",
+      teacherId:         a.teacherId,
+      subjectName,
+      time:              a.time,
+      endTime,
+      enrolled:          groupSize,
+      capacity:          a.capacity,
+      status:            "CONFIRMED",
+      modality:          a.modality,
+      recurrenceGroupId: null,
+    }
+    setAuloes(prev => prev.some(x => x.id === a.id) ? prev : [...prev, optimisticAulao])
+  }
+
   // ── Day view helpers ──────────────────────────────────────────────────────
 
   const [nowTime, setNowTime] = useState(() => new Date())
@@ -2069,6 +2123,7 @@ export function AgendaGrid({
         <CreateAulaoDialog
           open={showAulaoDialog}
           onClose={() => { setShowAulaoDialog(false); setPrefill(null); fetchData(curDate, view) }}
+          onCreated={handleAulaoCreated}
           students={allStudents ?? []}
           teachers={effectiveTeachers.map(t => ({
             id:           t.id,
