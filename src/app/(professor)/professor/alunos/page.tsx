@@ -5,19 +5,22 @@ import { PageHeader }    from "@/components/shared/page-header"
 import { AlunosTable }   from "./alunos-table"
 import type { AlunoProf } from "./alunos-table"
 import {
-  format, differenceInHours, differenceInDays, subMonths, startOfMonth,
+  differenceInHours, differenceInDays, subMonths, startOfMonth,
 } from "date-fns"
 import { ptBR } from "date-fns/locale"
-import { formatBR, nowBrazil } from "@/lib/datetime"
+import { formatBR, nowBrazil, toBrazilDate } from "@/lib/datetime"
 
 function relDate(date: Date, now: Date): string {
-  const h = differenceInHours(now, date)
-  const d = differenceInDays(now, date)
+  // `now` já vem no relógio de Brasília (nowBrazil); alinhamos a data da aula
+  // ao mesmo fuso para que as diferenças de horas/dias sejam consistentes.
+  const local = toBrazilDate(date)
+  const h = differenceInHours(now, local)
+  const d = differenceInDays(now, local)
   if (h < 2)   return `hoje ${formatBR(date, "HH")}h`
   if (h < 24)  return `há ${h}h`
   if (d === 1) return "ontem"
   if (d < 7)   return `há ${d} dias`
-  return format(date, "dd MMM", { locale: ptBR })
+  return formatBR(date, "dd MMM", { locale: ptBR })
 }
 
 async function getMeusAlunos(email: string): Promise<AlunoProf[] | null> {
