@@ -152,7 +152,6 @@ function LessonDetailModal({
   onClose:     () => void
 }) {
   const [completing,      setCompleting]      = useState(false)
-  const [topicsCovered,   setTopicsCovered]   = useState("")
   const [teacherNotes,    setTeacherNotes]    = useState("")
   const [sendingGuardian, setSendingGuardian] = useState(false)
   const [sendingTeacher,  setSendingTeacher]  = useState(false)
@@ -172,7 +171,7 @@ function LessonDetailModal({
       try {
         await updateLessonStatusAction(
           lesson.id, next,
-          next === "COMPLETED" ? topicsCovered : undefined,
+          undefined,
           next === "COMPLETED" ? teacherNotes  : undefined,
         )
         toast.success(
@@ -383,18 +382,6 @@ function LessonDetailModal({
               {completing ? (
                 <div className="space-y-3">
                   <div>
-                    <label className="text-xs font-semibold">
-                      Tópicos cobertos <span className="text-destructive">*</span>
-                    </label>
-                    <textarea
-                      value={topicsCovered}
-                      onChange={e => setTopicsCovered(e.target.value)}
-                      placeholder="Ex: Equações do 2º grau, fórmula de Bhaskara..."
-                      className="mt-1.5 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/30"
-                      rows={3}
-                    />
-                  </div>
-                  <div>
                     <label className="text-xs font-medium text-muted-foreground">Notas do professor</label>
                     <textarea
                       value={teacherNotes}
@@ -412,7 +399,7 @@ function LessonDetailModal({
                       size="sm"
                       className="bg-emerald-600 hover:bg-emerald-700 text-white"
                       onClick={() => act("COMPLETED")}
-                      disabled={pending || !topicsCovered.trim()}
+                      disabled={pending}
                     >
                       {pending
                         ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />
@@ -1178,12 +1165,19 @@ export function AgendaGrid({
   const parsed = parseISO(curDate)
   const today  = isToday(parsed)
 
+  // A disponibilidade é um template semanal atual — projetá-la sobre dias que já
+  // passaram reescreve a "história" visualmente. No passado mostramos apenas as
+  // aulas que de fato ocorreram, sem o fundo de disponibilidade.
+  const startOfToday = new Date()
+  startOfToday.setHours(0, 0, 0, 0)
+  const isPastDay = parsed.getTime() < startOfToday.getTime()
+
   // Recalcula disponibilidade dos professores conforme o dia navegado
   // Professores com maior disponibilidade no dia ficam à esquerda
   const effectiveTeachers = teachers
     .map(t => ({
       ...t,
-      slots: computeSlots(t.rawAvailability, getDay(parsed)),
+      slots: isPastDay ? [] : computeSlots(t.rawAvailability, getDay(parsed)),
     }))
     .sort((a, b) => {
       const minA = a.slots.reduce((sum, s) => sum + (s.end - s.start), 0)
@@ -1879,7 +1873,9 @@ export function AgendaGrid({
                           ))}
                         </div>
                       ) : (
-                        <span className="text-[10px] text-muted-foreground/50 italic">sem agenda hoje</span>
+                        <span className="text-[10px] text-muted-foreground/50 italic">
+                          {isPastDay ? "dia já passado" : "sem agenda hoje"}
+                        </span>
                       )}
 
                       {/* Contadores */}
