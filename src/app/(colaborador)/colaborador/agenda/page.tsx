@@ -1,5 +1,4 @@
 import { prisma }             from "@/lib/prisma"
-import { PageHeader }         from "@/components/shared/page-header"
 import { DayStarterBanner }   from "@/components/shared/day-starter-banner"
 import type { ConfirmacaoItem } from "@/components/shared/day-starter-banner"
 import { AgendaGrid }         from "./agenda-grid"
@@ -374,10 +373,6 @@ export default async function ColaboradorAgendaPage({ searchParams }: AgendaPage
 
   return (
     <div className="space-y-4">
-      <PageHeader
-        title="AGENDA"
-        description={`${weekday.charAt(0).toUpperCase() + weekday.slice(1)} · ${format(dateObj, "dd/MM/yyyy")}`}
-      />
       <DayStarterBanner
         scheduledCount={scheduledCount}
         confirmacaoItems={confirmacaoItems}

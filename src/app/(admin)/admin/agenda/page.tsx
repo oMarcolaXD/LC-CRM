@@ -1,11 +1,9 @@
 import { prisma }        from "@/lib/prisma"
-import { PageHeader }    from "@/components/shared/page-header"
 import { AgendaGrid }    from "@/app/(colaborador)/colaborador/agenda/agenda-grid"
 import type { TeacherCol, LessonSlot, AvailSlot, StudentOption } from "@/app/(colaborador)/colaborador/agenda/agenda-grid"
 import { getRoomCount }  from "@/lib/config"
 import type { Availability } from "@/lib/availability"
 import { format, startOfDay, endOfDay, parseISO, isValid, getDay } from "date-fns"
-import { ptBR } from "date-fns/locale"
 import { formatBR, toBrazilDate, nowBrazil } from "@/lib/datetime"
 
 interface AgendaPageProps {
@@ -119,14 +117,8 @@ export default async function AdminAgendaPage({ searchParams }: AgendaPageProps)
     remainingLessons: Number(s.packages[0]?.remainingLessons ?? 0),
   }))
 
-  const weekday = format(dateObj, "EEEE", { locale: ptBR })
-
   return (
     <div className="space-y-4">
-      <PageHeader
-        title="AGENDA"
-        description={`${weekday.charAt(0).toUpperCase() + weekday.slice(1)} · ${format(dateObj, "dd/MM/yyyy")}`}
-      />
       <AgendaGrid
         date={dateStr}
         teachers={teacherCols}
