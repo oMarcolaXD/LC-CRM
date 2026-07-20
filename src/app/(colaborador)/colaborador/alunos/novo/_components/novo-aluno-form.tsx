@@ -104,8 +104,8 @@ export function NovoAlunoForm({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="email">E-mail *</Label>
-                <Input id="email" name="email" type="email" placeholder="aluno@email.com" required autoComplete="off" />
+                <Label htmlFor="email">E-mail</Label>
+                <Input id="email" name="email" type="email" placeholder="aluno@email.com" autoComplete="off" />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="birthDate">Data de nascimento</Label>
@@ -195,28 +195,28 @@ export function NovoAlunoForm({
             <CardTitle className="font-sub text-base flex items-center gap-2">
               <UserRound className="w-4 h-4 text-primary" />
               Responsável
-              <span className="text-xs font-normal text-muted-foreground">(opcional — para alunos menores)</span>
+              <span className="text-xs font-normal text-muted-foreground">(obrigatório)</span>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="guardianName">Nome do responsável</Label>
-                <Input id="guardianName" name="guardianName" placeholder="Ex: Maria Oliveira" />
+                <Label htmlFor="guardianName">Nome do responsável *</Label>
+                <Input id="guardianName" name="guardianName" placeholder="Ex: Maria Oliveira" required />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="guardianPhone">WhatsApp do responsável</Label>
-                <PhoneInput id="guardianPhone" name="guardianPhone" />
+                <Label htmlFor="guardianPhone">WhatsApp do responsável *</Label>
+                <PhoneInput id="guardianPhone" name="guardianPhone" required />
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="guardianEmail">E-mail do responsável</Label>
-                <Input id="guardianEmail" name="guardianEmail" type="email" placeholder="responsavel@email.com" autoComplete="off" />
+                <Label htmlFor="guardianEmail">E-mail do responsável *</Label>
+                <Input id="guardianEmail" name="guardianEmail" type="email" placeholder="responsavel@email.com" autoComplete="off" required />
               </div>
             </div>
             <p className="text-xs text-muted-foreground">
-              Ao preencher o nome, um perfil de responsável será criado e vinculado automaticamente.
+              O responsável usa este e-mail para acessar o sistema e acompanhar o aluno. Um perfil será criado e vinculado automaticamente.
             </p>
           </CardContent>
         </Card>

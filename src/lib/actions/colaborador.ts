@@ -64,14 +64,14 @@ async function requireCollaboratorOrAdmin() {
 
 const newStudentSchema = z.object({
   name:          z.string().min(3, "Nome deve ter no mínimo 3 caracteres"),
-  email:         z.string().email("E-mail inválido"),
+  email:         z.string().email("E-mail inválido").optional().or(z.literal("")),
   password:      z.string().min(6, "Senha deve ter no mínimo 6 caracteres").optional().or(z.literal("")),
   phone:         z.string().optional(),
   grade:         z.string().optional(),
   school:        z.string().optional(),
-  guardianName:  z.string().optional(),
-  guardianPhone: z.string().optional(),
-  guardianEmail: z.string().email("E-mail do responsável inválido").optional().or(z.literal("")),
+  guardianName:  z.string().min(3, "Nome do responsável é obrigatório"),
+  guardianPhone: z.string().min(1, "WhatsApp do responsável é obrigatório"),
+  guardianEmail: z.string().email("E-mail do responsável inválido"),
 })
 
 export async function createStudentWithGuardianAction(formData: FormData) {
@@ -87,8 +87,13 @@ export async function createStudentWithGuardianAction(formData: FormData) {
   const { name, email, phone, grade, school,
           guardianName, guardianPhone, guardianEmail } = parsed.data
 
-  const exists = await prisma.user.findUnique({ where: { email } })
-  if (exists) redirect("/colaborador/alunos/novo?error=E-mail+já+cadastrado")
+  // E-mail do aluno é opcional — normaliza vazio para null (login fica pelo responsável)
+  const studentEmail = email && email.trim() ? email.trim() : null
+
+  if (studentEmail) {
+    const exists = await prisma.user.findUnique({ where: { email: studentEmail } })
+    if (exists) redirect("/colaborador/alunos/novo?error=E-mail+já+cadastrado")
+  }
 
   const skipEmail    = formData.get("skipEmail") === "on"
   const manualPass   = parsed.data.password
@@ -151,24 +156,20 @@ export async function createStudentWithGuardianAction(formData: FormData) {
 
   await prisma.$transaction(async (tx) => {
     const studentUser = await tx.user.create({
-      data: { name, email, password: hashed, phone, role: "STUDENT", active: !inactive },
+      data: { name, email: studentEmail, password: hashed, phone, role: "STUDENT", active: !inactive },
     })
 
     let guardianId: string | undefined
 
     if (guardianName) {
-      const gEmail = guardianEmail || `resp.${Date.now()}@interno.lcasa`
-
-      const existingGuardian = guardianEmail
-        ? await tx.user.findUnique({ where: { email: guardianEmail } })
-        : null
+      const existingGuardian = await tx.user.findUnique({ where: { email: guardianEmail } })
 
       if (existingGuardian) {
         const g = await tx.guardian.findUnique({ where: { userId: existingGuardian.id } })
         if (g) guardianId = g.id
       } else {
         const gUser = await tx.user.create({
-          data: { name: guardianName, email: gEmail, password: gPass, phone: guardianPhone, role: "GUARDIAN" },
+          data: { name: guardianName, email: guardianEmail, password: gPass, phone: guardianPhone, role: "GUARDIAN" },
         })
         const g = await tx.guardian.create({ data: { userId: gUser.id } })
         guardianId = g.id
@@ -242,10 +243,11 @@ export async function createStudentWithGuardianAction(formData: FormData) {
   revalidatePath("/colaborador/alunos")
   revalidatePath("/admin/usuarios")
 
-  // Envia e-mail com a senha apenas se o modo automático estiver ativo
-  if (!skipEmail) {
+  // Envia e-mail com a senha apenas se o modo automático estiver ativo e o aluno tiver e-mail
+  const emailWasSent = !skipEmail && Boolean(studentEmail)
+  if (emailWasSent) {
     try {
-      await sendWelcomeEmail(email, name, plainPassword)
+      await sendWelcomeEmail(studentEmail!, name, plainPassword)
     } catch {
       // Não bloqueia o cadastro se o e-mail falhar
     }
@@ -255,7 +257,7 @@ export async function createStudentWithGuardianAction(formData: FormData) {
     success:   "digitalizado",
     aulas:     String(lessonCount),
     pagamentos: String(paymentCount),
-    ...(skipEmail ? {} : { emailEnviado: "1" }),
+    ...(emailWasSent ? { emailEnviado: "1" } : {}),
   })
   redirect(`/colaborador/alunos/${createdStudentId}?${params.toString()}`)
 }
