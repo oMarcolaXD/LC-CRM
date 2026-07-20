@@ -50,20 +50,39 @@ export function getAvailableSlotsForDate(
   return allSlots.filter((s) => !bookedHHMM.includes(s))
 }
 
-/** Retorna os dias disponíveis nos próximos N dias */
+/** Retorna os dias disponíveis nos próximos N dias (incluindo hoje) */
 export function getAvailableDates(
   availability: Availability,
   daysAhead = 30,
+  minHoursAhead = 0,
 ): Date[] {
   const result: Date[] = []
+  const now    = new Date()
   const today  = new Date()
   today.setHours(0, 0, 0, 0)
+  const minMs  = minHoursAhead * 60 * 60 * 1000
 
-  for (let i = 1; i <= daysAhead; i++) {
+  for (let i = 0; i <= daysAhead; i++) {
     const d = new Date(today)
     d.setDate(today.getDate() + i)
-    const dow = d.getDay().toString()
-    if ((availability[dow] ?? []).length > 0) result.push(d)
+    const dow      = d.getDay().toString()
+    const daySlots = availability[dow] ?? []
+    if (daySlots.length === 0) continue
+
+    // Hoje só entra se ainda houver ao menos um horário que respeite a antecedência mínima
+    if (i === 0) {
+      const hasFutureSlot = daySlots.some((s) =>
+        slotsForInterval(s).some((hhmm) => {
+          const [h, m]  = hhmm.split(":").map(Number)
+          const slotAt  = new Date(d)
+          slotAt.setHours(h, m, 0, 0)
+          return slotAt.getTime() - now.getTime() >= minMs
+        })
+      )
+      if (!hasFutureSlot) continue
+    }
+
+    result.push(d)
   }
   return result
 }

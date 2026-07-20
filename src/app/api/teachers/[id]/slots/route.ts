@@ -63,7 +63,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   }
 
   // Retorna datas disponíveis dentro do horizonte definido pelo admin
-  const availableDates = getAvailableDates(availability, policy.maxDaysAhead)
+  const availableDates = getAvailableDates(availability, policy.maxDaysAhead, policy.minHoursAhead)
   return NextResponse.json({
     dates: availableDates.map((d) => d.toISOString().slice(0, 10)),
   })

@@ -132,7 +132,7 @@ export function BookingForm({
   }, [teacherId, selectedDate])
 
   const today     = startOfDay(new Date())
-  const weekStart = addDays(today, 1 + weekOffset * 7)
+  const weekStart = addDays(today, weekOffset * 7)
   const weekDays  = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
 
   const preferredAt = selectedDate && selectedSlot ? `${selectedDate}T${selectedSlot}:00` : ""
