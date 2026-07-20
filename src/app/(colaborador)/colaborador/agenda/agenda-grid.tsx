@@ -1172,14 +1172,20 @@ export function AgendaGrid({
   startOfToday.setHours(0, 0, 0, 0)
   const isPastDay = parsed.getTime() < startOfToday.getTime()
 
-  // Recalcula disponibilidade dos professores conforme o dia navegado
-  // Professores com maior disponibilidade no dia ficam à esquerda
+  // Recalcula disponibilidade dos professores conforme o dia navegado.
+  // No futuro/hoje, ordena por maior disponibilidade; no passado (sem
+  // disponibilidade projetada), ordena por quem teve mais aulas no dia.
   const effectiveTeachers = teachers
     .map(t => ({
       ...t,
       slots: isPastDay ? [] : computeSlots(t.rawAvailability, getDay(parsed)),
     }))
     .sort((a, b) => {
+      if (isPastDay) {
+        const cntA = lessons.filter(l => l.teacherId === a.id).length
+        const cntB = lessons.filter(l => l.teacherId === b.id).length
+        return cntB - cntA
+      }
       const minA = a.slots.reduce((sum, s) => sum + (s.end - s.start), 0)
       const minB = b.slots.reduce((sum, s) => sum + (s.end - s.start), 0)
       return minB - minA
