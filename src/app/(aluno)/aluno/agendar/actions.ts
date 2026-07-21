@@ -12,6 +12,7 @@ import { getBookingPolicy }    from "@/lib/config"
 import { format, addWeeks }    from "date-fns"
 import { ptBR }                from "date-fns/locale"
 import { randomUUID }          from "crypto"
+import { parseBrazilDateTime } from "@/lib/datetime"
 
 export async function requestLessonAction(formData: FormData) {
   const session = await auth()
@@ -58,7 +59,14 @@ export async function requestLessonAction(formData: FormData) {
   if (student.packages.length === 0) redirect("/aluno/agendar?error=Você+não+tem+aulas+disponíveis.+Adquira+um+pacote.")
 
   const { teacherId, subjectId, preferredAt, modality, notes, isGroupRequest, groupNote } = parsed.data
-  const requestDate = new Date(preferredAt)
+  // `preferredAt` chega como "YYYY-MM-DDTHH:mm:00" (sem fuso). Interpretamos
+  // sempre como horário de Brasília — senão o servidor UTC (Vercel) grava 3h a
+  // mais. Ver src/lib/datetime.ts.
+  const [datePart, timePart] = preferredAt.split("T")
+  const requestDate = parseBrazilDateTime(datePart, (timePart ?? "").slice(0, 5))
+  if (isNaN(requestDate.getTime())) {
+    redirect(`/aluno/agendar?error=${encodeURIComponent("Data ou horário inválidos")}`)
+  }
 
   // Valida limites de agendamento definidos pelo admin
   const policy = await getBookingPolicy()
