@@ -53,8 +53,17 @@ export default async function AdminAlunosPage() {
   const serialized: StudentRow[] = students.map(s => ({
     ...s,
     lastLessonAt:   lastLessonMap.get(s.id) ?? null,
-    packages:       s.packages.map(p => ({ ...p, pricePerLesson: Number(p.pricePerLesson) })),
-    payments:       s.payments.map(p => ({ ...p, amount: Number(p.amount) })),
+    packages:       s.packages.map(p => ({
+      ...p,
+      totalLessons:     Number(p.totalLessons),
+      remainingLessons: Number(p.remainingLessons),
+      pricePerLesson:   Number(p.pricePerLesson),
+    })),
+    payments:       s.payments.map(p => ({
+      ...p,
+      amount:    Number(p.amount),
+      feeAmount: p.feeAmount != null ? Number(p.feeAmount) : null,
+    })),
     participations: s.participations.map(part => ({
       ...part,
       lesson: {

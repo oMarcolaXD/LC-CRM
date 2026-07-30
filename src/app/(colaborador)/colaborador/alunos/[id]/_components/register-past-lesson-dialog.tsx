@@ -10,6 +10,8 @@ import {
 import { Button }   from "@/components/ui/button"
 import { Input }    from "@/components/ui/input"
 import { Label }    from "@/components/ui/label"
+import { mensagemDeErro } from "@/lib/error-message"
+import { ouFalhe } from "@/lib/action-result"
 import {
   History, Loader2, CheckCircle2, XCircle, MonitorPlay, School,
   Users, Plus, Trash2, DollarSign, CreditCard, AlertCircle,
@@ -136,7 +138,7 @@ export function RegisterPastLessonDialog({
 
       start(async () => {
         try {
-          await createGroupLessonAction({
+          ouFalhe(await createGroupLessonAction({
             teacherId,
             subjectId,
             studentIds:     allIds,
@@ -153,7 +155,7 @@ export function RegisterPastLessonDialog({
               { studentId, paid: paid1 },
               ...groupEntries.map(e => ({ studentId: e.studentId, paid: e.paid })),
             ],
-          })
+          }))
           const n = allIds.length
           toast.success(status === "COMPLETED"
             ? `Aula em grupo (${n} alunos) registrada`
@@ -161,7 +163,7 @@ export function RegisterPastLessonDialog({
           setOpen(false)
           router.refresh()
         } catch (e) {
-          toast.error(e instanceof Error ? e.message : "Erro ao registrar aula")
+          toast.error(mensagemDeErro(e, "Erro ao registrar aula"))
         }
       })
       return
@@ -169,7 +171,7 @@ export function RegisterPastLessonDialog({
 
     start(async () => {
       try {
-        await createLessonDirectAction({
+        ouFalhe(await createLessonDirectAction({
           teacherId,
           studentId,
           subjectId,
@@ -180,12 +182,12 @@ export function RegisterPastLessonDialog({
           statusOverride: status,
           topicsCovered:  topics || undefined,
           packageId:      packageId || undefined,
-        })
+        }))
         toast.success(status === "COMPLETED" ? "Aula registrada como realizada" : "Falta registrada")
         setOpen(false)
         router.refresh()
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Erro ao registrar aula")
+        toast.error(mensagemDeErro(e, "Erro ao registrar aula"))
       }
     })
   }

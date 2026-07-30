@@ -61,9 +61,9 @@ enum PayoutStatus {
 }
 
 enum TeacherMode {
-  ONLINE_ONLY  // só online, de casa
-  PRESENCIAL   // vem à sede; dá presencial E pode dar online ocupando uma sala
-  HYBRID       // pode trabalhar de casa (online) E vir à sede (presencial/online)
+  ONLINE_ONLY // só online, de casa
+  PRESENCIAL // vem à sede; dá presencial E pode dar online ocupando uma sala
+  HYBRID // pode trabalhar de casa (online) E vir à sede (presencial/online)
 }
 
 enum RoomType {
@@ -78,10 +78,16 @@ enum LessonType {
   COMPROMISSO
 }
 
+enum CourseStatus {
+  ACTIVE
+  FINISHED
+  CANCELLED
+}
+
 enum EducationLevel {
-  EF2        // Fundamental 2 (6º–9º ano)
-  EM         // Ensino Médio
-  SUPERIOR   // Ensino Superior
+  EF2 // Fundamental 2 (6º–9º ano)
+  EM // Ensino Médio
+  SUPERIOR // Ensino Superior
   VESTIBULAR // Preparatório vestibular
 }
 
@@ -100,12 +106,12 @@ model User {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  student        Student?
-  guardian       Guardian?
-  teacher        Teacher?
-  notifications  Notification[]
-  activityLogs   ActivityLog[]
-  authoredNotes  StudentNote[]
+  student              Student?
+  guardian             Guardian?
+  teacher              Teacher?
+  notifications        Notification[]
+  activityLogs         ActivityLog[]
+  authoredNotes        StudentNote[]
   cancellationRequests LessonCancellationRequest[] @relation("CancellationRequests")
   cancellationReviews  LessonCancellationRequest[] @relation("CancellationReviews")
   passwordResetTokens  PasswordResetToken[]
@@ -131,18 +137,18 @@ model PasswordResetToken {
 // ─── Perfis ───────────────────────────────────────────────────────────────────
 
 model Student {
-  id         String    @id @default(cuid())
-  userId     String?   @unique
-  user       User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id             String          @id @default(cuid())
+  userId         String?         @unique
+  user           User?           @relation(fields: [userId], references: [id], onDelete: Cascade)
   name           String
   grade          String
   educationLevel EducationLevel?
   school         String?
   guardianId     String?
-  guardian   Guardian? @relation(fields: [guardianId], references: [id])
-  notes      String?
-  tags       String[]
-  createdAt  DateTime  @default(now())
+  guardian       Guardian?       @relation(fields: [guardianId], references: [id])
+  notes          String?
+  tags           String[]
+  createdAt      DateTime        @default(now())
 
   packages       LessonPackage[]
   participations LessonParticipant[]
@@ -150,6 +156,7 @@ model Student {
   payments       Payment[]
   studentNotes   StudentNote[]
   materials      MaterialStudent[]
+  enrollments    CourseEnrollment[]
 
   @@map("students")
 }
@@ -179,26 +186,27 @@ model StudentNote {
 }
 
 model Teacher {
-  id           String   @id @default(cuid())
-  userId       String   @unique
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  hourlyRate   Decimal      @db.Decimal(10, 2)
-  bio          String?
-  availability Json?
-  teachingMode TeacherMode  @default(HYBRID)
+  id              String      @id @default(cuid())
+  userId          String      @unique
+  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  hourlyRate      Decimal     @db.Decimal(10, 2)
+  bio             String?
+  availability    Json?
+  teachingMode    TeacherMode @default(HYBRID)
   // Quando true, este professor aparece no agendamento externo (autoatendimento
   // do responsável / API de slots). Controlado pelo admin, por professor.
-  externalBooking Boolean   @default(false)
+  externalBooking Boolean     @default(false)
 
   // Janela de pagamento do repasse (dias do mês). Ex: paga entre o dia 5 e 10.
-  payDayStart  Int?
-  payDayEnd    Int?
+  payDayStart Int?
+  payDayEnd   Int?
 
   subjects  TeacherSubject[]
   lessons   Lesson[]
   requests  LessonRequest[]
   materials Material[]
   payouts   TeacherPayout[]
+  courses   Course[]
 
   @@map("teachers")
 }
@@ -212,7 +220,7 @@ model Room {
   type     RoomType @default(PHYSICAL)
   active   Boolean  @default(true)
 
-  lessons  Lesson[]
+  lessons Lesson[]
 
   @@map("rooms")
 }
@@ -226,7 +234,7 @@ model RecurrenceGroup {
   endsAt    DateTime?
   createdAt DateTime  @default(now())
 
-  lessons   Lesson[]
+  lessons Lesson[]
 
   @@map("recurrence_groups")
 }
@@ -242,6 +250,7 @@ model Subject {
   lessons         Lesson[]
   materials       Material[]
   lessonRequests  LessonRequest[]
+  courses         Course[]
 
   @@map("subjects")
 }
@@ -250,8 +259,8 @@ model TeacherSubject {
   teacherId String
   subjectId String
   levels    EducationLevel[]
-  teacher   Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade)
-  subject   Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  teacher   Teacher          @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  subject   Subject          @relation(fields: [subjectId], references: [id], onDelete: Cascade)
 
   @@id([teacherId, subjectId])
   @@map("teacher_subjects")
@@ -271,7 +280,7 @@ model LessonPackage {
   status           PackageStatus @default(ACTIVE)
 
   // Cobrança(s) geradas junto com o pacote — some(m) quando o pacote é excluído
-  payments         Payment[]
+  payments Payment[]
 
   @@map("lesson_packages")
 }
@@ -279,32 +288,34 @@ model LessonPackage {
 // ─── Aulas ────────────────────────────────────────────────────────────────────
 
 model Lesson {
-  id              String         @id @default(cuid())
-  teacherId       String
-  teacher         Teacher        @relation(fields: [teacherId], references: [id])
-  subjectId       String?
-  subject         Subject?       @relation(fields: [subjectId], references: [id])
-  scheduledAt     DateTime
-  duration        Int            @default(60)
-  modality        LessonModality @default(PRESENCIAL)
-  location        String?
-  meetingLink     String?
-  status          LessonStatus   @default(SCHEDULED)
-  lessonType      LessonType     @default(INDIVIDUAL)
-  title           String?
-  capacity        Int?
-  topicsCovered   String?
-  teacherNotes    String?
-  studentRating   Int?
-  studentFeedback String?
-  priceOverride     Decimal?       @db.Decimal(10, 2)
-  teacherOnsite     Boolean        @default(false)
+  id                String           @id @default(cuid())
+  teacherId         String
+  teacher           Teacher          @relation(fields: [teacherId], references: [id])
+  subjectId         String?
+  subject           Subject?         @relation(fields: [subjectId], references: [id])
+  scheduledAt       DateTime
+  duration          Int              @default(60)
+  modality          LessonModality   @default(PRESENCIAL)
+  location          String?
+  meetingLink       String?
+  status            LessonStatus     @default(SCHEDULED)
+  lessonType        LessonType       @default(INDIVIDUAL)
+  title             String?
+  capacity          Int?
+  topicsCovered     String?
+  teacherNotes      String?
+  studentRating     Int?
+  studentFeedback   String?
+  priceOverride     Decimal?         @db.Decimal(10, 2)
+  teacherOnsite     Boolean          @default(false)
   roomId            String?
-  room              Room?          @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  room              Room?            @relation(fields: [roomId], references: [id], onDelete: SetNull)
   recurrenceGroupId String?
   recurrenceGroup   RecurrenceGroup? @relation(fields: [recurrenceGroupId], references: [id], onDelete: SetNull)
-  createdAt         DateTime       @default(now())
-  updatedAt         DateTime       @updatedAt
+  courseId          String?
+  course            Course?          @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
 
   participants         LessonParticipant[]
   homework             Homework[]
@@ -314,7 +325,46 @@ model Lesson {
   @@index([status])
   @@index([scheduledAt])
   @@index([teacherId, status, scheduledAt])
+  @@index([courseId])
   @@map("lessons")
+}
+
+// ─── Cursos ───────────────────────────────────────────────────────────────────
+
+model Course {
+  id          String         @id @default(cuid())
+  name        String
+  description String?
+  subjectId   String?
+  subject     Subject?       @relation(fields: [subjectId], references: [id])
+  teacherId   String?
+  teacher     Teacher?       @relation(fields: [teacherId], references: [id])
+  modality    LessonModality @default(PRESENCIAL)
+  capacity    Int?
+  status      CourseStatus   @default(ACTIVE)
+  startDate   DateTime?
+  endDate     DateTime?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  lessons     Lesson[]
+  enrollments CourseEnrollment[]
+
+  @@index([teacherId])
+  @@index([subjectId])
+  @@map("courses")
+}
+
+model CourseEnrollment {
+  courseId   String
+  studentId  String
+  course     Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  student    Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  enrolledAt DateTime @default(now())
+
+  @@id([courseId, studentId])
+  @@index([studentId])
+  @@map("course_enrollments")
 }
 
 model LessonParticipant {
@@ -329,15 +379,15 @@ model LessonParticipant {
 }
 
 model LessonRequest {
-  id          String        @id @default(cuid())
-  studentId   String
-  student     Student       @relation(fields: [studentId], references: [id])
-  teacherId   String
-  teacher     Teacher       @relation(fields: [teacherId], references: [id])
-  requestedAt DateTime      @default(now())
-  preferredAt DateTime
-  subjectId   String?
-  subject     Subject?      @relation(fields: [subjectId], references: [id])
+  id             String         @id @default(cuid())
+  studentId      String
+  student        Student        @relation(fields: [studentId], references: [id])
+  teacherId      String
+  teacher        Teacher        @relation(fields: [teacherId], references: [id])
+  requestedAt    DateTime       @default(now())
+  preferredAt    DateTime
+  subjectId      String?
+  subject        Subject?       @relation(fields: [subjectId], references: [id])
   modality       LessonModality @default(PRESENCIAL)
   status         RequestStatus  @default(PENDING)
   approvedBy     String?
@@ -347,8 +397,8 @@ model LessonRequest {
 
   // Série recorrente (agendamento semanal do responsável) — agrupa os pedidos
   recurrenceSeriesId String?
-  seriesIndex        Int?     // posição na série (1..N)
-  seriesTotal        Int?     // total de pedidos da série
+  seriesIndex        Int? // posição na série (1..N)
+  seriesTotal        Int? // total de pedidos da série
 
   @@index([teacherId, status])
   @@index([studentId, status])
@@ -406,7 +456,7 @@ model Material {
   fileType   String
   uploadedAt DateTime @default(now())
 
-  students   MaterialStudent[]
+  students MaterialStudent[]
 
   @@map("materials")
 }
@@ -439,16 +489,16 @@ model Payment {
 
   // Taxa de cartão/maquininha estimada desta cobrança (snapshot no momento da
   // criação/edição). Receita líquida = amount - feeAmount. Ver src/lib/fees.ts
-  feeAmount     Decimal?      @db.Decimal(10, 2)
+  feeAmount Decimal? @db.Decimal(10, 2)
 
   // Parcelamento (boleto / cartão de crédito) — cada parcela é uma cobrança
-  installmentNumber  Int?     // nº desta parcela (1..N)
-  installmentTotal   Int?     // total de parcelas do grupo
-  installmentGroupId String?  // agrupa as parcelas de um mesmo parcelamento
+  installmentNumber  Int? // nº desta parcela (1..N)
+  installmentTotal   Int? // total de parcelas do grupo
+  installmentGroupId String? // agrupa as parcelas de um mesmo parcelamento
 
   // Pacote de origem — ao excluir o pacote, esta cobrança é excluída junto
-  packageId     String?
-  package       LessonPackage? @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  packageId String?
+  package   LessonPackage? @relation(fields: [packageId], references: [id], onDelete: Cascade)
 
   @@index([studentId])
   @@index([status])
@@ -477,11 +527,11 @@ model TeacherPayout {
 // Ex: "Cartão de crédito" 2–6x = 4,99%; 7–12x = 5,99%; "Boleto" = R$3,50 fixo.
 model CardFeeRate {
   id              String   @id @default(cuid())
-  method          String   // casa com Payment.method ("Cartão de crédito", "Boleto", "Pix", ...)
+  method          String // casa com Payment.method ("Cartão de crédito", "Boleto", "Pix", ...)
   minInstallments Int      @default(1)
   maxInstallments Int      @default(1)
-  percent         Decimal  @default(0) @db.Decimal(5, 2)   // ex: 4.99
-  fixed           Decimal  @default(0) @db.Decimal(10, 2)  // ex: 3.50 (boleto)
+  percent         Decimal  @default(0) @db.Decimal(5, 2) // ex: 4.99
+  fixed           Decimal  @default(0) @db.Decimal(10, 2) // ex: 3.50 (boleto)
   active          Boolean  @default(true)
   createdAt       DateTime @default(now())
 
@@ -494,7 +544,7 @@ model CardFeeRate {
 model MonthlyGoal {
   id           String   @id @default(cuid())
   year         Int
-  month        Int      // 1–12
+  month        Int // 1–12
   revenueGoal  Decimal? @db.Decimal(10, 2)
   lessonsGoal  Int?
   studentsGoal Int?

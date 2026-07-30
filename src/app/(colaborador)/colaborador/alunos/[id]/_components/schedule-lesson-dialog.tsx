@@ -13,7 +13,11 @@ import {
 import { Input }  from "@/components/ui/input"
 import { Label }  from "@/components/ui/label"
 import { toast }  from "sonner"
-import { createLessonDirectAction, createDuoLessonAction, createRecurringLessonsAction } from "@/lib/actions/lesson-request"
+import { createLessonDirectAction, createDuoLessonAction } from "@/lib/actions/lesson-request"
+import { weeklySlots } from "@/lib/recurrence"
+import { RecurringPreviewDialog, type RecurringParams } from "./recurring-preview-dialog"
+import { mensagemDeErro } from "@/lib/error-message"
+import { ouFalhe } from "@/lib/action-result"
 
 interface Teacher {
   id:       string
@@ -49,7 +53,9 @@ export function ScheduleLessonDialog({ studentId, studentName, teachers, hasBala
   const [duoIds, setDuoIds]     = useState<string[]>([])
   const [isRecurring, setIsRecurring] = useState(false)
   const [occurrences, setOccurrences] = useState(4)
+  const [alreadyAgreed, setAlreadyAgreed] = useState(false)
   const [conflicts, setConflicts]     = useState<{ date: string; reason: string }[]>([])
+  const [recurringParams, setRecurringParams] = useState<RecurringParams | null>(null)
   const [pending, start]        = useTransition()
 
   const selectedTeacher = teachers.find(t => t.id === teacherId)
@@ -80,6 +86,7 @@ export function ScheduleLessonDialog({ studentId, studentName, teachers, hasBala
       setDuoIds([])
       setIsRecurring(false)
       setOccurrences(4)
+      setAlreadyAgreed(false)
     }
     setOpen(v)
   }
@@ -93,10 +100,21 @@ export function ScheduleLessonDialog({ studentId, studentName, teachers, hasBala
       toast.error("Selecione ao menos mais um aluno para o grupo")
       return
     }
+
+    // Série recorrente: nada é gravado aqui. Abre a revisão, que verifica a
+    // agenda de todas as ocorrências e deixa ajustar só as exceções.
+    if (isRecurring && !isDuo) {
+      setRecurringParams({
+        teacherId, studentId, subjectId, modality, duration,
+        slots: weeklySlots(date, time, occurrences),
+      })
+      return
+    }
+
     start(async () => {
       try {
         if (isDuo) {
-          await createDuoLessonAction({
+          ouFalhe(await createDuoLessonAction({
             teacherId,
             subjectId,
             studentIds: [studentId, ...duoIds],
@@ -104,34 +122,38 @@ export function ScheduleLessonDialog({ studentId, studentName, teachers, hasBala
             time,
             modality,
             duration,
-          })
+          }))
           toast.success("Aula em grupo (pacote) agendada com sucesso")
-        } else if (isRecurring) {
-          const r = await createRecurringLessonsAction({
-            teacherId, studentId, subjectId, date, time, modality,
-            occurrences, duration,
-          })
-          const parts = [`${r.created} aula${r.created !== 1 ? "s" : ""} criada${r.created !== 1 ? "s" : ""}`]
-          if (r.skippedNoBalance > 0) parts.push(`${r.skippedNoBalance} sem saldo`)
-          setOpen(false)
-          router.refresh()
-          if (r.conflicts.length > 0) {
-            setConflicts(r.conflicts)
-            toast.warning(`Série criada, mas ${r.conflicts.length} horário${r.conflicts.length !== 1 ? "s têm" : " tem"} conflito`)
-          } else {
-            toast.success(`Série recorrente: ${parts.join(" · ")}`)
-          }
-          return
         } else {
-          await createLessonDirectAction({ teacherId, studentId, subjectId, date, time, modality, duration })
-          toast.success("Aula agendada com sucesso")
+          ouFalhe(await createLessonDirectAction({
+            teacherId, studentId, subjectId, date, time, modality, duration, alreadyAgreed,
+          }))
+          toast.success(alreadyAgreed
+            ? "Aula confirmada — professor avisado"
+            : "Aula agendada com sucesso")
         }
         setOpen(false)
         router.push(`/colaborador/alunos/${studentId}`)
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Erro ao agendar aula")
+        toast.error(mensagemDeErro(e, "Erro ao agendar aula"))
       }
     })
+  }
+
+  /** A série já foi revisada e criada pelo modal de exceções. */
+  function handleRecurringCreated(r: { created: number; conflicts: { date: string; reason: string }[] }) {
+    setRecurringParams(null)
+    setOpen(false)
+    router.refresh()
+
+    const n = `${r.created} aula${r.created !== 1 ? "s" : ""}`
+    if (r.conflicts.length > 0) {
+      // Alguém ocupou o horário entre a revisão e a confirmação
+      setConflicts(r.conflicts)
+      toast.warning(`${n} criada${r.created !== 1 ? "s" : ""}, mas ${r.conflicts.length} horário${r.conflicts.length !== 1 ? "s ficaram" : " ficou"} indisponível no meio do caminho`)
+    } else {
+      toast.success(`Série recorrente criada: ${n}`)
+    }
   }
 
   return (
@@ -334,6 +356,25 @@ export function ScheduleLessonDialog({ studentId, studentName, teachers, hasBala
               )}
             </div>
 
+            {/* Já acertado com o responsável (só faz sentido na aula única) */}
+            {!isDuo && !isRecurring && (
+              <label className="flex items-start gap-2.5 rounded-lg border border-border bg-muted/30 px-3 py-2.5 cursor-pointer hover:bg-muted/50 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={alreadyAgreed}
+                  onChange={e => setAlreadyAgreed(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 shrink-0 accent-[#219EBC]"
+                />
+                <span className="text-xs leading-snug">
+                  <span className="font-medium">Já combinei com o responsável</span>
+                  <span className="block text-[11px] text-muted-foreground mt-0.5">
+                    A aula já entra como <strong>Confirmada</strong> e o aviso vai só para o
+                    professor — sem mandar mensagem automática para quem você acabou de falar.
+                  </span>
+                </span>
+              </label>
+            )}
+
             {/* Recorrência semanal (indisponível no modo grupo) */}
             {!isDuo && (
               <div className="space-y-2">
@@ -353,8 +394,9 @@ export function ScheduleLessonDialog({ studentId, studentName, teachers, hasBala
                 {isRecurring && (
                   <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-2">
                     <p className="text-[11px] text-muted-foreground">
-                      Cria 1 aula por semana, sempre {date ? format(new Date(`${date}T00:00:00`), "EEEE", { locale: ptBRLocale }) : "no mesmo dia"} às {time}.
-                      Desconta {fmtAulas(duration)} do pacote por ocorrência — cria só o que couber no saldo.
+                      1 aula por semana, sempre {date ? format(new Date(`${date}T00:00:00`), "EEEE", { locale: ptBRLocale }) : "no mesmo dia"} às {time}.
+                      Desconta {fmtAulas(duration)} do pacote por ocorrência.
+                      Você verá a agenda de todas as datas antes de confirmar.
                     </p>
                     <div className="flex items-center gap-2">
                       <Label className="text-xs whitespace-nowrap">Quantas semanas</Label>
@@ -379,11 +421,19 @@ export function ScheduleLessonDialog({ studentId, studentName, teachers, hasBala
             </Button>
             <Button onClick={submit} disabled={pending || !teacherId || !subjectId}>
               {pending && <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />}
-              {isRecurring && !isDuo ? "Agendar série" : "Agendar"}
+              {isRecurring && !isDuo ? "Revisar série" : "Agendar"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Revisão da série: conflitos por data, com ajuste das exceções */}
+      <RecurringPreviewDialog
+        params={recurringParams}
+        studentName={studentName}
+        onClose={() => setRecurringParams(null)}
+        onCreated={handleRecurringCreated}
+      />
 
       {/* Aviso de conflitos da série recorrente */}
       <Dialog open={conflicts.length > 0} onOpenChange={(v) => { if (!v) setConflicts([]) }}>
@@ -396,8 +446,8 @@ export function ScheduleLessonDialog({ studentId, studentName, teachers, hasBala
           </DialogHeader>
 
           <p className="text-xs text-muted-foreground">
-            As demais aulas da série foram criadas normalmente. Os horários abaixo foram
-            pulados por conflito — reagende-os manualmente em outro horário:
+            As demais aulas da série foram criadas normalmente. Estes horários ficaram
+            ocupados entre a revisão e a confirmação — reagende-os manualmente:
           </p>
 
           <ul className="space-y-1.5 max-h-64 overflow-y-auto">

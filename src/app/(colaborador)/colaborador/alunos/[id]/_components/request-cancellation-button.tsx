@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { cancelLessonDirectAction } from "@/lib/actions/lesson-cancellation"
 import { Ban, Loader2 } from "lucide-react"
+import { mensagemDeErro } from "@/lib/error-message"
 
 interface Props {
   lessonId: string
@@ -31,7 +32,7 @@ export function RequestCancellationButton({ lessonId }: Props) {
         setReason("")
         router.refresh()
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Erro ao cancelar aula")
+        toast.error(mensagemDeErro(e, "Erro ao cancelar aula"))
         setState("idle")
       }
     })

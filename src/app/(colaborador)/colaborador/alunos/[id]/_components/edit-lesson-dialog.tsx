@@ -11,6 +11,8 @@ import { Button }   from "@/components/ui/button"
 import { Input }    from "@/components/ui/input"
 import { Label }    from "@/components/ui/label"
 import { Pencil, Loader2, MonitorPlay, School } from "lucide-react"
+import { mensagemDeErro } from "@/lib/error-message"
+import { ouFalhe } from "@/lib/action-result"
 
 interface Subject { id: string; name: string }
 interface Teacher { id: string; name: string; subjects: Subject[] }
@@ -39,6 +41,15 @@ const STATUSES = [
   { value: "CANCELLED", label: "Cancelada"  },
   { value: "SCHEDULED", label: "Agendada"   },
 ]
+
+/**
+ * "Confirmada" só aparece se a aula JÁ estiver confirmada — para poder editar os
+ * outros campos sem rebaixar o status. Confirmar é ação do botão Confirmar na
+ * agenda, que notifica professor e responsável (ver confirmLessonAction).
+ */
+function statusOptions(current: string) {
+  return current === "CONFIRMED" ? STATUSES : STATUSES.filter(s => s.value !== "CONFIRMED")
+}
 
 export function EditLessonDialog({ lesson, studentId, teachers }: Props) {
   const router = useRouter()
@@ -90,7 +101,7 @@ export function EditLessonDialog({ lesson, studentId, teachers }: Props) {
     }
     start(async () => {
       try {
-        await updateLessonDirectAction({
+        ouFalhe(await updateLessonDirectAction({
           lessonId:      lesson.id,
           studentId,
           date,
@@ -102,12 +113,12 @@ export function EditLessonDialog({ lesson, studentId, teachers }: Props) {
           topicsCovered: topics || undefined,
           teacherNotes:  notes  || undefined,
           status:        status as "COMPLETED" | "MISSED" | "CONFIRMED" | "CANCELLED" | "SCHEDULED",
-        })
+        }))
         toast.success("Aula atualizada")
         setOpen(false)
         router.refresh()
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Erro ao atualizar aula")
+        toast.error(mensagemDeErro(e, "Erro ao atualizar aula"))
       }
     })
   }
@@ -137,7 +148,7 @@ export function EditLessonDialog({ lesson, studentId, teachers }: Props) {
             <div className="space-y-1.5">
               <Label className="text-xs">Status</Label>
               <div className="flex flex-wrap gap-2">
-                {STATUSES.map(s => (
+                {statusOptions(lesson.status).map(s => (
                   <button
                     key={s.value}
                     type="button"

@@ -10,6 +10,8 @@ import { createDuoLessonAction } from "@/lib/actions/lesson-request"
 import { toast }    from "sonner"
 import { Users, Loader2, MapPin, Wifi, Building2, Home, X } from "lucide-react"
 import { format }   from "date-fns"
+import { mensagemDeErro } from "@/lib/error-message"
+import { ouFalhe } from "@/lib/action-result"
 
 interface StudentOption { id: string; name: string; remainingLessons?: number }
 interface TeacherOption {
@@ -85,7 +87,7 @@ export function CreateDuoLessonDialog({ open, onClose, students, teachers, defau
 
     start(async () => {
       try {
-        await createDuoLessonAction({
+        ouFalhe(await createDuoLessonAction({
           teacherId,
           subjectId,
           studentIds: selectedStudentIds,
@@ -93,11 +95,11 @@ export function CreateDuoLessonDialog({ open, onClose, students, teachers, defau
           time,
           modality,
           teacherOnsite: modality === "ONLINE" ? teacherOnsite : undefined,
-        })
+        }))
         toast.success(`Aula em grupo (pacote) criada para ${selectedStudentIds.length} alunos`)
         handleClose()
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Erro ao criar aula em grupo")
+        toast.error(mensagemDeErro(e, "Erro ao criar aula em grupo"))
       }
     })
   }

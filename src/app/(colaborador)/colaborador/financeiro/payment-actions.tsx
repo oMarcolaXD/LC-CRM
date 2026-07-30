@@ -6,6 +6,7 @@ import { markPaymentPaidColaboradorAction } from "@/lib/actions/colaborador"
 import { CheckCircle2, Loader2, FileText }  from "lucide-react"
 import Link                                 from "next/link"
 import { toast }                            from "sonner"
+import { mensagemDeErro } from "@/lib/error-message"
 
 interface PaymentActionsProps {
   id:     string
@@ -21,7 +22,7 @@ export function PaymentActions({ id, status }: PaymentActionsProps) {
         await markPaymentPaidColaboradorAction(id)
         toast.success("Pagamento marcado como pago")
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Erro ao atualizar pagamento")
+        toast.error(mensagemDeErro(e, "Erro ao atualizar pagamento"))
       }
     })
   }

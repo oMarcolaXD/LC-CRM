@@ -5,8 +5,9 @@ import { auth }           from "@/lib/auth"
 import { revalidatePath } from "next/cache"
 import { notify }         from "@/lib/notifications"
 import { getBookingPolicy, getOperationalConfig, isOperational } from "@/lib/config"
-import { isWithinAvailability, hasConflict } from "@/lib/availability"
+import { isWithinAvailability } from "@/lib/availability"
 import type { Availability } from "@/lib/availability"
+import { assertRoomFree, findTeacherConflicts, occupiesRoom } from "@/lib/scheduling"
 import { format }         from "date-fns"
 import { ptBR }           from "date-fns/locale"
 import { parseBrazilDateTime } from "@/lib/datetime"
@@ -195,25 +196,23 @@ export async function guardianRescheduleLessonAction(
     throw new Error("A escola não atende neste dia/horário")
   }
 
-  // Disponibilidade do professor + conflito de horário
-  const teacher = await prisma.teacher.findUnique({
-    where:   { id: lesson.teacherId },
-    include: {
-      lessons: {
-        where:  { status: { in: ["SCHEDULED", "CONFIRMED"] }, id: { not: lessonId } },
-        select: { scheduledAt: true },
-      },
-    },
-  })
+  // Disponibilidade semanal do professor
+  const teacher = await prisma.teacher.findUnique({ where: { id: lesson.teacherId } })
   if (!teacher) throw new Error("Professor não encontrado")
 
   const availability = (teacher.availability ?? {}) as unknown as Availability
-  if (!isWithinAvailability(newDate, availability)) {
+  if (!isWithinAvailability(newDate, availability, lesson.duration)) {
     throw new Error("O professor não está disponível neste horário")
   }
-  if (hasConflict(newDate, teacher.lessons.map((l) => l.scheduledAt))) {
-    throw new Error("Este horário já está ocupado")
+
+  // Ocupação real da agenda — mesmas regras dos agendamentos feitos pela escola.
+  // `excludeLessonId` impede que a própria aula seja contada como conflito.
+  const slot = { scheduledAt: newDate, duration: lesson.duration, excludeLessonId: lessonId }
+  if (occupiesRoom(lesson.modality, lesson.teacherOnsite)) {
+    await assertRoomFree(slot, { suggestOnline: false })
   }
+  const [clash] = await findTeacherConflicts({ ...slot, teacherId: lesson.teacherId })
+  if (clash) throw new Error("Este horário já está ocupado")
 
   await prisma.lesson.update({
     where: { id: lessonId },

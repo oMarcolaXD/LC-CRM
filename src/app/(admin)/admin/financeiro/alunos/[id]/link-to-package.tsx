@@ -7,6 +7,7 @@ import { Link2, Loader2, X } from "lucide-react"
 import { linkPaymentToPackageAction } from "@/lib/actions/financeiro"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
+import { mensagemDeErro } from "@/lib/error-message"
 
 interface PackageOption {
   id: string
@@ -43,7 +44,7 @@ export function LinkToPackage({ paymentId, studentId, packages, hasGroup }: Prop
         setOpen(false)
         router.refresh()
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Erro ao vincular")
+        toast.error(mensagemDeErro(e, "Erro ao vincular"))
       }
     })
   }

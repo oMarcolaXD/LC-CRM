@@ -9,6 +9,8 @@ import { createTeacherCommitmentAction } from "@/lib/actions/lesson-request"
 import { toast }   from "sonner"
 import { CalendarPlus, Loader2 } from "lucide-react"
 import { format }  from "date-fns"
+import { mensagemDeErro } from "@/lib/error-message"
+import { ouFalhe } from "@/lib/action-result"
 
 interface TeacherOption { id: string; name: string }
 
@@ -44,11 +46,11 @@ export function CreateCommitmentDialog({ open, onClose, teachers, defaultDate }:
 
     start(async () => {
       try {
-        await createTeacherCommitmentAction({ teacherId, title: title.trim(), date, time, duration })
+        ouFalhe(await createTeacherCommitmentAction({ teacherId, title: title.trim(), date, time, duration }))
         toast.success("Compromisso registrado na agenda do professor")
         handleClose()
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Erro ao registrar compromisso")
+        toast.error(mensagemDeErro(e, "Erro ao registrar compromisso"))
       }
     })
   }

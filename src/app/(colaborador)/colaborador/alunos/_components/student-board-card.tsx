@@ -104,7 +104,6 @@ export function StudentBoardCard({ student, column, detailBasePath }: StudentBoa
 
   const status       = getStatusInfo(pkg)
   const isInactive   = student.user?.active === false
-  const hasNoPackage = student._count.packages === 0
   const hasNoHistory = student._count.participations === 0
 
   const remainingPct = pkg && Number(pkg.totalLessons) > 0
@@ -146,17 +145,12 @@ export function StudentBoardCard({ student, column, detailBasePath }: StudentBoa
               {status.label}
             </span>
             {isInactive && (
-              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600 border border-gray-300">
+              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600 border border-gray-300 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700">
                 Ex-aluno
               </span>
             )}
-            {!isInactive && hasNoPackage && (
-              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-300">
-                Sem pacote
-              </span>
-            )}
             {!isInactive && hasNoHistory && (
-              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-300">
+              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-300 dark:bg-amber-900/40 dark:text-amber-400 dark:border-amber-800">
                 Sem histórico
               </span>
             )}

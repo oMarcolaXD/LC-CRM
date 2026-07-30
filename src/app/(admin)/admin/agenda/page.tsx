@@ -2,6 +2,8 @@ import { prisma }        from "@/lib/prisma"
 import { AgendaGrid }    from "@/app/(colaborador)/colaborador/agenda/agenda-grid"
 import type { TeacherCol, LessonSlot, AvailSlot, StudentOption } from "@/app/(colaborador)/colaborador/agenda/agenda-grid"
 import { getRoomCount }  from "@/lib/config"
+import { getNotificationStatus } from "@/lib/notifications/status"
+import { NotificationConfigWarning } from "@/components/shared/notification-config-warning"
 import type { Availability } from "@/lib/availability"
 import { format, startOfDay, endOfDay, parseISO, isValid, getDay } from "date-fns"
 import { formatBR, toBrazilDate, nowBrazil } from "@/lib/datetime"
@@ -117,8 +119,11 @@ export default async function AdminAgendaPage({ searchParams }: AgendaPageProps)
     remainingLessons: Number(s.packages[0]?.remainingLessons ?? 0),
   }))
 
+  const notificationStatus = getNotificationStatus()
+
   return (
     <div className="space-y-4">
+      <NotificationConfigWarning status={notificationStatus} />
       <AgendaGrid
         date={dateStr}
         teachers={teacherCols}
@@ -126,6 +131,7 @@ export default async function AdminAgendaPage({ searchParams }: AgendaPageProps)
         roomCount={roomCount}
         students={students}
         allStudents={students.map(s => ({ id: s.id, name: s.name }))}
+        notificationStatus={notificationStatus}
       />
     </div>
   )

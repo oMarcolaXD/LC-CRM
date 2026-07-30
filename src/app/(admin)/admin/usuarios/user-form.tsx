@@ -13,6 +13,7 @@ import {
   Briefcase, ShieldCheck, User, School, UserPlus, Link2, UserX, Search,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { GRADE_GROUPS, ADULT_GRADES, DEFAULT_GRADE } from "@/lib/constants/grades"
 import type { Role, TeacherMode } from "@prisma/client"
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -49,15 +50,6 @@ const ALL_ROLES = [
     color: "text-rose-500", activeBg: "bg-rose-500/10", activeBorder: "border-rose-500",
   },
 ]
-
-const GRADE_GROUPS = [
-  { label: "Ensino Fundamental", grades: ["6º EF", "7º EF", "8º EF", "9º EF"] },
-  { label: "Ensino Médio",       grades: ["1º EM", "2º EM", "3º EM"]           },
-  { label: "Superior & Outros",  grades: ["Vestibular", "ENEM", "Concurso", "Superior"] },
-]
-
-const ADULT_GRADES  = new Set(["Vestibular", "ENEM", "Concurso", "Superior"])
-const DEFAULT_GRADE = "6º EF"
 
 const TEACHING_MODES: { value: TeacherMode; label: string; description: string }[] = [
   { value: "PRESENCIAL",  label: "Presencial",          description: "Vem à sede; aulas presenciais e pode dar online de uma sala" },

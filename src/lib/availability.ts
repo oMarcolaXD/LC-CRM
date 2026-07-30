@@ -2,8 +2,13 @@
 // { "1": [{"start": "09:00", "end": "12:00"}, {"start": "14:00", "end": "18:00"}], "3": [...] }
 // Chave = dia da semana (0=Dom, 1=Seg, ..., 6=Sab)
 
+import { parseBrazilDateTime } from "@/lib/datetime"
+
 export interface TimeSlot   { start: string; end: string }
 export type Availability    = Record<string, TimeSlot[]>  // dia -> intervalos
+
+/** Aula já marcada que ocupa a agenda do professor. */
+export interface BookedLesson { scheduledAt: Date; duration?: number | null }
 
 export const DAY_NAMES = ["Domingo","Segunda","Terça","Quarta","Quinta","Sexta","Sábado"]
 export const DAY_SHORT = ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"]
@@ -24,30 +29,35 @@ function slotsForInterval(slot: TimeSlot, durationMin = 60): string[] {
   return result
 }
 
-/** Lista todos os slots disponíveis para uma data específica */
+/**
+ * Lista os slots livres de uma data ("yyyy-MM-dd").
+ *
+ * A comparação com as aulas já marcadas é feita em tempo absoluto: o slot vira
+ * um instante via `parseBrazilDateTime` e é testado por sobreposição real de
+ * intervalos. Comparar "HH:mm" daria errado no servidor em UTC, e comparar só o
+ * início deixaria passar uma aula de 90min que invade o slot seguinte.
+ */
 export function getAvailableSlotsForDate(
-  date:         Date,
+  dateStr:      string,        // "yyyy-MM-dd"
   availability: Availability,
-  bookedTimes:  Date[],       // aulas já marcadas
+  booked:       BookedLesson[],
   durationMin = 60,
 ): string[] {
-  const dow   = date.getDay().toString()
+  // Meio-dia evita que o fuso do servidor jogue o dia da semana para o vizinho.
+  const dow   = parseBrazilDateTime(dateStr, "12:00").getDay().toString()
   const slots = availability[dow] ?? []
-  const allSlots = slots.flatMap((s) => slotsForInterval(s, durationMin))
 
-  const bookedHHMM = bookedTimes
-    .filter((b) => {
-      const bd = new Date(b)
-      return bd.getFullYear() === date.getFullYear() &&
-             bd.getMonth()    === date.getMonth()    &&
-             bd.getDate()     === date.getDate()
+  return slots
+    .flatMap((s) => slotsForInterval(s, durationMin))
+    .filter((hhmm) => {
+      const start = parseBrazilDateTime(dateStr, hhmm).getTime()
+      const end   = start + durationMin * 60_000
+      return !booked.some((b) => {
+        const bStart = b.scheduledAt.getTime()
+        const bEnd   = bStart + (b.duration ?? 60) * 60_000
+        return start < bEnd && bStart < end
+      })
     })
-    .map((b) => {
-      const bd = new Date(b)
-      return `${String(bd.getHours()).padStart(2,"0")}:${String(bd.getMinutes()).padStart(2,"0")}`
-    })
-
-  return allSlots.filter((s) => !bookedHHMM.includes(s))
 }
 
 /** Retorna os dias disponíveis nos próximos N dias (incluindo hoje) */
@@ -85,19 +95,6 @@ export function getAvailableDates(
     result.push(d)
   }
   return result
-}
-
-/** Verifica se uma data/hora conflita com aulas existentes */
-export function hasConflict(
-  requestedAt:  Date,
-  bookedLessons: Date[],
-  durationMin = 60,
-): boolean {
-  const req = new Date(requestedAt).getTime()
-  return bookedLessons.some((b) => {
-    const booked = new Date(b).getTime()
-    return Math.abs(req - booked) < durationMin * 60 * 1000
-  })
 }
 
 /** Verifica se uma data/hora está dentro da disponibilidade */

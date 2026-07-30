@@ -13,12 +13,8 @@ import { Label }       from "@/components/ui/label"
 import { PhoneInput }  from "@/components/ui/phone-input"
 import { toast }  from "sonner"
 import { updateStudentAction } from "@/lib/actions/colaborador"
-
-const GRADES = [
-  "6º Ano EF", "7º Ano EF", "8º Ano EF", "9º Ano EF",
-  "1º Ano EM", "2º Ano EM", "3º Ano EM",
-  "Cursinho", "Graduação", "Pós-graduação", "Outro",
-]
+import { GRADES } from "@/lib/constants/grades"
+import { mensagemDeErro } from "@/lib/error-message"
 
 interface Props {
   student: {
@@ -101,7 +97,7 @@ export function EditStudentDialog({ student, guardian }: Props) {
         setOpen(false)
         router.refresh()
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Erro ao atualizar dados")
+        toast.error(mensagemDeErro(e, "Erro ao atualizar dados"))
       }
     })
   }

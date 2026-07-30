@@ -14,12 +14,7 @@ import {
   GraduationCap, UserRound, KeyRound, History, CreditCard,
   Package, UserX, ClipboardList, CheckCircle2, Loader2, Mail,
 } from "lucide-react"
-
-const GRADES = [
-  "6º Ano EF", "7º Ano EF", "8º Ano EF", "9º Ano EF",
-  "1º Ano EM", "2º Ano EM", "3º Ano EM",
-  "Cursinho", "Graduação", "Pós-graduação", "Outro",
-]
+import { GRADES } from "@/lib/constants/grades"
 
 interface Teacher { id: string; name: string }
 interface Subject { id: string; name: string }

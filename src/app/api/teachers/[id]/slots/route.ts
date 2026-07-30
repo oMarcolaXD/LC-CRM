@@ -4,6 +4,7 @@ import { auth }                      from "@/lib/auth"
 import { getAvailableSlotsForDate, getAvailableDates } from "@/lib/availability"
 import type { Availability }         from "@/lib/availability"
 import { getBookingPolicy }          from "@/lib/config"
+import { parseBrazilDateTime }       from "@/lib/datetime"
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth()
@@ -28,35 +29,29 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   // Se pediram slots de uma data específica
   if (dateStr) {
-    const date = new Date(dateStr + "T00:00:00")
-
+    // Janela em tempo absoluto no fuso de Brasília, com folga para trás: uma
+    // aula longa do fim da noite anterior ainda pode invadir a manhã seguinte.
+    const dayStart = parseBrazilDateTime(dateStr, "00:00").getTime()
     const bookedLessons = await prisma.lesson.findMany({
       where: {
         teacherId:   id,
         status:      { in: ["SCHEDULED", "CONFIRMED"] },
         scheduledAt: {
-          gte: new Date(dateStr + "T00:00:00"),
-          lte: new Date(dateStr + "T23:59:59"),
+          gte: new Date(dayStart - 8 * 60 * 60_000),
+          lt:  new Date(dayStart + 24 * 60 * 60_000),
         },
       },
-      select: { scheduledAt: true },
+      select: { scheduledAt: true, duration: true },
     })
 
-    let slots = getAvailableSlotsForDate(
-      date,
-      availability,
-      bookedLessons.map((l) => l.scheduledAt),
-    )
+    let slots = getAvailableSlotsForDate(dateStr, availability, bookedLessons)
 
     // Remove horários que violam a antecedência mínima definida pelo admin
     if (policy.minHoursAhead > 0) {
       const minMs = policy.minHoursAhead * 60 * 60 * 1000
-      slots = slots.filter((hhmm) => {
-        const [h, m] = hhmm.split(":").map(Number)
-        const slotAt = new Date(date)
-        slotAt.setHours(h, m, 0, 0)
-        return slotAt.getTime() - now.getTime() >= minMs
-      })
+      slots = slots.filter((hhmm) =>
+        parseBrazilDateTime(dateStr, hhmm).getTime() - now.getTime() >= minMs
+      )
     }
 
     return NextResponse.json({ slots })

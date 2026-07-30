@@ -11,6 +11,8 @@ import { rescheduleAndApproveRequestAction } from "@/lib/actions/lesson-request"
 import { MapPin, Wifi, Home, Building2, Loader2 } from "lucide-react"
 import { toast }   from "sonner"
 import { format }  from "date-fns"
+import { mensagemDeErro } from "@/lib/error-message"
+import { ouFalhe } from "@/lib/action-result"
 
 type TeacherMode = "ONLINE_ONLY" | "PRESENCIAL" | "HYBRID"
 
@@ -41,14 +43,14 @@ export function RescheduleDialog({
     if (!date || !time) return
     startTransition(async () => {
       try {
-        await rescheduleAndApproveRequestAction(
+        ouFalhe(await rescheduleAndApproveRequestAction(
           requestId, date, time, modality,
           showLocationToggle ? teacherOnsite : undefined,
-        )
+        ))
         toast.success("Aula reagendada e aprovada")
         onOpenChange(false)
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Erro ao reagendar")
+        toast.error(mensagemDeErro(e, "Erro ao reagendar"))
       }
     })
   }

@@ -16,6 +16,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select"
 import { Plus, Pencil, Trash2, Loader2, Percent } from "lucide-react"
+import { mensagemDeErro } from "@/lib/error-message"
 
 interface Rate {
   id:              string
@@ -124,7 +125,7 @@ function DeleteButton({ id, onDone }: { id: string; onDone: () => void }) {
           toast.success("Taxa excluída")
           onDone()
         } catch (e) {
-          toast.error(e instanceof Error ? e.message : "Erro ao excluir")
+          toast.error(mensagemDeErro(e, "Erro ao excluir"))
         }
       })}
       className="h-8 px-2 flex items-center justify-center rounded-lg bg-red-600 text-white text-xs font-medium hover:bg-red-700 disabled:opacity-50 transition-colors">
@@ -165,7 +166,7 @@ function FeeRateDialog({
         toast.success(rate ? "Taxa atualizada" : "Taxa criada")
         onSaved()
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Erro ao salvar")
+        toast.error(mensagemDeErro(e, "Erro ao salvar"))
       }
     })
   }

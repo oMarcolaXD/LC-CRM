@@ -187,6 +187,24 @@ export async function cancelAulaoSeriesAction(recurrenceGroupId: string) {
   for (const path of REVALIDATE_PATHS) revalidatePath(path)
 }
 
+// ─── Renomear aulão ────────────────────────────────────────────────────────────
+
+export async function renameAulaoAction(lessonId: string, title: string) {
+  await requireCollaboratorOrAdmin()
+
+  const trimmed = title.trim()
+  if (!trimmed) throw new Error("O nome não pode ficar vazio")
+
+  const lesson = await prisma.lesson.findUnique({ where: { id: lessonId } })
+  if (!lesson) throw new Error("Aulão não encontrado")
+  if (!["AULAO", "GROUP"].includes(lesson.lessonType)) throw new Error("Esta aula não é um aulão")
+
+  await prisma.lesson.update({ where: { id: lessonId }, data: { title: trimmed } })
+
+  for (const path of REVALIDATE_PATHS) revalidatePath(path)
+  revalidatePath(`/colaborador/auloes/${lessonId}`)
+}
+
 // ─── Marcar aulão como realizado ──────────────────────────────────────────────
 
 export async function completeAulaoAction(lessonId: string) {

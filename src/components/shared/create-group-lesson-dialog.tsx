@@ -10,6 +10,8 @@ import { createGroupLessonAction } from "@/lib/actions/lesson-request"
 import { toast }    from "sonner"
 import { Users, Loader2, MapPin, Wifi, Building2, Home, X, AlertCircle } from "lucide-react"
 import { format }   from "date-fns"
+import { mensagemDeErro } from "@/lib/error-message"
+import { ouFalhe } from "@/lib/action-result"
 
 interface StudentOption { id: string; name: string }
 interface TeacherOption {
@@ -92,7 +94,7 @@ export function CreateGroupLessonDialog({ open, onClose, students, teachers, def
 
     start(async () => {
       try {
-        await createGroupLessonAction({
+        ouFalhe(await createGroupLessonAction({
           teacherId,
           subjectId,
           studentIds: selectedStudentIds,
@@ -101,11 +103,11 @@ export function CreateGroupLessonDialog({ open, onClose, students, teachers, def
           modality,
           pricePerStudent: price,
           teacherOnsite: modality === "ONLINE" ? teacherOnsite : undefined,
-        })
+        }))
         toast.success(`Aula em grupo criada para ${selectedStudentIds.length} alunos`)
         handleClose()
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Erro ao criar aula em grupo")
+        toast.error(mensagemDeErro(e, "Erro ao criar aula em grupo"))
       }
     })
   }

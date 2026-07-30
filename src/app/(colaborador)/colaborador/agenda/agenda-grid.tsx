@@ -11,7 +11,7 @@ import {
 import { ptBR }                    from "date-fns/locale"
 import {
   ChevronLeft, ChevronRight, CalendarDays, CalendarRange, LayoutGrid,
-  CheckCircle2, XCircle, UserX, MessageCircle,
+  CheckCircle2, XCircle, UserX, MessageCircle, BellRing,
   Loader2, Wifi, MapPin, Clock, Plus, Building2, Home, AlertCircle, Users,
   CreditCard, User, GraduationCap, type LucideIcon,
 } from "lucide-react"
@@ -23,6 +23,7 @@ import {
   rejectRequestAction,
 } from "@/lib/actions/lesson-request"
 import {
+  confirmLessonAction,
   sendConfirmationToGuardianAction,
   sendConfirmationToTeacherAction,
 } from "@/lib/actions/colaborador"
@@ -36,7 +37,11 @@ import { CreateAulaoDialog }        from "@/components/shared/create-aulao-dialo
 import type { AulaoCreatedPayload } from "@/components/shared/create-aulao-dialog"
 import { CreateCommitmentDialog }   from "@/components/shared/create-commitment-dialog"
 import { AuloesSection }            from "./auloes-section"
+import { NotificationConfigWarning } from "@/components/shared/notification-config-warning"
+import type { NotificationStatus }  from "@/lib/notifications/status"
 import { parseBrazilDateTime }      from "@/lib/datetime"
+import { mensagemDeErro } from "@/lib/error-message"
+import { ouFalhe } from "@/lib/action-result"
 
 // ─── Constantes de layout ────────────────────────────────────────────────────
 
@@ -146,15 +151,18 @@ function LessonDetailModal({
   lesson,
   teacherName,
   onClose,
+  notificationStatus,
 }: {
   lesson:      LessonSlot
   teacherName: string
   onClose:     () => void
+  notificationStatus: NotificationStatus
 }) {
   const [completing,      setCompleting]      = useState(false)
   const [teacherNotes,    setTeacherNotes]    = useState("")
   const [sendingGuardian, setSendingGuardian] = useState(false)
   const [sendingTeacher,  setSendingTeacher]  = useState(false)
+  const [confirming,      setConfirming]      = useState(false)
   const [pending, start] = useTransition()
   const pathname = usePathname()
   const isAdmin  = pathname.startsWith("/admin")
@@ -180,17 +188,38 @@ function LessonDetailModal({
         )
         onClose()
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Erro")
+        toast.error(mensagemDeErro(e, "Erro"))
       }
     })
+
+  const confirmLesson = async () => {
+    setConfirming(true)
+    try {
+      const { professor, responsaveis } = ouFalhe(await confirmLessonAction(lesson.id))
+      // A aula é confirmada de todo jeito; o aviso é sobre quem não recebeu.
+      const falhas = [
+        responsaveis.problema ? `responsável: ${responsaveis.problema}` : null,
+        professor.problema    ? `professor: ${professor.problema}`      : null,
+      ].filter(Boolean)
+
+      if (falhas.length > 0) toast.warning(`Aula confirmada, mas ${falhas.join(" · ")}`)
+      else toast.success("Aula confirmada — professor e responsável notificados")
+      onClose()
+    } catch (e) {
+      toast.error(mensagemDeErro(e, "Erro ao confirmar a aula"))
+    } finally {
+      setConfirming(false)
+    }
+  }
 
   const sendToGuardian = async () => {
     setSendingGuardian(true)
     try {
-      await sendConfirmationToGuardianAction(lesson.id)
-      toast.success("WhatsApp enviado ao responsável")
+      const r = await sendConfirmationToGuardianAction(lesson.id)
+      if (r.problema) toast.warning(r.problema)
+      else toast.success(`Enviado ao responsável por ${r.canais.join(" e ")}`)
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Erro")
+      toast.error(mensagemDeErro(e, "Erro"))
     } finally {
       setSendingGuardian(false)
     }
@@ -199,10 +228,11 @@ function LessonDetailModal({
   const sendToTeacher = async () => {
     setSendingTeacher(true)
     try {
-      await sendConfirmationToTeacherAction(lesson.id)
-      toast.success("WhatsApp enviado ao professor")
+      const r = await sendConfirmationToTeacherAction(lesson.id)
+      if (r.problema) toast.warning(r.problema)
+      else toast.success(`Enviado ao professor por ${r.canais.join(" e ")}`)
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Erro")
+      toast.error(mensagemDeErro(e, "Erro"))
     } finally {
       setSendingTeacher(false)
     }
@@ -331,6 +361,11 @@ function LessonDetailModal({
             <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-2">
               Confirmações via WhatsApp
             </p>
+            {notificationStatus.aviso && (
+              <div className="mb-2">
+                <NotificationConfigWarning status={notificationStatus} variant="inline" />
+              </div>
+            )}
             <div className="rounded-lg border border-border overflow-hidden divide-y divide-border">
               <div className="flex items-center justify-between px-3 py-2.5 gap-3">
                 <div className="min-w-0">
@@ -411,6 +446,21 @@ function LessonDetailModal({
                 </div>
               ) : (
                 <div className="flex flex-wrap gap-2">
+                  {/* Única porta para CONFIRMED — avisa professor e responsável */}
+                  {lesson.status === "SCHEDULED" && (
+                    <Button
+                      size="sm"
+                      className="bg-[#219EBC] hover:bg-[#1a7e96] text-white"
+                      onClick={confirmLesson}
+                      disabled={pending || confirming}
+                    >
+                      {confirming
+                        ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />
+                        : <BellRing className="w-3.5 h-3.5 mr-1" />
+                      }
+                      Confirmar e avisar
+                    </Button>
+                  )}
                   <Button
                     size="sm"
                     className="bg-emerald-600 hover:bg-emerald-700 text-white"
@@ -469,6 +519,7 @@ function QuickScheduleModal({
   const [subjectId,    setSubjectId]    = useState("")
   const [modality,     setModality]     = useState<"PRESENCIAL" | "ONLINE">(isOnlineOnly ? "ONLINE" : "PRESENCIAL")
   const [teacherOnsite, setTeacherOnsite] = useState(false)
+  const [alreadyAgreed, setAlreadyAgreed] = useState(false)
   const [pending, start] = useTransition()
 
   const showLocationToggle = modality === "ONLINE" && !isOnlineOnly
@@ -480,7 +531,7 @@ function QuickScheduleModal({
         return
       }
       try {
-        await createLessonDirectAction({
+        ouFalhe(await createLessonDirectAction({
           teacherId: schedule.teacherId,
           studentId,
           subjectId,
@@ -488,11 +539,16 @@ function QuickScheduleModal({
           time: schedule.time,
           modality,
           teacherOnsite: modality === "ONLINE" ? teacherOnsite : undefined,
-        })
-        toast.success(isHistorical ? "Histórico importado" : "Aula agendada com sucesso")
+          alreadyAgreed: isHistorical ? undefined : alreadyAgreed,
+        }))
+        toast.success(
+          isHistorical    ? "Histórico importado" :
+          alreadyAgreed   ? "Aula confirmada — professor avisado" :
+                            "Aula agendada com sucesso"
+        )
         onClose()
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Erro ao agendar")
+        toast.error(mensagemDeErro(e, "Erro ao agendar"))
       }
     })
 
@@ -632,13 +688,31 @@ function QuickScheduleModal({
               )}
             </div>
           )}
+
+          {/* Já acertado com o responsável — típico de quem pediu pelo WhatsApp */}
+          {!isHistorical && (
+            <label className="flex items-start gap-2.5 rounded-lg border border-border bg-muted/30 px-3 py-2.5 cursor-pointer hover:bg-muted/50 transition-colors">
+              <input
+                type="checkbox"
+                checked={alreadyAgreed}
+                onChange={e => setAlreadyAgreed(e.target.checked)}
+                className="mt-0.5 h-4 w-4 shrink-0 accent-[#219EBC]"
+              />
+              <span className="text-xs leading-snug">
+                <span className="font-medium">Já combinei com o responsável</span>
+                <span className="block text-[11px] text-muted-foreground mt-0.5">
+                  Entra como <strong>Confirmada</strong>; avisa só o professor.
+                </span>
+              </span>
+            </label>
+          )}
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={pending}>Cancelar</Button>
           <Button onClick={submit} disabled={pending || !studentId || !subjectId}>
             {pending && <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />}
-            Agendar
+            {isHistorical ? "Importar" : alreadyAgreed ? "Agendar e confirmar" : "Agendar"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -896,11 +970,11 @@ function PendingApprovalModal({
 
   const approve = () => start(async () => {
     try {
-      await approveRequestAction(req.id, modality, showLocationToggle ? teacherOnsite : undefined)
+      ouFalhe(await approveRequestAction(req.id, modality, showLocationToggle ? teacherOnsite : undefined))
       toast.success(`Aula ${modality === "ONLINE" ? "online" : "presencial"} confirmada`)
       onClose()
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Erro ao aprovar")
+      toast.error(mensagemDeErro(e, "Erro ao aprovar"))
     }
   })
 
@@ -910,7 +984,7 @@ function PendingApprovalModal({
       toast.success("Solicitação recusada")
       onClose()
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Erro ao recusar")
+      toast.error(mensagemDeErro(e, "Erro ao recusar"))
     }
   })
 
@@ -1140,6 +1214,7 @@ interface AgendaGridProps {
   pendingRequests?:      PendingRequestSlot[]
   weekPendingRequests?:  PendingRequestSlot[]
   scheduledCount?:       number
+  notificationStatus:    NotificationStatus
 }
 
 export function AgendaGrid({
@@ -1147,6 +1222,7 @@ export function AgendaGrid({
   students, allStudents,
   weekLessons: initialWeekLessons, monthLessons: initialMonthLessons, initialView = "day",
   pendingRequests: initialPending, weekPendingRequests: initialWeekPending,
+  notificationStatus,
 }: AgendaGridProps) {
   // ── Data state (managed client-side after initial SSR) ────────────────────
 
@@ -1322,7 +1398,7 @@ export function AgendaGrid({
       studentId:     "",
       startMin,
       duration:      a.duration,
-      status:        "CONFIRMED",
+      status:        "SCHEDULED",
       modality:      a.modality,
       teacherOnsite: a.modality === "PRESENCIAL",
       time:          a.time,
@@ -1350,7 +1426,7 @@ export function AgendaGrid({
       endTime,
       enrolled:          groupSize,
       capacity:          a.capacity,
-      status:            "CONFIRMED",
+      status:            "SCHEDULED",
       modality:          a.modality,
       recurrenceGroupId: null,
     }
@@ -2051,6 +2127,7 @@ export function AgendaGrid({
           lesson={selectedLesson}
           teacherName={effectiveTeachers.find(t => t.id === selectedLesson.teacherId)?.name ?? ""}
           onClose={() => { setSelectedLesson(null); fetchData(curDate, view) }}
+          notificationStatus={notificationStatus}
         />
       )}
       {selectedPending && (

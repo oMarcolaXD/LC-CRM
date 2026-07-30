@@ -24,6 +24,7 @@ export const NAV_ITEMS: Record<Role, NavItem[]> = {
     { label: "Dashboard",  href: "/admin/dashboard",  icon: LayoutDashboard },
     { type: "section", label: "Agenda" },
     { label: "Agenda",     href: "/admin/agenda",     icon: CalendarDays    },
+    { label: "Aulões",     href: "/colaborador/auloes", icon: Library       },
     { type: "section", label: "Pessoas" },
     { label: "Alunos",      href: "/admin/alunos",      icon: GraduationCap   },
     { label: "Professores", href: "/admin/professores", icon: School          },

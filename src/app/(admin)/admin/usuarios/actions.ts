@@ -7,6 +7,7 @@ import { revalidatePath }   from "next/cache"
 import { redirect }         from "next/navigation"
 import bcrypt               from "bcryptjs"
 import { sendWelcomeEmail } from "@/lib/email"
+import { normalizeGrade } from "@/lib/constants/grades"
 import type { Role, EducationLevel, TeacherMode } from "@prisma/client"
 
 function generateStudentPassword(): string {
@@ -133,7 +134,7 @@ export async function createUserAction(
 
       } else if (guardianMode === "self") {
         await tx.student.create({
-          data: { userId: user.id, name, grade: grade ?? "Não informado", school, educationLevel: educationLevel as EducationLevel | undefined },
+          data: { userId: user.id, name, grade: normalizeGrade(grade) ?? "Não informado", school, educationLevel: educationLevel as EducationLevel | undefined },
         })
         const selfG = await tx.guardian.create({ data: { userId: user.id, relationship: "Próprio" } })
         await tx.student.update({ where: { userId: user.id }, data: { guardianId: selfG.id } })
@@ -144,7 +145,7 @@ export async function createUserAction(
         data: {
           userId:         user.id,
           name,
-          grade:          grade ?? "Não informado",
+          grade:          normalizeGrade(grade) ?? "Não informado",
           school,
           educationLevel: educationLevel as EducationLevel | undefined,
           guardianId:     resolvedGuardianId,
@@ -214,8 +215,8 @@ export async function updateUserAction(id: string, formData: FormData) {
       const gId = guardianId && guardianId.trim() ? guardianId.trim() : undefined
       await tx.student.upsert({
         where:  { userId: id },
-        update: { name: name ?? "Aluno", grade: grade ?? "Não informado", school, educationLevel: educationLevel as EducationLevel | undefined, guardianId: gId ?? null },
-        create: { userId: id, name: name ?? "Aluno", grade: grade ?? "Não informado", school, educationLevel: educationLevel as EducationLevel | undefined, guardianId: gId },
+        update: { name: name ?? "Aluno", grade: normalizeGrade(grade) ?? "Não informado", school, educationLevel: educationLevel as EducationLevel | undefined, guardianId: gId ?? null },
+        create: { userId: id, name: name ?? "Aluno", grade: normalizeGrade(grade) ?? "Não informado", school, educationLevel: educationLevel as EducationLevel | undefined, guardianId: gId },
       })
     }
     if (role === "TEACHER") {

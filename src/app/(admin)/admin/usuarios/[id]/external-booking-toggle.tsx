@@ -6,6 +6,7 @@ import { toast } from "sonner"
 import { Switch } from "@/components/ui/switch"
 import { setTeacherExternalBookingAction } from "../actions"
 import { CalendarCheck, CalendarOff, Loader2 } from "lucide-react"
+import { mensagemDeErro } from "@/lib/error-message"
 
 interface Props {
   teacherId: string
@@ -28,7 +29,7 @@ export function ExternalBookingToggle({ teacherId, enabled }: Props) {
         router.refresh()
       } catch (e) {
         setOn(!next) // reverte
-        toast.error(e instanceof Error ? e.message : "Erro ao atualizar")
+        toast.error(mensagemDeErro(e, "Erro ao atualizar"))
       }
     })
   }

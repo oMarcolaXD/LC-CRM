@@ -57,11 +57,11 @@ const STATUS_LABEL: Record<string, string> = {
 }
 
 const STATUS_CLASS: Record<string, string> = {
-  SCHEDULED: "bg-amber-100 text-amber-800 border-amber-300",
-  CONFIRMED: "bg-blue-100  text-blue-800  border-blue-300",
-  COMPLETED: "bg-slate-100 text-slate-700 border-slate-300",
-  CANCELLED: "bg-rose-100  text-rose-700  border-rose-300",
-  MISSED:    "bg-orange-100 text-orange-700 border-orange-300",
+  SCHEDULED: "bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/40 dark:text-amber-400 dark:border-amber-800",
+  CONFIRMED: "bg-blue-100  text-blue-800  border-blue-300  dark:bg-blue-900/40  dark:text-blue-400  dark:border-blue-800",
+  COMPLETED: "bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800/60 dark:text-slate-400 dark:border-slate-700",
+  CANCELLED: "bg-rose-100  text-rose-700  border-rose-300  dark:bg-rose-900/40  dark:text-rose-400  dark:border-rose-800",
+  MISSED:    "bg-orange-100 text-orange-700 border-orange-300 dark:bg-orange-900/40 dark:text-orange-400 dark:border-orange-800",
 }
 
 // ─── Componente principal ─────────────────────────────────────────────────────
@@ -116,7 +116,7 @@ export function AuloesListClient({
           <Button
             size="sm"
             variant="outline"
-            className="gap-1.5 border-blue-400/50 text-blue-700 hover:bg-blue-50"
+            className="gap-1.5 border-blue-400/50 text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/40"
             onClick={() => setShowGroupDialog(true)}
           >
             <Users className="w-4 h-4" />
@@ -161,15 +161,17 @@ export function AuloesListClient({
                 href={`/colaborador/auloes/${a.id}`}
                 className={`group block rounded-xl border p-4 space-y-3 transition-shadow hover:shadow-md ${
                   isAulao
-                    ? "bg-violet-50 border-violet-200 hover:border-violet-400"
-                    : "bg-blue-50 border-blue-200 hover:border-blue-400"
+                    ? "bg-violet-50 border-violet-200 hover:border-violet-400 dark:bg-violet-950/30 dark:border-violet-900 dark:hover:border-violet-700"
+                    : "bg-blue-50 border-blue-200 hover:border-blue-400 dark:bg-blue-950/30 dark:border-blue-900 dark:hover:border-blue-700"
                 }`}
               >
                 {/* Top row */}
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-1">
                     <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full shrink-0 ${
-                      isAulao ? "bg-violet-200 text-violet-800" : "bg-blue-200 text-blue-800"
+                      isAulao
+                        ? "bg-violet-200 text-violet-800 dark:bg-violet-900/60 dark:text-violet-300"
+                        : "bg-blue-200 text-blue-800 dark:bg-blue-900/60 dark:text-blue-300"
                     }`}>
                       {isAulao ? "Aulão" : "Grupo"}
                     </span>
@@ -187,7 +189,7 @@ export function AuloesListClient({
 
                 {/* Título */}
                 <div>
-                  <p className={`text-sm font-semibold leading-tight ${isAulao ? "text-violet-900" : "text-blue-900"}`}>
+                  <p className={`text-sm font-semibold leading-tight ${isAulao ? "text-violet-900 dark:text-violet-200" : "text-blue-900 dark:text-blue-200"}`}>
                     {a.title ?? a.subjectName}
                   </p>
                   <p className="text-xs text-muted-foreground mt-0.5">com {a.teacherName.split(" ")[0]} · {a.subjectName}</p>
@@ -204,11 +206,11 @@ export function AuloesListClient({
                 {/* Footer */}
                 <div className="flex items-center justify-between pt-1 border-t border-current/10">
                   <div className="flex items-center gap-3 text-xs">
-                    <span className={`flex items-center gap-1 font-medium ${isFull ? "text-rose-600" : "text-muted-foreground"}`}>
+                    <span className={`flex items-center gap-1 font-medium ${isFull ? "text-rose-600 dark:text-rose-400" : "text-muted-foreground"}`}>
                       <Users className="w-3.5 h-3.5" />
                       {countLabel} aluno{a.enrolled !== 1 ? "s" : ""}
                     </span>
-                    <span className={`flex items-center gap-1 ${a.isFree ? "text-emerald-600" : "text-amber-700"}`}>
+                    <span className={`flex items-center gap-1 ${a.isFree ? "text-emerald-600 dark:text-emerald-400" : "text-amber-700 dark:text-amber-400"}`}>
                       {a.isFree
                         ? <><CheckCircle2 className="w-3.5 h-3.5" /> Gratuito</>
                         : <><Tag className="w-3.5 h-3.5" /> Pago</>

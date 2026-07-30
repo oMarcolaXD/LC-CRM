@@ -8,6 +8,9 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { sendConfirmationsBatchAction } from "@/lib/actions/colaborador"
+import { NotificationConfigWarning } from "./notification-config-warning"
+import type { NotificationStatus } from "@/lib/notifications/status"
+import { mensagemDeErro } from "@/lib/error-message"
 
 // ─── Tipos públicos ────────────────────────────────────────────────────────────
 
@@ -292,10 +295,11 @@ interface ConfirmacoesModalProps {
   onClose:     () => void
   items:       ConfirmacaoItem[]
   dateLabel:   string
+  notificationStatus: NotificationStatus
 }
 
 export function ConfirmacoesModal({
-  open, onClose, items, dateLabel,
+  open, onClose, items, dateLabel, notificationStatus,
 }: ConfirmacoesModalProps) {
   const responsaveis = items.filter(i => i.tipo === "responsavel")
   const professores  = items.filter(i => i.tipo === "professor")
@@ -331,18 +335,29 @@ export function ConfirmacoesModal({
   const handleSend = () =>
     start(async () => {
       try {
-        await sendConfirmationsBatchAction(
+        const { delivered, confirmed, problema } = await sendConfirmationsBatchAction(
           selectedItems.map(i => ({
-            key:          i.key,
-            lessonId:     i.lessonId,
-            destinatario: i.tipo === "professor" ? "professor" : "responsavel",
-            mensagem:     previews[i.key] ?? i.preview,
+            key:      i.key,
+            lessonId: i.lessonId,
+            tipo:     i.tipo,
+            mensagem: previews[i.key] ?? i.preview,
           }))
         )
-        toast.success(`${selectedItems.length} mensagens enviadas!`)
+
+        // Nada entregue: mostra o motivo em vez de "enviadas!"
+        if (problema) {
+          toast.warning(problema)
+        } else {
+          const partes = [`${delivered} mensagem${delivered !== 1 ? "ns" : ""} entregue${delivered !== 1 ? "s" : ""}`]
+          if (confirmed > 0) partes.push(`${confirmed} aula${confirmed !== 1 ? "s" : ""} confirmada${confirmed !== 1 ? "s" : ""}`)
+          if (delivered < selectedItems.length) {
+            partes.push(`${selectedItems.length - delivered} não saíram`)
+          }
+          toast.success(partes.join(" · "))
+        }
         onClose()
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Erro ao enviar")
+        toast.error(mensagemDeErro(e, "Erro ao enviar"))
       }
     })
 
@@ -390,6 +405,13 @@ export function ConfirmacoesModal({
             </button>
           </div>
         </DialogHeader>
+
+        {/* ── Aviso de canal não configurado ── */}
+        {notificationStatus.aviso && (
+          <div className="shrink-0 border-b border-border px-[22px] py-[12px]">
+            <NotificationConfigWarning status={notificationStatus} variant="inline" />
+          </div>
+        )}
 
         {/* ── Controles ── */}
         <div

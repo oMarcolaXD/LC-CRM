@@ -12,6 +12,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog"
 import { CheckCircle2, Loader2, RotateCcw, CalendarClock } from "lucide-react"
+import { mensagemDeErro } from "@/lib/error-message"
 
 interface Row {
   teacherId:         string
@@ -40,7 +41,7 @@ export function PayoutRow({ row }: { row: Row }) {
         toast.success(paid ? "Repasse marcado como pago" : "Repasse reaberto")
         router.refresh()
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Erro ao atualizar repasse")
+        toast.error(mensagemDeErro(e, "Erro ao atualizar repasse"))
       }
     })
   }
@@ -118,7 +119,7 @@ function PayWindowDialog({
         toast.success("Dia de pagamento atualizado")
         onSaved()
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Erro ao salvar")
+        toast.error(mensagemDeErro(err, "Erro ao salvar"))
       }
     })
   }

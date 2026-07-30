@@ -1,4 +1,6 @@
 import { prisma }             from "@/lib/prisma"
+import { getNotificationStatus } from "@/lib/notifications/status"
+import { NotificationConfigWarning } from "@/components/shared/notification-config-warning"
 import { DayStarterBanner }   from "@/components/shared/day-starter-banner"
 import type { ConfirmacaoItem } from "@/components/shared/day-starter-banner"
 import { AgendaGrid }         from "./agenda-grid"
@@ -371,12 +373,17 @@ export default async function ColaboradorAgendaPage({ searchParams }: AgendaPage
 
   const weekday = format(dateObj, "EEEE", { locale: ptBR })
 
+  // Situação dos canais de envio — avisa antes do atendente tentar confirmar
+  const notificationStatus = getNotificationStatus()
+
   return (
     <div className="space-y-4">
+      <NotificationConfigWarning status={notificationStatus} />
       <DayStarterBanner
         scheduledCount={scheduledCount}
         confirmacaoItems={confirmacaoItems}
         dateLabel={`${weekday.charAt(0).toUpperCase() + weekday.slice(1)}, ${format(dateObj, "dd 'de' MMMM", { locale: ptBR })}`}
+        notificationStatus={notificationStatus}
       />
       <AgendaGrid
         date={dateStr}
@@ -392,6 +399,7 @@ export default async function ColaboradorAgendaPage({ searchParams }: AgendaPage
         pendingRequests={pendingRequests}
         weekPendingRequests={weekPendingRequests}
         scheduledCount={scheduledCount}
+        notificationStatus={notificationStatus}
       />
       <AgendaLegend />
     </div>

@@ -12,6 +12,8 @@ import {
   Users, Loader2, MapPin, Wifi, Building2, Home, X, BookOpen,
 } from "lucide-react"
 import { format } from "date-fns"
+import { mensagemDeErro } from "@/lib/error-message"
+import { ouFalhe } from "@/lib/action-result"
 
 interface StudentOption { id: string; name: string }
 interface TeacherOption {
@@ -118,7 +120,7 @@ export function CreateAulaoDialog({ open, onClose, students, teachers, defaultDa
 
     start(async () => {
       try {
-        const result = await createAulaoAction({
+        const result = ouFalhe(await createAulaoAction({
           teacherId,
           subjectId,
           title:           title.trim(),
@@ -132,7 +134,7 @@ export function CreateAulaoDialog({ open, onClose, students, teachers, defaultDa
           studentIds:      selectedStudentIds,
           teacherOnsite:   modality === "ONLINE" ? teacherOnsite : undefined,
           recurrence:      recurrence ? { rule: recurrence, endsAt: recurrenceEndsAt } : undefined,
-        })
+        }))
         toast.success("Aulão criado com sucesso")
         if (result?.id) {
           onCreated?.({
@@ -151,7 +153,7 @@ export function CreateAulaoDialog({ open, onClose, students, teachers, defaultDa
         }
         handleClose()
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Erro ao criar aulão")
+        toast.error(mensagemDeErro(e, "Erro ao criar aulão"))
       }
     })
   }

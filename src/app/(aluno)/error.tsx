@@ -18,12 +18,13 @@ export default function Error({
             <AlertTriangle className="w-7 h-7 text-destructive" />
           </div>
         </div>
-        <h2 className="font-heading text-xl">Erro inesperado</h2>
+        <h2 className="font-heading text-xl">Não foi possível carregar</h2>
         <p className="text-muted-foreground text-sm">
-          Nao foi possivel carregar esta pagina. Tente novamente ou volte ao inicio.
+          Algo deu errado ao abrir esta página. Tente novamente — se continuar,
+          avise o suporte informando o código abaixo.
         </p>
         {error.digest && (
-          <p className="text-xs text-muted-foreground/60">Codigo: {error.digest}</p>
+          <p className="text-xs text-muted-foreground/60">Código de suporte: {error.digest}</p>
         )}
         <div className="flex gap-3 justify-center">
           <Button onClick={reset}>Tentar novamente</Button>

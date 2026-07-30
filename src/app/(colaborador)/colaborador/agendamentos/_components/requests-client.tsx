@@ -7,6 +7,7 @@ import { RequestCard } from "@/components/shared/request-card"
 import { bulkApproveRequestsAction, bulkRejectRequestsAction } from "@/lib/actions/lesson-request"
 import { CheckCircle2, XCircle, Loader2 } from "lucide-react"
 import { toast } from "sonner"
+import { mensagemDeErro } from "@/lib/error-message"
 
 export interface RequestData {
   id:              string
@@ -67,7 +68,7 @@ export function RequestsClient({ groups }: RequestsClientProps) {
           toast.error(`${result.failed.length} falharam — verifique pacote/conflitos`)
         setSelected(new Set())
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Erro")
+        toast.error(mensagemDeErro(e, "Erro"))
       }
     })
   }
@@ -80,7 +81,7 @@ export function RequestsClient({ groups }: RequestsClientProps) {
         toast.success(`${ids.length} solicitação(ões) recusada(s)`)
         setSelected(new Set())
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Erro")
+        toast.error(mensagemDeErro(e, "Erro"))
       }
     })
   }
