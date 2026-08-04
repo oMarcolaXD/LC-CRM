@@ -84,7 +84,10 @@ const COLUMNS: ColumnDef[] = [
 function classify(student: StudentRow): BoardColumn {
   // Turma ativa vem primeiro: o contrato por período é o que rege a situação
   // desse aluno, então ele não entra na régua de saldo de pacote.
-  if (student.enrollments.length > 0) return "turma"
+  // O `?.` é proposital: as páginas que montam StudentRow usam
+  // `as unknown as`, então uma query que esqueça `enrollments` passa pelo tsc
+  // e só quebraria aqui, em produção.
+  if ((student.enrollments?.length ?? 0) > 0) return "turma"
 
   const pkg = student.packages[0] ?? null
   if (!pkg) return "novos"
@@ -113,7 +116,7 @@ function ListRow({ student, detailBasePath }: { student: StudentRow; detailBaseP
   const waPhone       = guardianPhone ?? studentPhone
   const detailHref    = `${detailBasePath}/${student.id}`
 
-  const turma = student.enrollments[0]?.course ?? null
+  const turma = student.enrollments?.[0]?.course ?? null
 
   const badgeCls = turma ? "bg-violet-100 text-violet-700"
     : remaining === 0 || pkg?.status === "EXHAUSTED"

@@ -26,6 +26,13 @@ export default async function AdminAlunosPage() {
         orderBy: { dueDate: "desc" },
         take:    1,
       },
+      // Turmas em andamento: quem acompanha por contrato não é "sem pacote".
+      // Precisa espelhar a query de /colaborador/alunos — as duas telas
+      // alimentam o mesmo StudentsBoard.
+      enrollments: {
+        where:   { course: { status: "ACTIVE" } },
+        include: { course: true },
+      },
       _count: {
         select: {
           packages:       true,

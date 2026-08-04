@@ -112,7 +112,7 @@ export function StudentBoardCard({ student, column, detailBasePath }: StudentBoa
   const guardianPhone = guardianUser?.phone?.replace(/\D/g, "") ?? null
   const studentPhone  = student.user?.phone?.replace(/\D/g, "") ?? null
   const waPhone       = guardianPhone ?? studentPhone
-  const turma         = student.enrollments[0]?.course ?? null
+  const turma         = student.enrollments?.[0]?.course ?? null
 
   const status       = getStatusInfo(pkg, turma)
   const isInactive   = student.user?.active === false
