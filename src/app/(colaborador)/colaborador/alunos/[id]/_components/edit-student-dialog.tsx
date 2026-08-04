@@ -19,6 +19,7 @@ import { mensagemDeErro } from "@/lib/error-message"
 interface Props {
   student: {
     id:     string
+    ra:     string
     name:   string
     grade:  string
     school: string | null
@@ -27,7 +28,6 @@ interface Props {
     active: boolean
     user: {
       email: string | null
-      phone: string | null
     } | null
   }
   guardian: {
@@ -47,7 +47,6 @@ export function EditStudentDialog({ student, guardian }: Props) {
   const [name,          setName]          = useState(student.name)
   const [grade,         setGrade]         = useState(student.grade)
   const [school,        setSchool]        = useState(student.school ?? "")
-  const [phone,         setPhone]         = useState(student.user?.phone ?? "")
   const [email,         setEmail]         = useState(student.user?.email ?? "")
   const [notes,         setNotes]         = useState(student.notes ?? "")
   const [tags,          setTags]          = useState(student.tags.join(", "))
@@ -61,7 +60,6 @@ export function EditStudentDialog({ student, guardian }: Props) {
       setName(student.name)
       setGrade(student.grade)
       setSchool(student.school ?? "")
-      setPhone(student.user?.phone ?? "")
       setEmail(student.user?.email ?? "")
       setNotes(student.notes ?? "")
       setTags(student.tags.join(", "))
@@ -84,7 +82,6 @@ export function EditStudentDialog({ student, guardian }: Props) {
           name:         name.trim(),
           grade,
           school:       school || undefined,
-          phone:        phone  || undefined,
           email:        email  || undefined,
           notes:        notes  || undefined,
           tags:         tags   || undefined,
@@ -141,6 +138,16 @@ export function EditStudentDialog({ student, guardian }: Props) {
                 </div>
 
                 <div className="space-y-1.5">
+                  <Label className="text-xs">R.A.</Label>
+                  <Input
+                    value={student.ra}
+                    readOnly
+                    disabled
+                    className="h-9 font-mono tabular-nums"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
                   <Label className="text-xs">Série / Ano *</Label>
                   <select
                     value={grade}
@@ -172,17 +179,11 @@ export function EditStudentDialog({ student, guardian }: Props) {
                     className="h-9"
                   />
                 </div>
-
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Telefone / WhatsApp</Label>
-                  <PhoneInput
-                    key={`phone-${open}`}
-                    value={phone}
-                    onChange={(raw) => setPhone(raw)}
-                    className="h-9"
-                  />
-                </div>
               </div>
+
+              <p className="text-xs text-muted-foreground">
+                O telefone de contato é o do responsável — o aluno é identificado pelo R.A.
+              </p>
             </div>
 
             {/* Tags */}

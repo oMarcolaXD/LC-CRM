@@ -35,7 +35,9 @@ export async function cancelLessonDirectAction(
 
   const studentId = lesson.participants[0]?.studentId ?? null
 
-  const activePkg = studentId
+  // Aula de turma não saiu de pacote nenhum (o contrato é por período), então
+  // cancelá-la também não devolve saldo — devolver criaria aula do nada.
+  const activePkg = studentId && !lesson.courseId
     ? await prisma.lessonPackage.findFirst({
         where:   { studentId, status: { in: ["ACTIVE", "EXHAUSTED"] } },
         orderBy: { purchaseDate: "desc" },
@@ -110,7 +112,8 @@ export async function approveLessonCancellationAction(requestId: string): Promis
   const { lesson } = request
   const studentId  = lesson.participants[0]?.studentId ?? null
 
-  const activePkg = studentId
+  // Ver cancelLessonDirectAction: aula de turma não devolve saldo de pacote.
+  const activePkg = studentId && !lesson.courseId
     ? await prisma.lessonPackage.findFirst({
         where:   { studentId, status: { in: ["ACTIVE", "EXHAUSTED"] } },
         orderBy: { purchaseDate: "desc" },

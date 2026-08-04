@@ -7,6 +7,7 @@ import { HistoryPagination } from "@/components/shared/history-pagination"
 import { format, formatDistanceToNow, subDays, differenceInMonths } from "date-fns"
 import { ptBR }         from "date-fns/locale"
 import { formatBR }     from "@/lib/datetime"
+import { descreverGrade, descreverPeriodo } from "@/lib/course"
 import { buttonVariants } from "@/components/ui/button"
 import { Badge }         from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -130,6 +131,10 @@ export default async function StudentDetailPage({ params, searchParams }: Props)
         packages:     { orderBy: { purchaseDate: "asc" } },
         payments:     { orderBy: { dueDate: "desc" }, take: 10 },
         studentNotes: { include: { author: true }, orderBy: { createdAt: "desc" }, take: 5 },
+        enrollments:  {
+          where:   { course: { status: "ACTIVE" } },
+          include: { course: { include: { teacher: { include: { user: { select: { name: true } } } } } } },
+        },
       },
     }),
     prisma.lesson.count({
@@ -211,6 +216,7 @@ export default async function StudentDetailPage({ params, searchParams }: Props)
 
   // ─── Computed values ─────────────────────────────────────────────────────
 
+  const turmasAtivas = student.enrollments
   const activePkg   = student.packages.find(p => p.status === "ACTIVE") ?? null
   const pkgIndex    = student.packages.findIndex(p => p.status === "ACTIVE")
   const packageCode = pkgIndex >= 0 ? `PKT-${String(pkgIndex + 1).padStart(3, "0")}` : null
@@ -299,7 +305,10 @@ export default async function StudentDetailPage({ params, searchParams }: Props)
         <div className="flex items-start gap-3 bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-xl text-sm">
           <Check className="w-4 h-4 mt-0.5 shrink-0 text-green-600" />
           <div>
-            <p className="font-semibold">Ficha digitalizada com sucesso!</p>
+            <p className="font-semibold">
+              Ficha digitalizada com sucesso!
+              <span className="ml-2 font-mono tabular-nums">R.A. {student.ra}</span>
+            </p>
             <p className="text-xs text-green-700 mt-0.5">
               {Number(aulas) > 0 && <>{aulas} aula{Number(aulas) !== 1 ? "s" : ""} importada{Number(aulas) !== 1 ? "s" : ""}</>}
               {Number(aulas) > 0 && Number(pagamentos) > 0 && " · "}
@@ -353,14 +362,29 @@ export default async function StudentDetailPage({ params, searchParams }: Props)
           <div className="flex-1 min-w-0">
             <div className="flex flex-wrap items-center gap-2 mb-1">
               <h1 className="font-sub text-xl font-bold">{student.name}</h1>
+              <span
+                className="text-xs font-medium px-2 py-0.5 rounded-full bg-primary/10 text-primary font-mono tabular-nums"
+                title="Registro do Aluno"
+              >
+                R.A. {student.ra}
+              </span>
               {isInactive && (
                 <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 border border-gray-300">
                   Ex-aluno
                 </span>
               )}
-              <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${activePkg ? "bg-green-100 text-green-700" : "bg-muted text-muted-foreground"}`}>
-                {activePkg ? "Ativa" : "Sem pacote"}
-              </span>
+              {turmasAtivas.length > 0 && (
+                <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-400">
+                  Acompanhamento
+                </span>
+              )}
+              {/* Só cobra pacote de quem não está em turma — quem acompanha por
+                  contrato não deve ser lido como "sem pacote". */}
+              {(activePkg || turmasAtivas.length === 0) && (
+                <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${activePkg ? "bg-green-100 text-green-700" : "bg-muted text-muted-foreground"}`}>
+                  {activePkg ? "Ativa" : "Sem pacote"}
+                </span>
+              )}
               {activePkg && Number(activePkg.remainingLessons) <= 4 && (
                 <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700">
                   {Number(activePkg.remainingLessons) <= 1 ? "Atenção" : "Renovar em breve"}
@@ -385,10 +409,11 @@ export default async function StudentDetailPage({ params, searchParams }: Props)
                   {student.user?.email ?? guardianUser?.email}
                 </span>
               )}
-              {(student.user?.phone || guardianUser?.phone) && (
+              {guardianUser?.phone && (
                 <span className="flex items-center gap-1.5">
                   <Phone className="w-3.5 h-3.5 shrink-0" />
-                  {student.user?.phone ?? guardianUser?.phone}
+                  {guardianUser.phone}
+                  <span className="text-xs">(resp.)</span>
                 </span>
               )}
               <span className="flex items-center gap-1.5 text-xs">
@@ -403,15 +428,14 @@ export default async function StudentDetailPage({ params, searchParams }: Props)
             <EditStudentDialog
               student={{
                 id:     student.id,
+                ra:     student.ra,
                 name:   student.name,
                 grade:  student.grade,
                 school: student.school,
                 notes:  student.notes,
                 tags:   student.tags,
                 active: student.user?.active ?? true,
-                user:   student.user
-                  ? { email: student.user.email ?? null, phone: student.user.phone ?? null }
-                  : null,
+                user:   student.user ? { email: student.user.email ?? null } : null,
               }}
               guardian={guardian && guardianUser
                 ? { user: { name: guardianUser.name, email: guardianUser.email ?? null, phone: guardianUser.phone ?? null } }
@@ -531,8 +555,36 @@ export default async function StudentDetailPage({ params, searchParams }: Props)
         {/* ── Coluna principal (col-span-2) ─────────────────────────────── */}
         <div className="lg:col-span-2 space-y-4">
 
+          {/* Turmas em andamento — contrato por período, não consome pacote */}
+          {turmasAtivas.map(({ course }) => (
+            <Link
+              key={course.id}
+              href={`/colaborador/turmas/${course.id}`}
+              className="block rounded-xl border border-violet-200 bg-violet-50/50 dark:border-violet-900 dark:bg-violet-950/20 px-4 py-3 hover:border-violet-400 transition-colors"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-violet-900 dark:text-violet-300">{course.name}</p>
+                  <p className="text-xs text-violet-700/80 dark:text-violet-400/80 mt-0.5">
+                    {[
+                      descreverGrade(course.weekday, course.startTime),
+                      descreverPeriodo(course.startDate, course.endDate),
+                      course.teacher?.user.name,
+                    ].filter(Boolean).join(" · ")}
+                  </p>
+                </div>
+                <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300 shrink-0">
+                  Acompanhamento
+                </span>
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-2">
+                As aulas desta turma não descontam do pacote — o contrato do período já cobre.
+              </p>
+            </Link>
+          ))}
+
           {/* Package timeline */}
-          {!activePkg && (
+          {!activePkg && turmasAtivas.length === 0 && (
             <div className="rounded-xl border border-dashed border-border bg-card/50 px-4 py-6 flex flex-col items-center gap-3 text-center">
               <BookOpen className="w-8 h-8 text-muted-foreground/30" />
               <p className="text-sm text-muted-foreground">Nenhum pacote ativo</p>

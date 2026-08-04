@@ -224,10 +224,20 @@ export function UserForm({
               </Label>
               <Input id="email" name="email" type="email" defaultValue={defaultValues?.email} placeholder="joao@email.com" />
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="phone">Telefone / WhatsApp *</Label>
-              <PhoneInput id="phone" name="phone" value={defaultValues?.phone ?? ""} required />
-            </div>
+            {role === "STUDENT" ? (
+              <div className="space-y-1.5">
+                <Label>Telefone / WhatsApp</Label>
+                <div className="flex items-center gap-2 h-10 rounded-lg border border-dashed border-border px-3 text-xs text-muted-foreground">
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0 text-[#219EBC]" />
+                  Contato fica no responsável — o aluno é identificado pelo R.A.
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                <Label htmlFor="phone">Telefone / WhatsApp *</Label>
+                <PhoneInput id="phone" name="phone" value={defaultValues?.phone ?? ""} required />
+              </div>
+            )}
           </div>
 
           {role === "STUDENT" && !isEdit ? (

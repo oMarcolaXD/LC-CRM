@@ -19,6 +19,7 @@ import { randomUUID }        from "crypto"
 import { calcFee, type FeeRate } from "@/lib/fees"
 import { comResultado, type ActionResult } from "@/lib/action-result"
 import { normalizeGrade } from "@/lib/constants/grades"
+import { gerarRA }        from "@/lib/ra"
 
 /** Carrega as regras de taxa de cartão ativas (para snapshot em Payment.feeAmount). */
 async function loadFeeRates(): Promise<FeeRate[]> {
@@ -73,7 +74,6 @@ const newStudentSchema = z.object({
   name:          z.string().min(3, "Nome deve ter no mínimo 3 caracteres"),
   email:         z.string().email("E-mail inválido").optional().or(z.literal("")),
   password:      z.string().min(6, "Senha deve ter no mínimo 6 caracteres").optional().or(z.literal("")),
-  phone:         z.string().optional(),
   grade:         z.string().optional(),
   school:        z.string().optional(),
   guardianName:  z.string().min(3, "Nome do responsável é obrigatório"),
@@ -91,7 +91,7 @@ export async function createStudentWithGuardianAction(formData: FormData) {
     redirect(`/colaborador/alunos/novo?error=${encodeURIComponent(msg)}`)
   }
 
-  const { name, email, phone, grade, school,
+  const { name, email, grade, school,
           guardianName, guardianPhone, guardianEmail } = parsed.data
 
   // E-mail do aluno é opcional — normaliza vazio para null (login fica pelo responsável)
@@ -162,8 +162,9 @@ export async function createStudentWithGuardianAction(formData: FormData) {
   const gPass = guardianName ? await bcrypt.hash(`Resp@${Math.random().toString(36).slice(2, 8)}`, 12) : ""
 
   await prisma.$transaction(async (tx) => {
+    // Aluno não tem telefone: o contato é sempre o do responsável.
     const studentUser = await tx.user.create({
-      data: { name, email: studentEmail, password: hashed, phone, role: "STUDENT", active: !inactive },
+      data: { name, email: studentEmail, password: hashed, role: "STUDENT", active: !inactive },
     })
 
     let guardianId: string | undefined
@@ -186,6 +187,7 @@ export async function createStudentWithGuardianAction(formData: FormData) {
     const student = await tx.student.create({
       data: {
         userId:    studentUser.id,
+        ra:        await gerarRA(tx),
         name:      studentUser.name,
         grade:     normalizeGrade(grade) ?? "Não informado",
         school,
@@ -275,7 +277,6 @@ const importRowSchema = z.object({
   nome:                z.string().min(1),
   email:               z.string().email(),
   senha:               z.string().min(6).default("Aluno@2025"),
-  telefone:            z.string().optional(),
   dataNascimento:      z.string().optional(),
   serie:               z.string().optional(),
   escola:              z.string().optional(),
@@ -306,7 +307,7 @@ export async function importStudentsAction(rows: unknown[]): Promise<ImportResul
     }
 
     const {
-      nome, email, senha, telefone, serie, escola,
+      nome, email, senha, serie, escola,
       nomeResponsavel, telefoneResponsavel, emailResponsavel,
     } = parsed.data
 
@@ -321,7 +322,7 @@ export async function importStudentsAction(rows: unknown[]): Promise<ImportResul
 
       await prisma.$transaction(async (tx) => {
         const studentUser = await tx.user.create({
-          data: { name: nome, email, password: hashed, phone: telefone, role: "STUDENT" },
+          data: { name: nome, email, password: hashed, role: "STUDENT" },
         })
 
         let guardianId: string | undefined
@@ -347,6 +348,7 @@ export async function importStudentsAction(rows: unknown[]): Promise<ImportResul
         await tx.student.create({
           data: {
             userId:    studentUser.id,
+            ra:        await gerarRA(tx),
             name:      studentUser.name,
             grade:     normalizeGrade(serie) ?? "Não informado",
             school:    escola,
@@ -373,7 +375,6 @@ const updateStudentSchema = z.object({
   name:          z.string().min(2, "Nome deve ter no mínimo 2 caracteres"),
   grade:         z.string().min(1, "Série é obrigatória"),
   school:        z.string().optional(),
-  phone:         z.string().optional(),
   email:         z.string().email("E-mail inválido").optional().or(z.literal("")),
   notes:         z.string().optional(),
   tags:          z.string().optional(),
@@ -388,7 +389,6 @@ export async function updateStudentAction(input: {
   name:           string
   grade:          string
   school?:        string
-  phone?:         string
   email?:         string
   notes?:         string
   tags?:          string
@@ -402,7 +402,7 @@ export async function updateStudentAction(input: {
   const parsed = updateStudentSchema.safeParse(input)
   if (!parsed.success) throw new Error(parsed.error.issues[0]?.message ?? "Dados inválidos")
 
-  const { studentId, name, grade, school, phone, email, notes, tags, active,
+  const { studentId, name, grade, school, email, notes, tags, active,
           guardianName, guardianPhone, guardianEmail } = parsed.data
 
   const student = await prisma.student.findUnique({
@@ -426,7 +426,6 @@ export async function updateStudentAction(input: {
         where: { id: student.userId },
         data: {
           name,
-          phone: phone || null,
           ...(email ? { email } : {}),
           ...(active !== undefined ? { active } : {}),
         },

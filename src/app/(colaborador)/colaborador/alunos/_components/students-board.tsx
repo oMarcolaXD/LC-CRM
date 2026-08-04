@@ -7,7 +7,7 @@ import { ptBR }                        from "date-fns/locale"
 import {
   GraduationCap, Plus, Upload, LayoutGrid, List,
   Search, MessageCircle, CalendarDays, UserRound,
-  ArrowDownWideNarrow, School as SchoolIcon, Mail, Phone,
+  ArrowDownWideNarrow, School as SchoolIcon, Mail,
 } from "lucide-react"
 import { buttonVariants }              from "@/components/ui/button"
 import { Input }                       from "@/components/ui/input"
@@ -17,6 +17,7 @@ import {
 }                                      from "@/components/ui/select"
 import { StudentBoardCard }            from "./student-board-card"
 import type { StudentRow, BoardColumn } from "./student-board-card"
+import { descreverGrade }               from "@/lib/course"
 
 // Normaliza texto para busca: remove acentos e caixa (ex.: "José" → "jose")
 const norm = (s: string) => s.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase()
@@ -41,6 +42,13 @@ interface ColumnDef {
 }
 
 const COLUMNS: ColumnDef[] = [
+  {
+    id:          "turma",
+    title:       "Acompanhamento",
+    description: "contrato por período",
+    topBorder:   "border-t-violet-400",
+    headerBg:    "bg-violet-50 dark:bg-violet-950/20",
+  },
   {
     id:          "novos",
     title:       "Recém-cadastrados",
@@ -74,6 +82,10 @@ const COLUMNS: ColumnDef[] = [
 // ── Classification ────────────────────────────────────────────────────────────
 
 function classify(student: StudentRow): BoardColumn {
+  // Turma ativa vem primeiro: o contrato por período é o que rege a situação
+  // desse aluno, então ele não entra na régua de saldo de pacote.
+  if (student.enrollments.length > 0) return "turma"
+
   const pkg = student.packages[0] ?? null
   if (!pkg) return "novos"
 
@@ -95,19 +107,23 @@ function ListRow({ student, detailBasePath }: { student: StudentRow; detailBaseP
   const nextLesson   = student.participations[0]?.lesson ?? null
   const guardianUser = student.guardian?.user ?? null
   const guardianPhone = guardianUser?.phone?.replace(/\D/g, "") ?? null
+  // Fallback só para fichas antigas: aluno novo não tem telefone próprio.
   const studentPhone  = student.user?.phone?.replace(/\D/g, "") ?? null
-  const studentPhoneRaw = student.user?.phone ?? null
   const studentEmail  = student.user?.email ?? null
   const waPhone       = guardianPhone ?? studentPhone
   const detailHref    = `${detailBasePath}/${student.id}`
 
-  const badgeCls = remaining === 0 || pkg?.status === "EXHAUSTED"
+  const turma = student.enrollments[0]?.course ?? null
+
+  const badgeCls = turma ? "bg-violet-100 text-violet-700"
+    : remaining === 0 || pkg?.status === "EXHAUSTED"
     ? "bg-red-100 text-red-700"
     : remaining <= 1 ? "bg-orange-100 text-orange-700"
     : remaining <= 4 ? "bg-yellow-100 text-yellow-700"
     : "bg-green-100 text-green-700"
 
-  const badgeLabel = !pkg ? "Sem pacote"
+  const badgeLabel = turma ? "Turma ativa"
+    : !pkg ? "Sem pacote"
     : remaining === 0 || pkg.status === "EXHAUSTED" ? "Pacote esgotou"
     : remaining === 1 ? "Última aula"
     : `${remaining} aulas`
@@ -123,8 +139,18 @@ function ListRow({ student, detailBasePath }: { student: StudentRow; detailBaseP
         <div className="min-w-0 flex-1 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
             <p className="font-medium text-sm">{displayName}</p>
+            <span className="text-xs font-mono tabular-nums text-muted-foreground" title="Registro do Aluno">
+              {student.ra}
+            </span>
             <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${badgeCls}`}>{badgeLabel}</span>
           </div>
+
+          {turma && (
+            <p className="text-xs text-violet-600 dark:text-violet-400 truncate">
+              {turma.name}
+              {descreverGrade(turma.weekday, turma.startTime) && ` · ${descreverGrade(turma.weekday, turma.startTime)}`}
+            </p>
+          )}
 
           {/* Identidade (série · escola) */}
           {(student.grade || student.school) && (
@@ -144,15 +170,9 @@ function ListRow({ student, detailBasePath }: { student: StudentRow; detailBaseP
             </div>
           )}
 
-          {/* Contatos rápidos (aluno e responsável) */}
-          {(studentEmail || studentPhoneRaw || guardianUser) && (
+          {/* Contatos rápidos (e-mail do aluno + responsável) */}
+          {(studentEmail || guardianUser) && (
             <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
-              {studentPhoneRaw && (
-                <span className="flex items-center gap-1.5">
-                  <Phone className="w-3 h-3 shrink-0" />
-                  {studentPhoneRaw}
-                </span>
-              )}
               {studentEmail && (
                 <span className="flex items-center gap-1.5 min-w-0">
                   <Mail className="w-3 h-3 shrink-0" />
@@ -235,9 +255,9 @@ export function StudentsBoard({
       if (q) {
         const matchName     = norm(s.name?.trim() || s.user?.name || "").includes(q)
         const matchGuardian = s.guardian?.user.name ? norm(s.guardian.user.name).includes(q) : false
-        const matchPhone    = (s.user?.phone ?? "").includes(q)
-                           || (s.guardian?.user.phone ?? "").includes(q)
-        if (!matchName && !matchGuardian && !matchPhone) return false
+        const matchRA       = s.ra.includes(q)
+        const matchPhone    = (s.guardian?.user.phone ?? "").includes(q)
+        if (!matchName && !matchGuardian && !matchRA && !matchPhone) return false
       }
       return true
     })
@@ -262,7 +282,7 @@ export function StudentsBoard({
 
   const byColumn = useMemo(() => {
     const map: Record<BoardColumn, StudentRow[]> = {
-      atencao: [], renovar: [], "em-dia": [], novos: [],
+      atencao: [], renovar: [], "em-dia": [], novos: [], turma: [],
     }
     for (const s of sorted) map[classify(s)].push(s)
     return map
@@ -301,7 +321,7 @@ export function StudentsBoard({
         <div className="relative flex-1 min-w-45">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
           <Input
-            placeholder="Aluno, responsável, telefone..."
+            placeholder="Aluno, R.A., responsável, telefone..."
             value={search}
             onChange={e => setSearch(e.target.value)}
             className="pl-9 h-9"

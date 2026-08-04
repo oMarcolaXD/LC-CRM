@@ -30,6 +30,9 @@ export async function enrollStudentInAulaoAction(lessonId: string, studentId: st
   })
   if (!lesson) throw new Error("Aulão não encontrado")
   if (!["AULAO", "GROUP"].includes(lesson.lessonType)) throw new Error("Esta aula não é um aulão")
+  // Encontro de turma se gerencia pela matrícula, em /colaborador/turmas —
+  // inscrever por aqui geraria uma cobrança avulsa em cima do contrato.
+  if (lesson.courseId) throw new Error("Este é um encontro de turma — use a matrícula da turma")
   if (["COMPLETED", "CANCELLED"].includes(lesson.status)) throw new Error("Não é possível inscrever em aulão já encerrado")
 
   const alreadyEnrolled = lesson.participants.some(p => p.studentId === studentId)
@@ -78,6 +81,8 @@ export async function unenrollStudentFromAulaoAction(lessonId: string, studentId
   })
   if (!lesson) throw new Error("Aulão não encontrado")
   if (lesson.status === "COMPLETED") throw new Error("Não é possível desinscrever de aulão já realizado")
+  // Ver enrollStudentInAulaoAction: quem manda na turma é a matrícula.
+  if (lesson.courseId) throw new Error("Este é um encontro de turma — remova o aluno pela turma")
 
   const participant = lesson.participants.find(p => p.studentId === studentId)
   if (!participant) throw new Error("Aluno não está inscrito neste aulão")

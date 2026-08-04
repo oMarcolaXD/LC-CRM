@@ -42,6 +42,11 @@ async function loadOwnedLesson(userId: string, lessonId: string) {
   if (lesson.participants.length > 1) {
     throw new Error("Aulas em grupo só podem ser alteradas pela escola")
   }
+  // Encontro de turma faz parte de um contrato por período — remarcar ou
+  // cancelar é conversa com a escola, e não devolve saldo de pacote nenhum.
+  if (lesson.courseId) {
+    throw new Error("Aulas de turma só podem ser alteradas pela escola")
+  }
 
   const studentId = lesson.participants.find((p) => ownedIds.has(p.studentId))?.studentId
   if (!studentId) throw new Error("Você não tem permissão para alterar esta aula")

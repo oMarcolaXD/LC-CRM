@@ -8,7 +8,9 @@ export const dynamic = "force-dynamic"
 export default async function AuloesPage() {
   const [lessonsRaw, teachersRaw, studentsRaw] = await Promise.all([
     prisma.lesson.findMany({
-      where:   { lessonType: { in: ["AULAO", "GROUP"] } },
+      // Encontro de turma também é GROUP, mas tem tela própria em /turmas —
+      // listar aqui encheria a página com a grade inteira de cada semestre.
+      where:   { lessonType: { in: ["AULAO", "GROUP"] }, courseId: null },
       include: {
         participants: { include: { student: true } },
         teacher:      { include: { user: true } },

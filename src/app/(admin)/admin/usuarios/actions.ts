@@ -8,6 +8,7 @@ import { redirect }         from "next/navigation"
 import bcrypt               from "bcryptjs"
 import { sendWelcomeEmail } from "@/lib/email"
 import { normalizeGrade } from "@/lib/constants/grades"
+import { gerarRA }        from "@/lib/ra"
 import type { Role, EducationLevel, TeacherMode } from "@prisma/client"
 
 function generateStudentPassword(): string {
@@ -79,8 +80,12 @@ export async function createUserAction(
     return { error: "Colaboradores não podem criar administradores" }
   }
 
+  // Aluno adulto ("self") é o próprio responsável, então entra como GUARDIAN.
+  const userRole: Role = (role === "STUDENT" && guardianMode === "self") ? "GUARDIAN" : role as Role
+
   const emailNorm = email && email.trim() ? email.trim() : undefined
-  const phoneNorm = phone ? phone.replace(/\D/g, "") : undefined
+  // Aluno não tem telefone próprio — o contato é sempre o do responsável.
+  const phoneNorm = userRole !== "STUDENT" && phone ? phone.replace(/\D/g, "") : undefined
 
   if (emailNorm) {
     const exists = await prisma.user.findUnique({ where: { email: emailNorm } })
@@ -100,8 +105,6 @@ export async function createUserAction(
   if (!passwordToHash) return { error: "Senha obrigatória para este perfil" }
 
   const hashed = await bcrypt.hash(passwordToHash, 12)
-
-  const userRole: Role = (role === "STUDENT" && guardianMode === "self") ? "GUARDIAN" : role as Role
 
   await prisma.$transaction(async (tx) => {
     const user = await tx.user.create({
@@ -134,7 +137,7 @@ export async function createUserAction(
 
       } else if (guardianMode === "self") {
         await tx.student.create({
-          data: { userId: user.id, name, grade: normalizeGrade(grade) ?? "Não informado", school, educationLevel: educationLevel as EducationLevel | undefined },
+          data: { userId: user.id, ra: await gerarRA(tx), name, grade: normalizeGrade(grade) ?? "Não informado", school, educationLevel: educationLevel as EducationLevel | undefined },
         })
         const selfG = await tx.guardian.create({ data: { userId: user.id, relationship: "Próprio" } })
         await tx.student.update({ where: { userId: user.id }, data: { guardianId: selfG.id } })
@@ -144,6 +147,7 @@ export async function createUserAction(
       await tx.student.create({
         data: {
           userId:         user.id,
+          ra:             await gerarRA(tx),
           name,
           grade:          normalizeGrade(grade) ?? "Não informado",
           school,
@@ -203,7 +207,8 @@ export async function updateUserAction(id: string, formData: FormData) {
   const { name, email, password, phone, role, grade, educationLevel, school, hourlyRate, bio, teachingMode, guardianId, relationship } = parsed.data
 
   const emailNorm = email && email.trim() ? email.trim() : null
-  const phoneNorm = phone ? phone.replace(/\D/g, "") : null
+  // Aluno não tem telefone próprio — o contato é sempre o do responsável.
+  const phoneNorm = role !== "STUDENT" && phone ? phone.replace(/\D/g, "") : null
 
   const updateData: Record<string, unknown> = { name, email: emailNorm, phone: phoneNorm, role }
   if (password) updateData.password = await bcrypt.hash(password, 12)
@@ -216,7 +221,7 @@ export async function updateUserAction(id: string, formData: FormData) {
       await tx.student.upsert({
         where:  { userId: id },
         update: { name: name ?? "Aluno", grade: normalizeGrade(grade) ?? "Não informado", school, educationLevel: educationLevel as EducationLevel | undefined, guardianId: gId ?? null },
-        create: { userId: id, name: name ?? "Aluno", grade: normalizeGrade(grade) ?? "Não informado", school, educationLevel: educationLevel as EducationLevel | undefined, guardianId: gId },
+        create: { userId: id, ra: await gerarRA(tx), name: name ?? "Aluno", grade: normalizeGrade(grade) ?? "Não informado", school, educationLevel: educationLevel as EducationLevel | undefined, guardianId: gId },
       })
     }
     if (role === "TEACHER") {

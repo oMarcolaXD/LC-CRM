@@ -13,8 +13,9 @@ import {
 import { importStudentsAction, type ImportResult } from "@/lib/actions/colaborador"
 
 // ─── Colunas esperadas ──────────────────────────────────────────────────────
+// O aluno não tem telefone próprio — o contato é sempre o do responsável.
 const COLUMNS = [
-  "nome", "email", "senha", "telefone", "dataNascimento",
+  "nome", "email", "senha", "dataNascimento",
   "serie", "escola", "nomeResponsavel", "telefoneResponsavel", "emailResponsavel",
 ] as const
 
@@ -24,7 +25,6 @@ const COLUMN_LABELS: Record<typeof COLUMNS[number], string> = {
   nome:                "Nome",
   email:               "E-mail",
   senha:               "Senha",
-  telefone:            "Telefone",
   dataNascimento:      "Data de Nascimento",
   serie:               "Série",
   escola:              "Escola",
@@ -319,7 +319,6 @@ export default function ImportarAlunosPage() {
                   ["nome",                "Sim",  "Lucas Oliveira"],
                   ["email",               "Sim",  "lucas@email.com"],
                   ["senha",               "Não",  "Padrão: Aluno@2025"],
-                  ["telefone",            "Não",  "(11) 99999-0000"],
                   ["dataNascimento",       "Não",  "DD/MM/AAAA — ex: 15/03/2010"],
                   ["serie",               "Não",  "9º EF · 2º EM · Superior"],
                   ["escola",              "Não",  "Colégio São Paulo"],

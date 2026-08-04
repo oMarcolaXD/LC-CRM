@@ -137,7 +137,10 @@ model PasswordResetToken {
 // ─── Perfis ───────────────────────────────────────────────────────────────────
 
 model Student {
-  id             String          @id @default(cuid())
+  id String @id @default(cuid())
+  // R.A. (Registro do Aluno) — 6 dígitos aleatórios, identificador visível do
+  // aluno em fichas, buscas e recibos. O `id` segue como chave interna (FKs).
+  ra             String          @unique
   userId         String?         @unique
   user           User?           @relation(fields: [userId], references: [id], onDelete: Cascade)
   name           String
@@ -331,6 +334,9 @@ model Lesson {
 
 // ─── Cursos ───────────────────────────────────────────────────────────────────
 
+/// Turma de acompanhamento: um contrato por período (ex.: semestral) com grade
+/// fixa, alunos matriculados e valor fechado. Diferente do LessonPackage, as
+/// aulas da turma NÃO consomem saldo — o que vale é o contrato estar ativo.
 model Course {
   id          String         @id @default(cuid())
   name        String
@@ -347,11 +353,26 @@ model Course {
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
 
+  // ── Grade fixa ──────────────────────────────────────────────────────────────
+  // Dia da semana (0 = domingo … 6 = sábado) e horário do encontro semanal.
+  weekday       Int?
+  startTime     String? // "HH:mm" no fuso de Brasília
+  duration      Int     @default(60)
+  teacherOnsite Boolean @default(false)
+
+  // ── Contrato ────────────────────────────────────────────────────────────────
+  // Valor cobrado de CADA aluno matriculado pelo período inteiro, dividido em
+  // `installments` parcelas. Zero/null = turma sem cobrança.
+  pricePerStudent Decimal? @db.Decimal(10, 2)
+  installments    Int      @default(1)
+
   lessons     Lesson[]
   enrollments CourseEnrollment[]
+  payments    Payment[]
 
   @@index([teacherId])
   @@index([subjectId])
+  @@index([status])
   @@map("courses")
 }
 
@@ -500,11 +521,16 @@ model Payment {
   packageId String?
   package   LessonPackage? @relation(fields: [packageId], references: [id], onDelete: Cascade)
 
+  // Turma de origem — mesma regra do pacote: some junto com a turma
+  courseId String?
+  course   Course? @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
   @@index([studentId])
   @@index([status])
   @@index([dueDate])
   @@index([installmentGroupId])
   @@index([packageId])
+  @@index([courseId])
   @@map("payments")
 }
 

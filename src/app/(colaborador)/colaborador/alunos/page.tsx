@@ -36,6 +36,11 @@ export default async function ColaboradorAlunosPage({ searchParams }: AlunosPage
         take:    1,
         include: { lesson: { include: { subject: true } } },
       },
+      // Turmas em andamento: quem acompanha por contrato não é "sem pacote"
+      enrollments: {
+        where:   { course: { status: "ACTIVE" } },
+        include: { course: true },
+      },
       payments: {
         orderBy: { dueDate: "desc" },
         take:    1,

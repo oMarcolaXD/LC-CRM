@@ -6,6 +6,7 @@ import { format }    from "date-fns"
 import { ptBR }      from "date-fns/locale"
 import { MessageCircle, CalendarDays, UserRound } from "lucide-react"
 import type { Prisma } from "@prisma/client"
+import { descreverGrade } from "@/lib/course"
 
 export type StudentRow = Prisma.StudentGetPayload<{
   include: {
@@ -14,6 +15,7 @@ export type StudentRow = Prisma.StudentGetPayload<{
     packages: true
     participations: { include: { lesson: { include: { subject: true } } } }
     payments: true
+    enrollments: { include: { course: true } }
     _count: { select: { packages: true; participations: true } }
   }
 }> & {
@@ -21,7 +23,7 @@ export type StudentRow = Prisma.StudentGetPayload<{
   lastLessonAt?: string | null
 }
 
-export type BoardColumn = "atencao" | "renovar" | "em-dia" | "novos"
+export type BoardColumn = "atencao" | "renovar" | "em-dia" | "novos" | "turma"
 
 const AVATAR_COLORS = [
   "bg-orange-500",
@@ -41,7 +43,12 @@ function initials(name: string) {
   return name.split(" ").slice(0, 2).map(w => w[0]).join("").toUpperCase()
 }
 
-function getStatusInfo(pkg: StudentRow["packages"][number] | null) {
+function getStatusInfo(
+  pkg: StudentRow["packages"][number] | null,
+  turma?: StudentRow["enrollments"][number]["course"] | null,
+) {
+  // Turma manda no rótulo: quem acompanha por contrato não "fica sem pacote".
+  if (turma) return { label: "Turma ativa", cls: "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-400" }
   if (!pkg) return { label: "Sem pacote", cls: "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400" }
 
   const remaining = Number(pkg.remainingLessons)
@@ -66,6 +73,10 @@ function getStatusInfo(pkg: StudentRow["packages"][number] | null) {
 }
 
 const ACTION_CONFIG: Record<BoardColumn, { label: string; cls: string }> = {
+  turma: {
+    label: "Ver acompanhamento",
+    cls:   "border border-brand-blue text-brand-blue hover:bg-brand-blue/10 bg-transparent",
+  },
   atencao: {
     label: "Renovar",
     cls:   "bg-primary text-white hover:bg-primary/90",
@@ -101,8 +112,9 @@ export function StudentBoardCard({ student, column, detailBasePath }: StudentBoa
   const guardianPhone = guardianUser?.phone?.replace(/\D/g, "") ?? null
   const studentPhone  = student.user?.phone?.replace(/\D/g, "") ?? null
   const waPhone       = guardianPhone ?? studentPhone
+  const turma         = student.enrollments[0]?.course ?? null
 
-  const status       = getStatusInfo(pkg)
+  const status       = getStatusInfo(pkg, turma)
   const isInactive   = student.user?.active === false
   const hasNoHistory = student._count.participations === 0
 
@@ -156,9 +168,16 @@ export function StudentBoardCard({ student, column, detailBasePath }: StudentBoa
             )}
           </div>
           <p className="text-xs text-muted-foreground mt-0.5">
-            {student.grade}
+            <span className="font-mono tabular-nums" title="Registro do Aluno">{student.ra}</span>
+            {` · ${student.grade}`}
             {nextLesson ? ` · ${nextLesson.subject?.name ?? "–"}` : ""}
           </p>
+          {turma && (
+            <p className="text-xs text-violet-600 dark:text-violet-400 mt-0.5 truncate" title={turma.name}>
+              {turma.name}
+              {descreverGrade(turma.weekday, turma.startTime) && ` · ${descreverGrade(turma.weekday, turma.startTime)}`}
+            </p>
+          )}
         </div>
       </div>
 

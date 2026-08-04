@@ -339,10 +339,10 @@ async function main() {
     { id: "student-12", name: "Letícia Gomes",     grade: "3º EM",      educationLevel: EducationLevel.EM,         guardianId: "guardian-11", school: "E.E. João Paulo II",  tags: ["ENEM 2026"]                                 },
   ]
 
-  for (const s of alunosDefs) {
+  for (const [i, s] of alunosDefs.entries()) {
     await prisma.student.create({
       data: {
-        id: s.id, name: s.name, grade: s.grade, educationLevel: s.educationLevel,
+        id: s.id, ra: String(100001 + i), name: s.name, grade: s.grade, educationLevel: s.educationLevel,
         guardianId: s.guardianId, school: s.school ?? null, tags: s.tags ?? [],
       },
     })
