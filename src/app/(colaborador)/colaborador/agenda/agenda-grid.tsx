@@ -1238,6 +1238,19 @@ export function AgendaGrid({
   const scrollRef    = useRef<HTMLDivElement | null>(null)
   const [canScrollRight, setCanScrollRight] = useState(false)
 
+  // ── Canceladas ────────────────────────────────────────────────────────────
+  // Aula cancelada não ocupa a agenda de verdade (BLOCKING_STATUSES em
+  // lib/scheduling.ts), mas enquanto o bloco continuava desenhado o horário
+  // parecia ocupado e o clique de "agendar aqui" morria no card. Fora da grade
+  // por padrão, então — o histórico fica a um clique no botão do rodapé.
+  const [showCancelled, setShowCancelled] = useState(false)
+  const semCanceladas = <T extends { status: string }>(arr: T[]): T[] =>
+    showCancelled ? arr : arr.filter(l => l.status !== "CANCELLED")
+
+  const visibleLessons = semCanceladas(lessons)
+  const visibleWeek    = semCanceladas(weekLessons ?? [])
+  const visibleMonth   = semCanceladas(monthLessons ?? [])
+
   const parsed = parseISO(curDate)
   const today  = isToday(parsed)
 
@@ -1258,8 +1271,8 @@ export function AgendaGrid({
     }))
     .sort((a, b) => {
       if (isPastDay) {
-        const cntA = lessons.filter(l => l.teacherId === a.id).length
-        const cntB = lessons.filter(l => l.teacherId === b.id).length
+        const cntA = visibleLessons.filter(l => l.teacherId === a.id).length
+        const cntB = visibleLessons.filter(l => l.teacherId === b.id).length
         return cntB - cntA
       }
       const minA = a.slots.reduce((sum, s) => sum + (s.end - s.start), 0)
@@ -1268,6 +1281,13 @@ export function AgendaGrid({
     })
 
   const [view, setView]                     = useState<ViewMode>(initialView)
+
+  /** Quantas canceladas a visão atual está escondendo. */
+  const cancelledCount = (
+    view === "month" ? (monthLessons ?? []) :
+    view === "week"  ? (weekLessons ?? [])  :
+    lessons
+  ).filter(l => l.status === "CANCELLED").length
 
   useEffect(() => {
     const el = scrollRef.current
@@ -1447,7 +1467,7 @@ export function AgendaGrid({
   const nowLabel  = format(nowTime, "HH:mm")
 
   const hours     = Array.from({ length: TOTAL }, (_, i) => START + i)
-  const byTeacher = (id: string) => lessons.filter(l => l.teacherId === id)
+  const byTeacher = (id: string) => visibleLessons.filter(l => l.teacherId === id)
 
   const roomUsage = (hour: number): number => {
     const slotStart = hour * 60
@@ -1533,7 +1553,7 @@ export function AgendaGrid({
     { length: Math.ceil(calDays.length / 7) },
     (_, i) => calDays.slice(i * 7, i * 7 + 7)
   )
-  const lessonsByDay = (monthLessons ?? []).reduce<Record<string, WeekLessonSlot[]>>((acc, l) => {
+  const lessonsByDay = visibleMonth.reduce<Record<string, WeekLessonSlot[]>>((acc, l) => {
     ;(acc[l.date] ??= []).push(l)
     return acc
   }, {})
@@ -1651,12 +1671,26 @@ export function AgendaGrid({
             )}
             <span>
               {view === "month"
-                ? `${(monthLessons ?? []).length} aula${(monthLessons ?? []).length !== 1 ? "s" : ""} no mês`
+                ? `${visibleMonth.length} aula${visibleMonth.length !== 1 ? "s" : ""} no mês`
                 : view === "week"
-                ? `${(weekLessons ?? []).length} aula${(weekLessons ?? []).length !== 1 ? "s" : ""} na semana`
-                : `${lessons.length} aula${lessons.length !== 1 ? "s" : ""}`
+                ? `${visibleWeek.length} aula${visibleWeek.length !== 1 ? "s" : ""} na semana`
+                : `${visibleLessons.length} aula${visibleLessons.length !== 1 ? "s" : ""}`
               }
             </span>
+
+            {cancelledCount > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowCancelled(v => !v)}
+                className="flex items-center gap-1 rounded-full border border-rose-200 px-2 py-0.5 text-[11px] text-rose-600 hover:bg-rose-50 dark:border-rose-900 dark:text-rose-400 dark:hover:bg-rose-950/40"
+                title={showCancelled
+                  ? "Esconder as aulas canceladas — o horário delas está livre"
+                  : "Mostrar as aulas canceladas (elas não ocupam o horário)"}
+              >
+                <XCircle className="w-3 h-3" />
+                {showCancelled ? "esconder" : "ver"} {cancelledCount} cancelada{cancelledCount !== 1 ? "s" : ""}
+              </button>
+            )}
             <div className="hidden sm:flex items-center gap-2">
               {(["CONFIRMED", "SCHEDULED", "COMPLETED"] as LessonStatus[]).map(s => (
                 <span key={s} className="flex items-center gap-1">
@@ -1788,7 +1822,7 @@ export function AgendaGrid({
                 const dayStr    = format(day, "yyyy-MM-dd")
                 const isCurrentDay = isToday(day)
                 const isActiveDay  = dayStr === date
-                const dayLessons   = (weekLessons ?? [])
+                const dayLessons   = visibleWeek
                   .filter(l => l.date === dayStr)
                   .sort((a, b) => a.startMin - b.startMin)
 

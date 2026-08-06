@@ -824,11 +824,14 @@ export async function deleteLessonAction(lessonId: string) {
   const session = await auth()
   if (session?.user?.role !== "ADMIN") throw new Error("Sem permissão")
 
-  const participants = await prisma.lessonParticipant.findMany({
-    where: { lessonId },
-    select: { studentId: true },
+  // A aula é o que precisa existir — uma aula sem inscritos (aulão vazio,
+  // compromisso) também pode ser excluída.
+  const lesson = await prisma.lesson.findUnique({
+    where:  { id: lessonId },
+    select: { id: true, participants: { select: { studentId: true } } },
   })
-  if (participants.length === 0) throw new Error("Aula não encontrada")
+  if (!lesson) throw new Error("Aula não encontrada")
+  const participants = lesson.participants
 
   await prisma.lesson.delete({ where: { id: lessonId } })
 

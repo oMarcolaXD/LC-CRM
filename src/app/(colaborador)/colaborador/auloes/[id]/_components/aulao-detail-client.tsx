@@ -4,11 +4,16 @@ import { useState, useTransition } from "react"
 import {
   Users, MapPin, Wifi, Tag, CheckCircle2, Clock, XCircle, Loader2,
   UserPlus, UserMinus, BookOpen, Building2, Home, Repeat2, Pencil, Check, X,
+  RotateCcw, Trash2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge }  from "@/components/ui/badge"
 import { toast }  from "sonner"
+import { useRouter } from "next/navigation"
 import { mensagemDeErro } from "@/lib/error-message"
+import { ouFalhe } from "@/lib/action-result"
+import { EditAulaoDialog } from "@/components/shared/edit-aulao-dialog"
+import type { EditTeacherOption } from "@/components/shared/edit-aulao-dialog"
 import {
   enrollStudentInAulaoAction,
   unenrollStudentFromAulaoAction,
@@ -16,6 +21,8 @@ import {
   cancelAulaoSeriesAction,
   completeAulaoAction,
   renameAulaoAction,
+  reactivateAulaoAction,
+  deleteAulaoAction,
 } from "@/lib/actions/aulao"
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
@@ -30,9 +37,14 @@ export interface AulaoDetail {
   id:               string
   lessonType:       "AULAO" | "GROUP"
   title:            string | null
+  teacherId:        string
   teacherName:      string
+  subjectId:        string | null
   subjectName:      string
   scheduledAt:      string
+  /** Data e hora no relógio de Brasília — o formulário de edição parte daqui. */
+  date:             string // yyyy-MM-dd
+  time:             string // HH:mm
   duration:         number
   modality:         "PRESENCIAL" | "ONLINE"
   teacherOnsite:    boolean
@@ -85,20 +97,27 @@ const PAYMENT_CLASS: Record<string, string> = {
 export function AulaoDetailClient({
   aulao,
   allStudents,
+  teachers,
+  canDelete,
 }: {
   aulao:       AulaoDetail
   allStudents: StudentOption[]
+  teachers:    EditTeacherOption[]
+  canDelete:   boolean
 }) {
+  const router = useRouter()
   const [showEnrollPanel, setShowEnrollPanel] = useState(false)
   const [searchTerm,      setSearchTerm]      = useState("")
   const [pending, start]                      = useTransition()
   const [editingTitle,    setEditingTitle]    = useState(false)
   const [titleDraft,      setTitleDraft]      = useState(aulao.title ?? aulao.subjectName)
   const [renaming, startRename]               = useTransition()
+  const [showEditDialog,  setShowEditDialog]  = useState(false)
 
   const isAulao    = aulao.lessonType === "AULAO"
   const ModeIcon   = aulao.modality === "ONLINE" ? Wifi : MapPin
   const isClosed   = ["COMPLETED", "CANCELLED"].includes(aulao.status)
+  const isCancelled = aulao.status === "CANCELLED"
   const isFull     = !!aulao.capacity && aulao.participants.length >= aulao.capacity
   const enrolledIds = new Set(aulao.participants.map(p => p.studentId))
 
@@ -169,6 +188,36 @@ export function AulaoDetailClient({
         setEditingTitle(false)
       } catch (e) {
         toast.error(mensagemDeErro(e, "Erro ao renomear"))
+      }
+    })
+  }
+
+  function reactivate() {
+    start(async () => {
+      try {
+        ouFalhe(await reactivateAulaoAction(aulao.id))
+        toast.success("Aulão reativado — voltou para a agenda")
+      } catch (e) {
+        toast.error(mensagemDeErro(e, "Erro ao reativar"))
+      }
+    })
+  }
+
+  function remove() {
+    const nome = aulao.title ?? aulao.subjectName
+    if (!confirm(
+      `Excluir "${nome}" de vez?\n\n` +
+      `O aulão some da agenda e do histórico, junto com as cobranças ainda não pagas. ` +
+      `Não dá para desfazer — para apenas tirar da agenda, use "Cancelar aulão".`
+    )) return
+
+    start(async () => {
+      try {
+        ouFalhe(await deleteAulaoAction(aulao.id))
+        toast.success("Aulão excluído")
+        router.push("/colaborador/auloes")
+      } catch (e) {
+        toast.error(mensagemDeErro(e, "Erro ao excluir"))
       }
     })
   }
@@ -425,6 +474,32 @@ export function AulaoDetailClient({
 
           {!isClosed && (
             <Button
+              variant="outline"
+              className="w-full gap-2 border-violet-300 text-violet-700 hover:bg-violet-50 dark:border-violet-800 dark:text-violet-300 dark:hover:bg-violet-950/40"
+              disabled={pending}
+              onClick={() => setShowEditDialog(true)}
+            >
+              <Pencil className="w-4 h-4" />
+              Editar aulão
+            </Button>
+          )}
+
+          {isCancelled && (
+            <Button
+              className="w-full gap-2 bg-violet-600 hover:bg-violet-700 text-white"
+              disabled={pending}
+              onClick={reactivate}
+            >
+              {pending
+                ? <Loader2 className="w-4 h-4 animate-spin" />
+                : <RotateCcw className="w-4 h-4" />
+              }
+              Reativar aulão
+            </Button>
+          )}
+
+          {!isClosed && (
+            <Button
               className="w-full gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
               disabled={pending || aulao.status === "COMPLETED"}
               onClick={complete}
@@ -464,10 +539,29 @@ export function AulaoDetailClient({
             </Button>
           )}
 
-          {isClosed && (
-            <p className="text-xs text-center text-muted-foreground pt-1">
-              Aulão {aulao.status === "COMPLETED" ? "realizado" : "cancelado"} — sem ações disponíveis.
+          {isCancelled && (
+            <p className="text-xs text-muted-foreground pt-1">
+              Aulão cancelado — não aparece mais na grade da agenda e o horário está livre.
+              Reative para colocá-lo de volta (as cobranças em aberto voltam junto).
             </p>
+          )}
+
+          {aulao.status === "COMPLETED" && (
+            <p className="text-xs text-center text-muted-foreground pt-1">
+              Aulão realizado — o histórico não se edita.
+            </p>
+          )}
+
+          {canDelete && (
+            <Button
+              variant="ghost"
+              className="w-full gap-2 text-xs text-muted-foreground hover:text-rose-600 hover:bg-rose-50 dark:hover:text-rose-400 dark:hover:bg-rose-950/40"
+              disabled={pending}
+              onClick={remove}
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Excluir definitivamente
+            </Button>
           )}
         </div>
 
@@ -495,6 +589,28 @@ export function AulaoDetailClient({
           </div>
         )}
       </div>
+
+      <EditAulaoDialog
+        open={showEditDialog}
+        onClose={() => setShowEditDialog(false)}
+        teachers={teachers}
+        aulao={{
+          id:              aulao.id,
+          lessonType:      aulao.lessonType,
+          title:           aulao.title ?? aulao.subjectName,
+          teacherId:       aulao.teacherId,
+          subjectId:       aulao.subjectId ?? "",
+          date:            aulao.date,
+          time:            aulao.time,
+          duration:        aulao.duration,
+          modality:        aulao.modality,
+          teacherOnsite:   aulao.teacherOnsite,
+          capacity:        aulao.capacity,
+          isFree:          aulao.isFree,
+          pricePerStudent: aulao.pricePerStudent,
+          enrolledCount:   aulao.participants.length,
+        }}
+      />
     </div>
   )
 }
