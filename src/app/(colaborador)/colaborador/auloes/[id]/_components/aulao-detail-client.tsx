@@ -55,6 +55,8 @@ export interface AulaoDetail {
   participants:     ParticipantItem[]
   recurrenceGroupId: string | null
   recurrenceRule:   string | null
+  /** Ocorrências que "esta e as próximas" alcançaria (esta inclusa). */
+  seriesPendingCount: number
 }
 
 export interface StudentOption {
@@ -609,6 +611,8 @@ export function AulaoDetailClient({
           isFree:          aulao.isFree,
           pricePerStudent: aulao.pricePerStudent,
           enrolledCount:   aulao.participants.length,
+          recurrenceGroupId:  aulao.recurrenceGroupId,
+          seriesPendingCount: aulao.seriesPendingCount,
         }}
       />
     </div>

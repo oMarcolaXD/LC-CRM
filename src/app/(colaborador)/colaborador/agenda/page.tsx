@@ -43,6 +43,7 @@ function mapToLessonSlot(
     status: string
     modality: string
     teacherOnsite: boolean
+    blocksAgenda: boolean
     lessonType: string
     title: string | null
     capacity: number | null
@@ -89,6 +90,7 @@ function mapToLessonSlot(
     groupMates:    l.participants.slice(1).map(p => p.student.name ?? "Aluno"),
     packageStatus,
     lessonType,
+    blocksAgenda:  l.blocksAgenda,
     title:         l.title ?? null,
     capacity:      l.capacity ?? null,
   }

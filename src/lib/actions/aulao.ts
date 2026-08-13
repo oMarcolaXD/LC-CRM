@@ -1,5 +1,6 @@
 "use server"
 
+import type { Prisma }    from "@prisma/client"
 import { prisma }         from "@/lib/prisma"
 import { auth }           from "@/lib/auth"
 import { revalidatePath } from "next/cache"
@@ -10,7 +11,9 @@ import type { ActionResult } from "@/lib/action-result"
 import { parseBrazilDateTime, formatBR } from "@/lib/datetime"
 import {
   assertTeacherFree, assertRoomFree, occupiesRoom,
+  findSeriesConflicts, seriesConflictMessage,
 } from "@/lib/scheduling"
+import { daysBetween, shiftDay } from "@/lib/recurrence"
 
 async function requireCollaboratorOrAdmin() {
   const session = await auth()
@@ -260,13 +263,24 @@ export interface UpdateAulaoInput {
   capacity?:        number | null
   isFree:           boolean
   pricePerStudent?: number
+  /**
+   * `SERIES` aplica a edição a esta e às próximas ocorrências pendentes da
+   * recorrência — remarcar um aulão semanal não deveria custar 20 edições.
+   * Ocorrências já realizadas ou canceladas ficam como estão.
+   */
+  scope?:           "ONE" | "SERIES"
 }
 
-export async function updateAulaoAction(input: UpdateAulaoInput): Promise<ActionResult<undefined>> {
-  return comResultado(async () => { await editarAulao(input); return undefined })
+export interface UpdateAulaoResult {
+  /** Quantas ocorrências foram alteradas. */
+  updated: number
 }
 
-async function editarAulao(input: UpdateAulaoInput) {
+export async function updateAulaoAction(input: UpdateAulaoInput): Promise<ActionResult<UpdateAulaoResult>> {
+  return comResultado(() => editarAulao(input))
+}
+
+async function editarAulao(input: UpdateAulaoInput): Promise<UpdateAulaoResult> {
   await requireCollaboratorOrAdmin()
 
   const lesson = await prisma.lesson.findUnique({
@@ -297,11 +311,6 @@ async function editarAulao(input: UpdateAulaoInput) {
   if (capacity !== null && (!Number.isFinite(capacity) || capacity < 1)) {
     throw new Error("Capacidade inválida — deixe em branco para não ter limite")
   }
-  if (capacity !== null && capacity < lesson.participants.length) {
-    throw new Error(
-      `A capacidade não pode ser menor que os ${lesson.participants.length} aluno(s) já inscrito(s)`
-    )
-  }
 
   const [teacher, subject] = await Promise.all([
     prisma.teacher.findUnique({ where: { id: input.teacherId }, include: { user: true } }),
@@ -320,9 +329,62 @@ async function editarAulao(input: UpdateAulaoInput) {
   const scheduledAt = parseBrazilDateTime(input.date, input.time)
   if (isNaN(scheduledAt.getTime())) throw new Error("Data ou horário inválido")
 
+  const agora = new Date()
+
+  // ── Ocorrências alcançadas pela edição ───────────────────────────────────────
+  // "Só esta" mexe em uma; "toda a série" leva junto as próximas pendentes,
+  // deslocadas pelo mesmo número de dias — assim a recorrência não se desmancha.
+  const emSerie = input.scope === "SERIES" && !!lesson.recurrenceGroupId
+
+  const ocorrencias = emSerie
+    ? await prisma.lesson.findMany({
+        where: {
+          recurrenceGroupId: lesson.recurrenceGroupId!,
+          status:            { in: ["SCHEDULED", "CONFIRMED"] },
+          OR: [{ id: lesson.id }, { scheduledAt: { gte: agora } }],
+        },
+        include: { participants: true },
+        orderBy: { scheduledAt: "asc" },
+      })
+    : [lesson]
+
+  const deltaDias = emSerie
+    ? daysBetween(formatBR(lesson.scheduledAt, "yyyy-MM-dd"), input.date)
+    : 0
+
+  const alvos = ocorrencias.map((o) => ({
+    id:           o.id,
+    lessonType:   o.lessonType,
+    antes:        o.scheduledAt,
+    precoAntes:   o.priceOverride ? o.priceOverride.toNumber() : 0,
+    participants: o.participants.map(p => p.studentId),
+    scheduledAt:  o.id === lesson.id
+      ? scheduledAt
+      : parseBrazilDateTime(shiftDay(formatBR(o.scheduledAt, "yyyy-MM-dd"), deltaDias), input.time),
+    duration,
+  }))
+
+  const lotado = alvos.find(a => capacity !== null && capacity < a.participants.length)
+  if (lotado) {
+    throw new Error(
+      `A capacidade não pode ser menor que os ${lotado.participants.length} aluno(s) já inscrito(s)`
+      + (emSerie ? ` em ${formatBR(lotado.antes, "dd/MM")}` : "")
+    )
+  }
+
   // Agenda só é validada para o futuro — corrigir os dados de um aulão que já
   // aconteceu não pode esbarrar na agenda de então.
-  if (scheduledAt >= new Date()) {
+  const futuros = alvos.filter(a => a.scheduledAt >= agora)
+
+  if (emSerie) {
+    const conflitos = await findSeriesConflicts({
+      teacherId:   input.teacherId,
+      teacherName: teacher.user.name,
+      needsRoom:   occupiesRoom(input.modality, teacherOnsite),
+      slots:       futuros,
+    })
+    if (conflitos.length > 0) throw new Error(seriesConflictMessage(conflitos))
+  } else if (futuros.length > 0) {
     await assertTeacherFree(
       { teacherId: input.teacherId, scheduledAt, duration, excludeLessonId: lesson.id },
       teacher.user.name,
@@ -332,79 +394,114 @@ async function editarAulao(input: UpdateAulaoInput) {
     }
   }
 
-  const studentIds  = lesson.participants.map(p => p.studentId)
-  const description = descricaoCobranca({
-    lessonType:  lesson.lessonType,
-    subjectName: subject.name,
-    title,
-    scheduledAt,
-  })
-
   await prisma.$transaction(async (tx) => {
-    await tx.lesson.update({
-      where: { id: lesson.id },
-      data: {
-        teacherId:     input.teacherId,
-        subjectId:     input.subjectId,
-        title,
-        scheduledAt,
-        duration,
-        modality:      input.modality,
-        teacherOnsite,
-        capacity,
-        priceOverride: price,
-      },
-    })
+    for (const alvo of alvos) {
+      await tx.lesson.update({
+        where: { id: alvo.id },
+        data: {
+          teacherId:     input.teacherId,
+          subjectId:     input.subjectId,
+          title,
+          scheduledAt:   alvo.scheduledAt,
+          duration,
+          modality:      input.modality,
+          teacherOnsite,
+          capacity,
+          priceOverride: price,
+        },
+      })
 
-    if (studentIds.length === 0) return
+      // Nada mudou na cobrança desta ocorrência (nem data, nem valor): não vale
+      // gastar consultas dentro da transação — uma série longa somaria dezenas.
+      const cobrancaIntacta =
+        alvo.precoAntes === price && alvo.antes.getTime() === alvo.scheduledAt.getTime()
+      if (cobrancaIntacta) continue
 
-    const existentes = await tx.payment.findMany({
-      where: { studentId: { in: studentIds }, dueDate: lesson.scheduledAt },
-    })
-
-    if (price === 0) {
-      // Virou gratuito: some com o que ainda não foi pago. O que já foi pago
-      // fica de pé — o dinheiro entrou, quem estorna é o financeiro.
-      const aRemover = existentes.filter(p => p.status !== "PAID").map(p => p.id)
-      if (aRemover.length > 0) await tx.payment.deleteMany({ where: { id: { in: aRemover } } })
-      return
-    }
-
-    const emAberto = existentes.filter(p => p.status !== "PAID")
-    if (emAberto.length > 0) {
-      await tx.payment.updateMany({
-        where: { id: { in: emAberto.map(p => p.id) } },
-        data:  { amount: price, dueDate: scheduledAt, description },
+      await sincronizarCobrancas(tx, {
+        studentIds:  alvo.participants,
+        dueDateAtual: alvo.antes,
+        scheduledAt: alvo.scheduledAt,
+        price,
+        description: descricaoCobranca({
+          lessonType:  alvo.lessonType,
+          subjectName: subject.name,
+          title,
+          scheduledAt: alvo.scheduledAt,
+        }),
       })
     }
-
-    // Cobrança quitada acompanha a data nova para não perder o vínculo com o
-    // aulão (o vínculo é o dueDate), mas o valor pago não se reescreve.
-    const pagos = existentes.filter(p => p.status === "PAID")
-    if (pagos.length > 0) {
-      await tx.payment.updateMany({
-        where: { id: { in: pagos.map(p => p.id) } },
-        data:  { dueDate: scheduledAt },
-      })
-    }
-
-    // Era gratuito e virou pago: quem não tinha cobrança ganha uma.
-    const jaCobrados = new Set(existentes.map(p => p.studentId))
-    const semCobranca = studentIds.filter(id => !jaCobrados.has(id))
-    if (semCobranca.length > 0) {
-      await tx.payment.createMany({
-        data: semCobranca.map(studentId => ({
-          studentId,
-          amount:  price,
-          dueDate: scheduledAt,
-          description,
-          status:  "PENDING" as const,
-        })),
-      })
-    }
-  })
+  }, { timeout: 20_000, maxWait: 10_000 })
 
   revalidateAulao(lesson.id)
+  for (const alvo of alvos) revalidatePath(`/colaborador/auloes/${alvo.id}`)
+
+  return { updated: alvos.length }
+}
+
+/**
+ * Faz as cobranças dos inscritos acompanharem a edição do aulão.
+ *
+ * O vínculo entre Payment e aulão é indireto (studentId + dueDate = data da
+ * aula), então mover a data exige reescrever o dueDate — senão a cobrança perde
+ * o aulão de vista. Ver o comentário do bloco "Editar aulão".
+ */
+async function sincronizarCobrancas(
+  tx: Prisma.TransactionClient,
+  opts: {
+    studentIds:   string[]
+    /** Data da aula ANTES da edição — é por ela que as cobranças são achadas. */
+    dueDateAtual: Date
+    scheduledAt:  Date
+    price:        number
+    description:  string
+  },
+) {
+  if (opts.studentIds.length === 0) return
+
+  const existentes = await tx.payment.findMany({
+    where: { studentId: { in: opts.studentIds }, dueDate: opts.dueDateAtual },
+  })
+
+  if (opts.price === 0) {
+    // Virou gratuito: some com o que ainda não foi pago. O que já foi pago
+    // fica de pé — o dinheiro entrou, quem estorna é o financeiro.
+    const aRemover = existentes.filter(p => p.status !== "PAID").map(p => p.id)
+    if (aRemover.length > 0) await tx.payment.deleteMany({ where: { id: { in: aRemover } } })
+    return
+  }
+
+  const emAberto = existentes.filter(p => p.status !== "PAID")
+  if (emAberto.length > 0) {
+    await tx.payment.updateMany({
+      where: { id: { in: emAberto.map(p => p.id) } },
+      data:  { amount: opts.price, dueDate: opts.scheduledAt, description: opts.description },
+    })
+  }
+
+  // Cobrança quitada acompanha a data nova para não perder o vínculo com o
+  // aulão (o vínculo é o dueDate), mas o valor pago não se reescreve.
+  const pagos = existentes.filter(p => p.status === "PAID")
+  if (pagos.length > 0) {
+    await tx.payment.updateMany({
+      where: { id: { in: pagos.map(p => p.id) } },
+      data:  { dueDate: opts.scheduledAt },
+    })
+  }
+
+  // Era gratuito e virou pago: quem não tinha cobrança ganha uma.
+  const jaCobrados  = new Set(existentes.map(p => p.studentId))
+  const semCobranca = opts.studentIds.filter(id => !jaCobrados.has(id))
+  if (semCobranca.length > 0) {
+    await tx.payment.createMany({
+      data: semCobranca.map(studentId => ({
+        studentId,
+        amount:  opts.price,
+        dueDate: opts.scheduledAt,
+        description: opts.description,
+        status:  "PENDING" as const,
+      })),
+    })
+  }
 }
 
 // ─── Reativar aulão cancelado ─────────────────────────────────────────────────

@@ -10,7 +10,7 @@ import {
 import { Button }   from "@/components/ui/button"
 import { Input }    from "@/components/ui/input"
 import { Label }    from "@/components/ui/label"
-import { Pencil, Loader2, MonitorPlay, School } from "lucide-react"
+import { Pencil, Loader2, MonitorPlay, School, Repeat2, CalendarCheck } from "lucide-react"
 import { mensagemDeErro } from "@/lib/error-message"
 import { ouFalhe } from "@/lib/action-result"
 
@@ -29,6 +29,8 @@ interface Props {
     duration:      number | null
     topicsCovered: string | null
     teacherNotes:  string | null
+    /** Preenchido quando a aula faz parte de uma série recorrente. */
+    recurrenceGroupId?: string | null
   }
   studentId: string
   teachers:  Teacher[]
@@ -70,9 +72,18 @@ export function EditLessonDialog({ lesson, studentId, teachers }: Props) {
   const [topics,    setTopics]    = useState(lesson.topicsCovered ?? "")
   const [notes,     setNotes]     = useState(lesson.teacherNotes ?? "")
   const [status,    setStatus]    = useState(lesson.status)
+  const [scope,     setScope]     = useState<"ONE" | "SERIES">("ONE")
 
   const selectedTeacher   = teachers.find(t => t.id === teacherId)
   const availableSubjects = selectedTeacher?.subjects ?? []
+
+  // O alcance "série" só faz sentido enquanto a aula continua agendada: marcar
+  // realizada/faltou/cancelada é sempre sobre esta ocorrência (ver editarAula).
+  const emSerie     = !!lesson.recurrenceGroupId
+  const statusAtivo = status === "SCHEDULED" || status === "CONFIRMED"
+  const aplicaSerie = emSerie && scope === "SERIES" && statusAtivo
+  const duracaoMudou =
+    Math.round((parseFloat(duration.replace(",", ".")) || 1) * 60) !== (lesson.duration ?? 60)
 
   function handleTeacherChange(tid: string) {
     setTeacherId(tid)
@@ -90,6 +101,7 @@ export function EditLessonDialog({ lesson, studentId, teachers }: Props) {
       setTopics(lesson.topicsCovered ?? "")
       setNotes(lesson.teacherNotes ?? "")
       setStatus(lesson.status)
+      setScope("ONE")
     }
     setOpen(v)
   }
@@ -101,7 +113,7 @@ export function EditLessonDialog({ lesson, studentId, teachers }: Props) {
     }
     start(async () => {
       try {
-        ouFalhe(await updateLessonDirectAction({
+        const r = ouFalhe(await updateLessonDirectAction({
           lessonId:      lesson.id,
           studentId,
           date,
@@ -113,8 +125,11 @@ export function EditLessonDialog({ lesson, studentId, teachers }: Props) {
           topicsCovered: topics || undefined,
           teacherNotes:  notes  || undefined,
           status:        status as "COMPLETED" | "MISSED" | "CONFIRMED" | "CANCELLED" | "SCHEDULED",
+          scope:         aplicaSerie ? "SERIES" : "ONE",
         }))
-        toast.success("Aula atualizada")
+        toast.success(r.updated > 1
+          ? `Série atualizada — ${r.updated} aulas remarcadas`
+          : "Aula atualizada")
         setOpen(false)
         router.refresh()
       } catch (e) {
@@ -144,6 +159,50 @@ export function EditLessonDialog({ lesson, studentId, teachers }: Props) {
           </DialogHeader>
 
           <div className="space-y-4 py-2">
+            {/* Alcance — só aparece quando a aula faz parte de uma série */}
+            {emSerie && (
+              <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-2">
+                <p className="flex items-center gap-1.5 text-xs font-medium">
+                  <Repeat2 className="w-3.5 h-3.5 text-primary" />
+                  Esta aula se repete. O que você quer alterar?
+                </p>
+                <div className="flex rounded-lg border border-input overflow-hidden bg-background">
+                  <button
+                    type="button"
+                    onClick={() => setScope("ONE")}
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs transition-colors ${
+                      scope === "ONE" ? "bg-primary text-white" : "text-muted-foreground hover:bg-muted/50"
+                    }`}
+                  >
+                    <CalendarCheck className="w-3.5 h-3.5" /> Só esta
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setScope("SERIES")}
+                    disabled={!statusAtivo}
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+                      scope === "SERIES" && statusAtivo ? "bg-primary text-white" : "text-muted-foreground hover:bg-muted/50"
+                    }`}
+                  >
+                    <Repeat2 className="w-3.5 h-3.5" /> Esta e as próximas
+                  </button>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  {aplicaSerie
+                    ? "As próximas aulas pendentes da série vão para o horário novo, deslocadas pelos mesmos dias que você mudar aqui. O que já passou não muda."
+                    : !statusAtivo
+                    ? "Realizada, faltou e cancelada valem só para esta aula — a série continua como está."
+                    : "Conteúdo, observações e status são sempre só desta aula."}
+                </p>
+                {aplicaSerie && duracaoMudou && (
+                  <p className="text-[11px] text-amber-700 dark:text-amber-400">
+                    Mudar o número de aulas não refaz o desconto no pacote — as aulas já foram
+                    debitadas quando a série foi criada. Ajuste o saldo à mão, se precisar.
+                  </p>
+                )}
+              </div>
+            )}
+
             {/* Status */}
             <div className="space-y-1.5">
               <Label className="text-xs">Status</Label>

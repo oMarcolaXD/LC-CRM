@@ -36,7 +36,7 @@ export default async function AulaoDetailPage({ params }: Props) {
 
   if (!lesson || !["AULAO", "GROUP"].includes(lesson.lessonType)) notFound()
 
-  const [allStudentsRaw, teachersRaw, session] = await Promise.all([
+  const [allStudentsRaw, teachersRaw, session, seriesPendingCount] = await Promise.all([
     prisma.student.findMany({
       select:  { id: true, name: true },
       orderBy: { name: "asc" },
@@ -47,6 +47,17 @@ export default async function AulaoDetailPage({ params }: Props) {
       orderBy: { user: { name: "asc" } },
     }),
     auth(),
+    // Quantas ocorrências a edição "esta e as próximas" alcançaria — mesma
+    // regra do servidor (ver updateAulaoAction): esta + as futuras pendentes.
+    lesson.recurrenceGroupId
+      ? prisma.lesson.count({
+          where: {
+            recurrenceGroupId: lesson.recurrenceGroupId,
+            status:            { in: ["SCHEDULED", "CONFIRMED"] },
+            OR: [{ id: lesson.id }, { scheduledAt: { gte: new Date() } }],
+          },
+        })
+      : Promise.resolve(0),
   ])
 
   const teachers: EditTeacherOption[] = teachersRaw.map(t => ({
@@ -92,6 +103,7 @@ export default async function AulaoDetailPage({ params }: Props) {
     participants,
     recurrenceGroupId: lesson.recurrenceGroupId ?? null,
     recurrenceRule:    lesson.recurrenceGroup?.rule ?? null,
+    seriesPendingCount,
   }
 
   const allStudents: StudentOption[] = allStudentsRaw.map(s => ({ id: s.id, name: s.name }))

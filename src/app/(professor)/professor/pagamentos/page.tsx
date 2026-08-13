@@ -1,4 +1,5 @@
 import { auth }        from "@/lib/auth"
+import { teacherWhereForSession } from "@/lib/teacher-session"
 import { prisma }      from "@/lib/prisma"
 import { PageHeader }  from "@/components/shared/page-header"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -11,7 +12,7 @@ const MONTHS = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov
 export default async function ProfessorPagamentosPage() {
   const session = await auth()
   const teacher = await prisma.teacher.findFirst({
-    where: { user: { email: session?.user?.email ?? "" } },
+    where: teacherWhereForSession(session),
   })
 
   const now = new Date()

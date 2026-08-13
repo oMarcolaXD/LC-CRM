@@ -15,7 +15,8 @@ import { Label }  from "@/components/ui/label"
 import { toast }  from "sonner"
 import { createLessonDirectAction, createDuoLessonAction } from "@/lib/actions/lesson-request"
 import { weeklySlots } from "@/lib/recurrence"
-import { RecurringPreviewDialog, type RecurringParams } from "./recurring-preview-dialog"
+import { RecurringPreviewDialog, type RecurringParams } from "@/components/shared/recurring-preview-dialog"
+import { TeacherSubjectPicker } from "@/components/shared/teacher-subject-picker"
 import { mensagemDeErro } from "@/lib/error-message"
 import { ouFalhe } from "@/lib/action-result"
 
@@ -58,9 +59,6 @@ export function ScheduleLessonDialog({ studentId, studentName, teachers, hasBala
   const [recurringParams, setRecurringParams] = useState<RecurringParams | null>(null)
   const [pending, start]        = useTransition()
 
-  const selectedTeacher = teachers.find(t => t.id === teacherId)
-  const subjects        = selectedTeacher?.subjects ?? []
-
   function toggleDuo(id: string) {
     setDuoIds(prev =>
       prev.includes(id)
@@ -69,9 +67,9 @@ export function ScheduleLessonDialog({ studentId, studentName, teachers, hasBala
     )
   }
 
-  function handleTeacherChange(val: string | null) {
-    setTeacher(val ?? "")
-    setSubject("")
+  function handlePickerChange(next: { teacherId: string; subjectId: string }) {
+    setTeacher(next.teacherId)
+    setSubject(next.subjectId)
   }
 
   function handleOpen(v: boolean) {
@@ -102,10 +100,14 @@ export function ScheduleLessonDialog({ studentId, studentName, teachers, hasBala
     }
 
     // Série recorrente: nada é gravado aqui. Abre a revisão, que verifica a
-    // agenda de todas as ocorrências e deixa ajustar só as exceções.
-    if (isRecurring && !isDuo) {
+    // agenda de todas as ocorrências e deixa ajustar só as exceções. Vale
+    // também para a aula em grupo — os alunos entram como participantes da
+    // mesma aula, e cada ocorrência desconta do pacote de todos.
+    if (isRecurring) {
       setRecurringParams({
-        teacherId, studentId, subjectId, modality, duration,
+        teacherId,
+        studentIds: isDuo ? [studentId, ...duoIds] : [studentId],
+        subjectId, modality, duration,
         slots: weeklySlots(date, time, occurrences),
       })
       return
@@ -246,36 +248,15 @@ export function ScheduleLessonDialog({ studentId, studentName, teachers, hasBala
               </div>
             )}
 
-            {/* Professor */}
-            <div className="space-y-1.5">
-              <Label className="text-xs">Professor *</Label>
-              <select
-                value={teacherId}
-                onChange={e => handleTeacherChange(e.target.value)}
-                className="flex h-9 w-full rounded-lg border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-              >
-                <option value="">Selecionar professor</option>
-                {teachers.map(t => (
-                  <option key={t.id} value={t.id}>{t.name}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Matéria */}
-            <div className="space-y-1.5">
-              <Label className="text-xs">Matéria *</Label>
-              <select
-                value={subjectId}
-                onChange={e => setSubject(e.target.value)}
-                disabled={!teacherId || subjects.length === 0}
-                className="flex h-9 w-full rounded-lg border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
-              >
-                <option value="">{teacherId ? "Selecionar matéria" : "Selecione um professor primeiro"}</option>
-                {subjects.map(s => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
-                ))}
-              </select>
-            </div>
+            {/* Matéria + professor, filtrando um pelo outro */}
+            <TeacherSubjectPicker
+              teachers={teachers}
+              teacherId={teacherId}
+              subjectId={subjectId}
+              onChange={handlePickerChange}
+              labelClassName="text-xs font-medium"
+              selectClassName="mt-1 flex h-9 w-full rounded-lg border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+            />
 
             {/* Data + Hora */}
             <div className="grid grid-cols-2 gap-3">
@@ -375,44 +356,42 @@ export function ScheduleLessonDialog({ studentId, studentName, teachers, hasBala
               </label>
             )}
 
-            {/* Recorrência semanal (indisponível no modo grupo) */}
-            {!isDuo && (
-              <div className="space-y-2">
-                <button
-                  type="button"
-                  onClick={() => setIsRecurring(v => !v)}
-                  className={`w-full flex items-center justify-center gap-2 py-2 rounded-lg border text-sm font-medium transition-colors ${
-                    isRecurring
-                      ? "bg-primary/10 text-primary border-primary/40"
-                      : "bg-muted text-muted-foreground border-border hover:bg-muted/80"
-                  }`}
-                >
-                  <Repeat className="w-4 h-4" />
-                  {isRecurring ? "Aula recorrente (ativada)" : "Repetir semanalmente"}
-                </button>
+            {/* Recorrência semanal — vale também para a aula em grupo */}
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={() => setIsRecurring(v => !v)}
+                className={`w-full flex items-center justify-center gap-2 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                  isRecurring
+                    ? "bg-primary/10 text-primary border-primary/40"
+                    : "bg-muted text-muted-foreground border-border hover:bg-muted/80"
+                }`}
+              >
+                <Repeat className="w-4 h-4" />
+                {isRecurring ? "Aula recorrente (ativada)" : "Repetir semanalmente"}
+              </button>
 
-                {isRecurring && (
-                  <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-2">
-                    <p className="text-[11px] text-muted-foreground">
-                      1 aula por semana, sempre {date ? format(new Date(`${date}T00:00:00`), "EEEE", { locale: ptBRLocale }) : "no mesmo dia"} às {time}.
-                      Desconta {fmtAulas(duration)} do pacote por ocorrência.
-                      Você verá a agenda de todas as datas antes de confirmar.
-                    </p>
-                    <div className="flex items-center gap-2">
-                      <Label className="text-xs whitespace-nowrap">Quantas semanas</Label>
-                      <Input
-                        type="number"
-                        min={2}
-                        max={52}
-                        value={occurrences}
-                        onChange={e => setOccurrences(Math.max(2, Math.min(52, parseInt(e.target.value, 10) || 2)))}
-                        className="h-8 w-20"
-                      />
-                    </div>
+              {isRecurring && (
+                <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-2">
+                  <p className="text-[11px] text-muted-foreground">
+                    1 aula por semana, sempre {date ? format(new Date(`${date}T00:00:00`), "EEEE", { locale: ptBRLocale }) : "no mesmo dia"} às {time}.
+                    Desconta {fmtAulas(duration)} {isDuo ? "do pacote de cada aluno" : "do pacote"} por ocorrência.
+                    Você verá a agenda de todas as datas antes de confirmar.
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <Label className="text-xs whitespace-nowrap">Quantas semanas</Label>
+                    <Input
+                      type="number"
+                      min={2}
+                      max={52}
+                      value={occurrences}
+                      onChange={e => setOccurrences(Math.max(2, Math.min(52, parseInt(e.target.value, 10) || 2)))}
+                      className="h-8 w-20"
+                    />
                   </div>
-                )}
-              </div>
-            )}
+                </div>
+              )}
+            </div>
           </div>
 
           <DialogFooter>
@@ -421,7 +400,7 @@ export function ScheduleLessonDialog({ studentId, studentName, teachers, hasBala
             </Button>
             <Button onClick={submit} disabled={pending || !teacherId || !subjectId}>
               {pending && <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />}
-              {isRecurring && !isDuo ? "Revisar série" : "Agendar"}
+              {isRecurring ? "Revisar série" : "Agendar"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -430,7 +409,12 @@ export function ScheduleLessonDialog({ studentId, studentName, teachers, hasBala
       {/* Revisão da série: conflitos por data, com ajuste das exceções */}
       <RecurringPreviewDialog
         params={recurringParams}
-        studentName={studentName}
+        label={
+          isDuo && duoIds.length > 0
+            ? [studentName, ...duoIds.map(id => otherStudents.find(s => s.id === id)?.name ?? "")]
+                .map(n => n.split(" ")[0]).filter(Boolean).join(" + ")
+            : studentName
+        }
         onClose={() => setRecurringParams(null)}
         onCreated={handleRecurringCreated}
       />

@@ -32,6 +32,18 @@ export type CalendarLesson = {
   modality:    string
   student:     { user: { name: string } }
   subject:     { name: string }
+  lessonType:  string
+  /** Título de compromisso/anotação — aula usa matéria + aluno. */
+  title:       string | null
+  /** false = anotação da secretaria: lembrete, não bloqueia o horário. */
+  blocksAgenda: boolean
+}
+
+/** O que aparece na linha do card: aula mostra o aluno; compromisso, o título. */
+export function lessonLabel(l: CalendarLesson): string {
+  if (l.lessonType !== "COMPROMISSO") return l.student.user.name
+  const texto = l.title?.trim() || "Compromisso"
+  return l.blocksAgenda ? texto : `Nota: ${texto}`
 }
 
 function lessonPosition(lesson: CalendarLesson) {
@@ -156,7 +168,7 @@ export function TeacherWeekCalendar({ lessons }: { lessons: CalendarLesson[] }) 
                       {format(new Date(lesson.scheduledAt), "HH:mm")} {lesson.subject.name}
                     </p>
                     <p className="text-[10px] leading-tight truncate opacity-90">
-                      {lesson.student.user.name}
+                      {lessonLabel(lesson)}
                     </p>
                   </a>
                 )

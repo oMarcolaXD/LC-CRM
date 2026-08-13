@@ -1,4 +1,5 @@
 import { auth }   from "@/lib/auth"
+import { teacherWhereForSession } from "@/lib/teacher-session"
 import { prisma } from "@/lib/prisma"
 import { PageHeader } from "@/components/shared/page-header"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -24,7 +25,7 @@ export default async function ProfessorMateriaisPage() {
   const session = await auth()
 
   const teacher = await prisma.teacher.findFirst({
-    where: { user: { email: session?.user?.email ?? "" } },
+    where: teacherWhereForSession(session),
   })
 
   const [materials, students, subjectRows] = await Promise.all([

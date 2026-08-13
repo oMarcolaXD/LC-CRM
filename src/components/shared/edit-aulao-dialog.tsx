@@ -7,9 +7,10 @@ import {
 import { Button } from "@/components/ui/button"
 import { updateAulaoAction } from "@/lib/actions/aulao"
 import { toast } from "sonner"
-import { Loader2, MapPin, Wifi, Building2, Home, Pencil, AlertTriangle } from "lucide-react"
+import { Loader2, MapPin, Wifi, Building2, Home, Pencil, AlertTriangle, Repeat2, CalendarCheck } from "lucide-react"
 import { mensagemDeErro } from "@/lib/error-message"
 import { ouFalhe } from "@/lib/action-result"
+import { TeacherSubjectPicker } from "@/components/shared/teacher-subject-picker"
 
 export interface EditTeacherOption {
   id:           string
@@ -34,6 +35,10 @@ export interface EditAulaoValues {
   isFree:          boolean
   pricePerStudent: number | null
   enrolledCount:   number
+  /** Preenchido quando o aulão faz parte de uma série recorrente. */
+  recurrenceGroupId?: string | null
+  /** Quantas ocorrências pendentes a série ainda tem (incluindo esta). */
+  seriesPendingCount?: number
 }
 
 interface Props {
@@ -61,7 +66,12 @@ export function EditAulaoDialog({ open, onClose, aulao, teachers }: Props) {
   const [pricePerStudent, setPricePerStudent] = useState(
     aulao.pricePerStudent ? String(aulao.pricePerStudent).replace(".", ",") : ""
   )
+  const [scope, setScope] = useState<"ONE" | "SERIES">("ONE")
   const [pending, start] = useTransition()
+
+  const emSerie      = !!aulao.recurrenceGroupId
+  const pendentes    = aulao.seriesPendingCount ?? 0
+  const aplicaSerie  = emSerie && scope === "SERIES"
 
   // Reabrir o diálogo mostra o aulão como ele está agora, não como estava na
   // última edição abandonada.
@@ -78,6 +88,7 @@ export function EditAulaoDialog({ open, onClose, aulao, teachers }: Props) {
     setCapacity(aulao.capacity?.toString() ?? "")
     setIsFree(aulao.isFree)
     setPricePerStudent(aulao.pricePerStudent ? String(aulao.pricePerStudent).replace(".", ",") : "")
+    setScope("ONE")
   }, [open, aulao])
 
   const teacher       = teachers.find(t => t.id === teacherId)
@@ -85,12 +96,14 @@ export function EditAulaoDialog({ open, onClose, aulao, teachers }: Props) {
   const showLocToggle = modality === "ONLINE" && teacher && !isOnlineOnly
   const capacityNum   = capacity.trim() === "" ? null : parseInt(capacity, 10)
 
-  // Trocar de professor pode invalidar a matéria: só a mantém se ele a leciona.
-  function handleTeacherChange(id: string) {
-    setTeacherId(id)
-    const next = teachers.find(t => t.id === id)
-    if (!next?.subjects.some(s => s.id === subjectId)) setSubjectId("")
-    if (next?.teachingMode === "ONLINE_ONLY") setModality("ONLINE")
+  // O picker já cuida de manter matéria e professor coerentes; aqui só resta a
+  // modalidade de quem atende exclusivamente online.
+  function handlePickerChange(next: { teacherId: string; subjectId: string }) {
+    setTeacherId(next.teacherId)
+    setSubjectId(next.subjectId)
+    if (teachers.find(t => t.id === next.teacherId)?.teachingMode === "ONLINE_ONLY") {
+      setModality("ONLINE")
+    }
   }
 
   function submit() {
@@ -112,7 +125,7 @@ export function EditAulaoDialog({ open, onClose, aulao, teachers }: Props) {
 
     start(async () => {
       try {
-        ouFalhe(await updateAulaoAction({
+        const r = ouFalhe(await updateAulaoAction({
           lessonId:        aulao.id,
           title:           title.trim(),
           teacherId,
@@ -125,8 +138,11 @@ export function EditAulaoDialog({ open, onClose, aulao, teachers }: Props) {
           capacity:        capacityNum,
           isFree,
           pricePerStudent: price,
+          scope:           aplicaSerie ? "SERIES" : "ONE",
         }))
-        toast.success("Aulão atualizado")
+        toast.success(r.updated > 1
+          ? `Série atualizada — ${r.updated} ocorrências remarcadas`
+          : "Aulão atualizado")
         onClose()
       } catch (e) {
         toast.error(mensagemDeErro(e, "Erro ao salvar o aulão"))
@@ -149,6 +165,43 @@ export function EditAulaoDialog({ open, onClose, aulao, teachers }: Props) {
         </DialogHeader>
 
         <div className="space-y-4">
+          {/* Alcance da edição — só aparece em aulão recorrente */}
+          {emSerie && (
+            <div className="rounded-lg border border-violet-300 bg-violet-50 p-3 space-y-2 dark:border-violet-900 dark:bg-violet-950/30">
+              <p className="flex items-center gap-1.5 text-xs font-medium text-violet-900 dark:text-violet-200">
+                <Repeat2 className="w-3.5 h-3.5" />
+                Este aulão se repete. O que você quer alterar?
+              </p>
+              <div className="flex rounded-lg border border-input overflow-hidden bg-background">
+                <button
+                  type="button"
+                  onClick={() => setScope("ONE")}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs transition-colors ${
+                    scope === "ONE" ? "bg-violet-600 text-white" : "text-muted-foreground hover:bg-muted/50"
+                  }`}
+                >
+                  <CalendarCheck className="w-3.5 h-3.5" /> Só esta
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setScope("SERIES")}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs transition-colors ${
+                    scope === "SERIES" ? "bg-violet-600 text-white" : "text-muted-foreground hover:bg-muted/50"
+                  }`}
+                >
+                  <Repeat2 className="w-3.5 h-3.5" />
+                  Esta e as próximas{pendentes > 1 ? ` (${pendentes})` : ""}
+                </button>
+              </div>
+              {aplicaSerie && (
+                <p className="text-[11px] text-violet-800 dark:text-violet-300">
+                  As próximas ocorrências pendentes vão para o horário novo, deslocadas pelos mesmos
+                  dias que você mudar aqui. Aulões já realizados ou cancelados ficam como estão.
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Título */}
           <div>
             <label className="text-xs font-medium">
@@ -157,28 +210,14 @@ export function EditAulaoDialog({ open, onClose, aulao, teachers }: Props) {
             <input type="text" value={title} onChange={e => setTitle(e.target.value)} className={inputClass} />
           </div>
 
-          {/* Professor */}
-          <div>
-            <label className="text-xs font-medium">Professor <span className="text-destructive">*</span></label>
-            <select value={teacherId} onChange={e => handleTeacherChange(e.target.value)} className={inputClass}>
-              <option value="">Selecionar professor...</option>
-              {teachers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-            </select>
-          </div>
-
-          {/* Matéria */}
-          <div>
-            <label className="text-xs font-medium">Matéria <span className="text-destructive">*</span></label>
-            <select
-              value={subjectId}
-              onChange={e => setSubjectId(e.target.value)}
-              disabled={!teacher?.subjects?.length}
-              className={`${inputClass} disabled:opacity-50`}
-            >
-              <option value="">Selecionar matéria...</option>
-              {(teacher?.subjects ?? []).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
-          </div>
+          {/* Matéria + professor, filtrando um pelo outro */}
+          <TeacherSubjectPicker
+            teachers={teachers}
+            teacherId={teacherId}
+            subjectId={subjectId}
+            onChange={handlePickerChange}
+            selectClassName={`${inputClass} disabled:opacity-50`}
+          />
 
           {/* Data, hora e duração */}
           <div className="grid grid-cols-3 gap-3">
@@ -203,8 +242,10 @@ export function EditAulaoDialog({ open, onClose, aulao, teachers }: Props) {
           {dataMudou && (
             <p className="flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-400">
               <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-              As cobranças em aberto dos {aulao.enrolledCount} aluno(s) inscrito(s) passam para a data nova.
-              Avise os alunos — o sistema não reenvia a confirmação sozinho.
+              {aplicaSerie
+                ? "As cobranças em aberto de cada ocorrência acompanham a data nova. Avise os alunos — o sistema não reenvia a confirmação sozinho."
+                : `As cobranças em aberto dos ${aulao.enrolledCount} aluno(s) inscrito(s) passam para a data nova.
+                   Avise os alunos — o sistema não reenvia a confirmação sozinho.`}
             </p>
           )}
 

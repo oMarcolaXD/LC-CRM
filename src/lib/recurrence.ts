@@ -5,7 +5,7 @@
  * não sofre com o fuso do servidor.
  */
 
-import { addWeeks, format, parseISO } from "date-fns"
+import { addDays, addWeeks, differenceInCalendarDays, format, parseISO } from "date-fns"
 
 /** Uma ocorrência da série: dia de calendário + hora local de Brasília. */
 export interface SlotRef {
@@ -24,6 +24,19 @@ export function weeklySlots(date: string, time: string, count: number): SlotRef[
     date: format(addWeeks(first, i), "yyyy-MM-dd"),
     time,
   }))
+}
+
+/** Dias de calendário entre dois dias "yyyy-MM-dd" (pode ser negativo). */
+export function daysBetween(from: string, to: string): number {
+  return differenceInCalendarDays(parseISO(`${to}T00:00:00`), parseISO(`${from}T00:00:00`))
+}
+
+/**
+ * Desloca um dia de calendário. Editar a série inteira move todas as ocorrências
+ * pelo MESMO número de dias, preservando o espaçamento semanal original.
+ */
+export function shiftDay(date: string, days: number): string {
+  return format(addDays(parseISO(`${date}T00:00:00`), days), "yyyy-MM-dd")
 }
 
 /** Ordena por data+hora — a série pode ser reordenada quando o usuário edita uma exceção. */
@@ -65,7 +78,13 @@ export interface RecurringPreview {
   creatableCount:   number
   blockedCount:     number
   costPerLesson:    number
+  /**
+   * Saldo que limita a série. Numa aula em grupo pelo pacote toda ocorrência
+   * debita de TODOS os alunos, então quem manda é o menor saldo da turma.
+   */
   balanceRemaining: number
   /** Saldo que sobra se a série for confirmada como está. */
   balanceAfter:     number
+  /** Alunos da série — mais de um significa aula em grupo pelo pacote. */
+  students:         { name: string; balance: number }[]
 }

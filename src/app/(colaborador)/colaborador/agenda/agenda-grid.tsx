@@ -13,7 +13,7 @@ import {
   ChevronLeft, ChevronRight, CalendarDays, CalendarRange, LayoutGrid,
   CheckCircle2, XCircle, UserX, MessageCircle, BellRing,
   Loader2, Wifi, MapPin, Clock, Plus, Building2, Home, AlertCircle, Users,
-  CreditCard, User, GraduationCap, type LucideIcon,
+  CreditCard, User, GraduationCap, StickyNote, type LucideIcon,
 } from "lucide-react"
 import { Button }                  from "@/components/ui/button"
 import {
@@ -108,6 +108,8 @@ export interface LessonSlot {
   groupMates:    string[]
   packageStatus: "pago" | "pendente" | "atrasado"
   lessonType:    "INDIVIDUAL" | "GROUP" | "AULAO" | "COMPROMISSO"
+  /** false = anotação: aparece na agenda, mas o horário segue livre. */
+  blocksAgenda:  boolean
   title:         string | null
   capacity:      number | null
 }
@@ -143,6 +145,20 @@ export interface PendingRequestSlot {
   modality:    "PRESENCIAL" | "ONLINE"
   teacherMode: "ONLINE_ONLY" | "PRESENCIAL" | "HYBRID"
   notes:       string | null
+}
+
+/** Minutos em "N aula(s)" — 1 aula = 60 min, como no perfil do aluno. */
+function fmtAulas(minutes: number): string {
+  const n = minutes / 60
+  const label = n % 1 === 0 ? String(n) : n.toFixed(1).replace(".", ",")
+  return `${label} aula${n === 1 ? "" : "s"}`
+}
+
+/** "14:00" + 90 min → "15:30" (aritmética de relógio, sem fuso envolvido). */
+function somaHora(time: string, minutes: number): string {
+  const [h, m] = time.split(":").map(Number)
+  const total  = h * 60 + m + minutes
+  return `${String(Math.floor(total / 60) % 24).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`
 }
 
 // ─── Modal: detalhes de aula (visão 360) ─────────────────────────────────────
@@ -272,8 +288,15 @@ function LessonDetailModal({
                 </>
               ) : lesson.lessonType === "COMPROMISSO" ? (
                 <>
-                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-1">Compromisso</p>
+                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-1">
+                    {lesson.blocksAgenda ? "Compromisso" : "Anotação"}
+                  </p>
                   <p className="font-semibold text-[13px] leading-snug">{lesson.title ?? "Compromisso"}</p>
+                  {!lesson.blocksAgenda && (
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                      Não bloqueia o horário — dá para agendar aula neste intervalo.
+                    </p>
+                  )}
                 </>
               ) : (
                 <>
@@ -518,6 +541,7 @@ function QuickScheduleModal({
   const [studentId,    setStudentId]    = useState("")
   const [subjectId,    setSubjectId]    = useState("")
   const [modality,     setModality]     = useState<"PRESENCIAL" | "ONLINE">(isOnlineOnly ? "ONLINE" : "PRESENCIAL")
+  const [duration,     setDuration]     = useState(60)
   const [teacherOnsite, setTeacherOnsite] = useState(false)
   const [alreadyAgreed, setAlreadyAgreed] = useState(false)
   const [pending, start] = useTransition()
@@ -538,6 +562,7 @@ function QuickScheduleModal({
           date,
           time: schedule.time,
           modality,
+          duration,
           teacherOnsite: modality === "ONLINE" ? teacherOnsite : undefined,
           alreadyAgreed: isHistorical ? undefined : alreadyAgreed,
         }))
@@ -615,6 +640,34 @@ function QuickScheduleModal({
                 <option key={s.id} value={s.id}>{s.name}</option>
               ))}
             </select>
+          </div>
+
+          {/* Quantas aulas do pacote esta sessão consome — dava para escolher só
+              pelo perfil do aluno, e a agenda criava sempre 1 aula de 60 min. */}
+          <div>
+            <label className="text-xs font-medium">Duração</label>
+            <select
+              value={duration}
+              onChange={e => setDuration(parseInt(e.target.value, 10))}
+              className={`mt-1 w-full rounded-lg border px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors ${
+                duration === 30
+                  ? "bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-900"
+                  : duration > 60
+                  ? "bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-900"
+                  : "bg-background text-foreground border-input"
+              }`}
+            >
+              {[30, 60, 90, 120, 150, 180, 210, 240].map(min => (
+                <option key={min} value={min} className="bg-background text-foreground">
+                  {fmtAulas(min)} ({min} min)
+                </option>
+              ))}
+            </select>
+            {duration !== 60 && (
+              <p className="text-[10px] text-muted-foreground mt-1">
+                Desconta {fmtAulas(duration)} do pacote e ocupa a agenda até {somaHora(schedule.time, duration)}.
+              </p>
+            )}
           </div>
 
           <div>
@@ -845,6 +898,24 @@ function LessonBlock({
   onSelect: (l: LessonSlot) => void
 }) {
   const height = Math.max(px(lesson.duration), 32)
+
+  // ── ANOTAÇÃO: faixa fina no topo do horário ───────────────────────────────
+  // Ela não segura o horário, então também não pode tapar o slot: ocupa só uma
+  // tira, e o resto do intervalo continua clicável para agendar uma aula.
+  if (lesson.lessonType === "COMPROMISSO" && !lesson.blocksAgenda) {
+    return (
+      <div
+        data-lesson="true"
+        onClick={() => onSelect(lesson)}
+        style={{ top: px(lesson.startMin - START * 60), height: 18, left: 3, right: 3 }}
+        title={`Anotação: ${lesson.title ?? ""} — não bloqueia o horário`}
+        className="absolute z-10 flex items-center gap-1 rounded border border-dashed border-sky-400 bg-sky-50/90 px-1 text-sky-700 overflow-hidden select-none cursor-pointer transition-opacity hover:opacity-85 dark:bg-sky-950/60 dark:text-sky-300 dark:border-sky-800"
+      >
+        <StickyNote className="w-2.5 h-2.5 shrink-0" />
+        <p className="text-[10px] font-medium leading-none truncate">{lesson.title ?? "Anotação"}</p>
+      </div>
+    )
+  }
 
   // ── COMPROMISSO: bloco cinza simplificado ─────────────────────────────────
   if (lesson.lessonType === "COMPROMISSO") {
@@ -1430,6 +1501,7 @@ export function AgendaGrid({
       groupMates:    [],
       packageStatus: "pago",
       lessonType:    "AULAO",
+      blocksAgenda:  true,
       title:         a.title,
       capacity:      a.capacity,
     }
@@ -1474,6 +1546,8 @@ export function AgendaGrid({
     const slotEnd   = slotStart + 60
     return lessons.filter(l => {
       if (l.modality !== "PRESENCIAL") return false
+      // Anotação não ocupa sala — nem na conta que aparece na régua de horários
+      if (!l.blocksAgenda) return false
       if (l.status === "CANCELLED" || l.status === "MISSED") return false
       const lEnd = l.startMin + l.duration
       return l.startMin < slotEnd && lEnd > slotStart

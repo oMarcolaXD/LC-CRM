@@ -15,13 +15,15 @@ import {
   findConflictIn,
   loadRoomAgendaFor,
   loadTeacherAgendaFor,
+  findSeriesConflicts,
+  seriesConflictMessage,
   occupiesRoom,
   overlaps,
   DEFAULT_DURATION,
 } from "@/lib/scheduling"
-import { getRoomCount } from "@/lib/config"
+import { getRoomCount, getOperationalConfig } from "@/lib/config"
 import {
-  sortSlots, isCreatable, isConflict, MAX_OCCURRENCES,
+  sortSlots, isCreatable, isConflict, daysBetween, shiftDay, MAX_OCCURRENCES,
   type SlotRef, type SlotVerdict, type RecurringPreview,
 } from "@/lib/recurrence"
 import { comResultado, type ActionResult } from "@/lib/action-result"
@@ -583,31 +585,54 @@ async function evaluateRecurringSlots(opts: {
   return result
 }
 
-/** Carrega pacote + professor e resolve a ocupação de sala da série. */
+/**
+ * Carrega pacotes + professor e resolve a ocupação de sala da série.
+ *
+ * A série aceita de 1 a 4 alunos: com um só é uma aula individual recorrente,
+ * com mais de um é uma aula em grupo pelo pacote (uma única aula por ocorrência,
+ * com todos como participantes — os gêmeos que estudam juntos, por exemplo).
+ * Cada ocorrência debita o pacote de TODOS, então o saldo que limita a série é
+ * o menor da turma.
+ */
 async function loadRecurringContext(data: {
   teacherId:      string
-  studentId:      string
+  studentIds:     string[]
   modality:       "PRESENCIAL" | "ONLINE"
   teacherOnsite?: boolean
   packageId?:     string
 }) {
-  const student = await prisma.student.findUnique({
-    where:   { id: data.studentId },
-    include: {
-      user:     true,
-      packages: data.packageId
-        ? { where: { id: data.packageId } }
-        : {
-            where:   { status: "ACTIVE", remainingLessons: { gt: 0 } },
-            orderBy: { purchaseDate: "desc" },
-            take:    1,
-          },
-    },
-  })
-  if (!student) throw new Error("Aluno não encontrado")
+  const ids = [...new Set(data.studentIds)]
+  if (ids.length === 0) throw new Error("Selecione ao menos um aluno para a série")
+  if (ids.length > 4)   throw new Error("Uma série em grupo aceita no máximo 4 alunos")
 
-  const pkg = student.packages[0]
-  if (!pkg) throw new Error(data.packageId ? "Pacote não encontrado" : "Aluno sem saldo de aulas disponível")
+  // `packageId` só faz sentido quando há um único aluno — em grupo cada um
+  // debita do seu próprio pacote ativo.
+  const packageFilter = data.packageId && ids.length === 1
+    ? { where: { id: data.packageId } }
+    : {
+        where:   { status: "ACTIVE" as const, remainingLessons: { gt: 0 } },
+        orderBy: { purchaseDate: "desc" as const },
+        take:    1,
+      }
+
+  const students = await prisma.student.findMany({
+    where:   { id: { in: ids } },
+    include: { user: true, packages: packageFilter },
+  })
+  if (students.length !== ids.length) throw new Error("Um ou mais alunos não encontrados")
+
+  const emGrupo = ids.length > 1
+  const alunos  = students.map((student) => {
+    const pkg = student.packages[0]
+    if (!pkg) {
+      throw new Error(
+        data.packageId && !emGrupo ? "Pacote não encontrado"
+      : emGrupo                    ? `${student.name} está sem saldo de aulas disponível`
+      :                              "Aluno sem saldo de aulas disponível"
+      )
+    }
+    return { student, pkg, balance: Number(pkg.remainingLessons) }
+  })
 
   const teacher = await prisma.teacher.findUnique({
     where:   { id: data.teacherId },
@@ -620,7 +645,14 @@ async function loadRecurringContext(data: {
   else if (teacher.teachingMode === "ONLINE_ONLY")  teacherOnsite = false
   else                                              teacherOnsite = data.teacherOnsite ?? false
 
-  return { student, pkg, teacher, teacherOnsite, needsRoom: occupiesRoom(data.modality, teacherOnsite) }
+  return {
+    alunos,
+    /** Menor saldo da turma — é ele quem limita quantas ocorrências cabem. */
+    balance: Math.min(...alunos.map((a) => a.balance)),
+    teacher,
+    teacherOnsite,
+    needsRoom: occupiesRoom(data.modality, teacherOnsite),
+  }
 }
 
 // ─── Pré-visualização da série (alimenta o modal de exceções) ─────────────────
@@ -631,11 +663,13 @@ async function loadRecurringContext(data: {
  */
 export interface RecurringInput {
   teacherId:      string
-  studentId:      string
+  /** 1 aluno = série individual; 2 a 4 = aula em grupo pelo pacote. */
+  studentIds:     string[]
   slots:          SlotRef[]
   modality:       "PRESENCIAL" | "ONLINE"
   duration?:      number
   teacherOnsite?: boolean
+  /** Pacote específico a debitar — só vale para série de um aluno só. */
   packageId?:     string
 }
 
@@ -656,7 +690,7 @@ async function preverSerie(data: RecurringInput): Promise<RecurringPreview> {
   const duration = data.duration ?? 60
   const cost     = lessonCost(duration)
   const ctx      = await loadRecurringContext(data)
-  const balance  = Number(ctx.pkg.remainingLessons)
+  const balance  = ctx.balance
 
   const evaluated = await evaluateRecurringSlots({
     slots:            data.slots,
@@ -676,6 +710,7 @@ async function preverSerie(data: RecurringInput): Promise<RecurringPreview> {
     costPerLesson:    cost,
     balanceRemaining: balance,
     balanceAfter:     balance - creatable.length * cost,
+    students:         ctx.alunos.map((a) => ({ name: a.student.name, balance: a.balance })),
   }
 }
 
@@ -706,11 +741,10 @@ async function criarSerie(
   const duration = data.duration ?? 60
   const cost     = lessonCost(duration)
   const ctx      = await loadRecurringContext(data)
-  const { student, pkg, teacher, teacherOnsite } = ctx
+  const { alunos, teacher, teacherOnsite } = ctx
+  const emGrupo  = alunos.length > 1
 
   const subject = await prisma.subject.findUnique({ where: { id: data.subjectId } })
-
-  const startBal = Number(pkg.remainingLessons)
 
   // Revalida na hora de gravar: algo pode ter sido agendado entre a
   // pré-visualização e a confirmação.
@@ -720,7 +754,7 @@ async function criarSerie(
     teacherFirstName: teacher.user.name.split(" ")[0],
     duration,
     needsRoom:        ctx.needsRoom,
-    balance:          startBal,
+    balance:          ctx.balance,
   })
 
   const toCreate         = evaluated.filter((s) => isCreatable(s.verdict))
@@ -733,6 +767,8 @@ async function criarSerie(
     throw new Error(
       conflicts.length > 0
         ? "Todos os horários da série têm conflito. Nenhuma aula foi criada."
+      : emGrupo
+        ? "Nenhum dos alunos tem saldo suficiente para agendar a série."
         : "Aluno sem saldo suficiente para agendar a série.",
     )
   }
@@ -765,37 +801,43 @@ async function criarSerie(
           duration,
           modality:     data.modality,
           status:       verdict === "PAST" ? "COMPLETED" : "SCHEDULED",
+          lessonType:   emGrupo ? "GROUP" : "INDIVIDUAL",
           teacherOnsite,
           recurrenceGroupId,
-          participants: { create: { studentId: data.studentId } },
+          participants: { create: alunos.map((a) => ({ studentId: a.student.id })) },
         },
       }),
     ),
-    prisma.lessonPackage.update({
-      where: { id: pkg.id },
-      data:  {
-        remainingLessons: { decrement: totalCost },
-        status: startBal - totalCost <= 0 ? "EXHAUSTED" : "ACTIVE",
-      },
-    }),
+    // Cada aluno paga a série do seu próprio pacote
+    ...alunos.map((a) =>
+      prisma.lessonPackage.update({
+        where: { id: a.pkg.id },
+        data:  {
+          remainingLessons: { decrement: totalCost },
+          status: a.balance - totalCost <= 0 ? "EXHAUSTED" : "ACTIVE",
+        },
+      }),
+    ),
   ])
 
-  // Notifica o aluno de cada aula futura agendada (uma por ocorrência).
+  // Notifica cada aluno de cada aula futura agendada (uma por ocorrência).
   // Aulas passadas (registro histórico) não geram notificação.
   for (const { at, verdict } of toCreate) {
     if (verdict === "PAST") continue
-    try {
-      await notifyLessonScheduled({
-        studentUserId: student.userId ?? "",
-        studentEmail:  student.user?.email ?? null,
-        studentPhone:  student.user?.phone ?? null,
-        teacherName:   teacher.user.name ?? "–",
-        subject:       subject?.name ?? "–",
-        scheduledAt:   formatBR(at, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR }),
-        modality:      data.modality === "PRESENCIAL" ? "Presencial" : "Online",
-      })
-    } catch {
-      // Notificação falha silenciosamente — as aulas já foram criadas
+    for (const { student } of alunos) {
+      try {
+        await notifyLessonScheduled({
+          studentUserId: student.userId ?? "",
+          studentEmail:  student.user?.email ?? null,
+          studentPhone:  student.user?.phone ?? null,
+          teacherName:   teacher.user.name ?? "–",
+          subject:       subject?.name ?? "–",
+          scheduledAt:   formatBR(at, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR }),
+          modality:      data.modality === "PRESENCIAL" ? "Presencial" : "Online",
+        })
+      } catch {
+        // Notificação falha silenciosamente — as aulas já foram criadas
+      }
     }
   }
 
@@ -803,7 +845,7 @@ async function criarSerie(
   revalidatePath("/colaborador/agendamentos")
   revalidatePath("/admin/agenda")
   revalidatePath("/professor/agenda")
-  revalidatePath(`/colaborador/alunos/${data.studentId}`)
+  for (const { student } of alunos) revalidatePath(`/colaborador/alunos/${student.id}`)
 
   return { created: toCreate.length, conflicts, skippedNoBalance }
 }
@@ -1155,6 +1197,14 @@ export async function createBatchPastLessonsAction(data: {
 
 // ─── Editar Aula (admin e colaborador) ───────────────────────────────────────
 
+/**
+ * Alcance da edição de uma aula que faz parte de uma série recorrente.
+ * `SERIES` move também as próximas ocorrências ainda pendentes — é o pedido de
+ * quem remarca o horário fixo do aluno e não quer repetir 15 vezes a mesma
+ * edição. O que já aconteceu fica como está: histórico não se remarca.
+ */
+export type EditScope = "ONE" | "SERIES"
+
 export interface UpdateLessonDirectInput {
   lessonId:       string
   studentId:      string   // para revalidação
@@ -1167,36 +1217,53 @@ export interface UpdateLessonDirectInput {
   topicsCovered?: string
   teacherNotes?:  string
   status:         "COMPLETED" | "MISSED" | "CONFIRMED" | "CANCELLED" | "SCHEDULED"
+  scope?:         EditScope
+}
+
+export interface UpdateLessonResult {
+  /** Quantas aulas foram alteradas (1 quando o alcance é só esta). */
+  updated: number
 }
 
 export async function updateLessonDirectAction(
   data: UpdateLessonDirectInput,
-): Promise<ActionResult> {
-  return comResultado(async () => { await editarAula(data); return undefined })
+): Promise<ActionResult<UpdateLessonResult>> {
+  return comResultado(() => editarAula(data))
 }
 
-async function editarAula(data: UpdateLessonDirectInput) {
+async function editarAula(data: UpdateLessonDirectInput): Promise<UpdateLessonResult> {
   const session = await auth()
   if (!["ADMIN", "COLLABORATOR"].includes(session?.user?.role ?? "")) throw new Error("Sem permissão")
 
   const scheduledAt  = parseBrazilDateTime(data.date, data.time)
   const teacherOnsite = data.modality === "PRESENCIAL"
 
+  const atual = await prisma.lesson.findUnique({
+    where:  { id: data.lessonId },
+    select: { id: true, status: true, scheduledAt: true, recurrenceGroupId: true },
+  })
+  if (!atual) throw new Error("Aula não encontrada")
+
   // ── Confirmar não é uma edição de campo ──────────────────────────────────────
   // A transição para CONFIRMED passa só pelo botão Confirmar (confirmLessonAction),
   // que envia as notificações ao professor e ao responsável/aluno. Aqui, a aula só
   // pode permanecer confirmada — nunca virar confirmada.
-  if (data.status === "CONFIRMED") {
-    const atual = await prisma.lesson.findUnique({
-      where:  { id: data.lessonId },
-      select: { status: true },
-    })
-    if (!atual) throw new Error("Aula não encontrada")
-    if (atual.status !== "CONFIRMED") {
-      throw new Error(
-        "Use o botão Confirmar para confirmar a aula — assim o professor e o responsável são notificados."
-      )
-    }
+  if (data.status === "CONFIRMED" && atual.status !== "CONFIRMED") {
+    throw new Error(
+      "Use o botão Confirmar para confirmar a aula — assim o professor e o responsável são notificados."
+    )
+  }
+
+  const teacher = await prisma.teacher.findUnique({
+    where:  { id: data.teacherId },
+    select: { user: { select: { name: true } } },
+  })
+
+  // ── Edição da série inteira ──────────────────────────────────────────────────
+  if (data.scope === "SERIES" && atual.recurrenceGroupId) {
+    const updated = await editarSerieDeAulas({ data, atual, teacherName: teacher?.user.name, teacherOnsite })
+    revalidarAula(data.studentId)
+    return { updated }
   }
 
   // ── Validação da agenda ──────────────────────────────────────────────────────
@@ -1205,10 +1272,6 @@ async function editarAula(data: UpdateLessonDirectInput) {
   // `excludeLessonId` evita que a aula conflite consigo mesma.
   const stillOccupiesAgenda = data.status === "CONFIRMED" || data.status === "SCHEDULED"
   if (stillOccupiesAgenda && scheduledAt > new Date()) {
-    const teacher = await prisma.teacher.findUnique({
-      where:  { id: data.teacherId },
-      select: { user: { select: { name: true } } },
-    })
     const slot = { scheduledAt, duration: data.duration, excludeLessonId: data.lessonId }
     if (occupiesRoom(data.modality, teacherOnsite)) await assertRoomFree(slot)
     await assertTeacherFree({ ...slot, teacherId: data.teacherId }, teacher?.user.name)
@@ -1229,11 +1292,96 @@ async function editarAula(data: UpdateLessonDirectInput) {
     },
   })
 
-  revalidatePath(`/colaborador/alunos/${data.studentId}`)
-  revalidatePath(`/admin/usuarios/${data.studentId}`)
+  revalidarAula(data.studentId)
+  return { updated: 1 }
+}
+
+function revalidarAula(studentId: string) {
+  revalidatePath(`/colaborador/alunos/${studentId}`)
+  revalidatePath(`/admin/usuarios/${studentId}`)
   revalidatePath("/colaborador/agenda")
   revalidatePath("/admin/agenda")
   revalidatePath("/professor/agenda")
+}
+
+/**
+ * Remarca esta ocorrência e as próximas pendentes da mesma recorrência.
+ *
+ * O deslocamento é em DIAS de calendário: mover a aula de terça para quarta
+ * empurra toda a série um dia, preservando o espaçamento semanal. O horário
+ * novo vale para todas. Conteúdo, observações e status continuam sendo desta
+ * ocorrência só — cada aula tem a sua própria história.
+ */
+async function editarSerieDeAulas(opts: {
+  data:          UpdateLessonDirectInput
+  atual:         { id: string; status: string; scheduledAt: Date; recurrenceGroupId: string | null }
+  teacherName?:  string
+  teacherOnsite: boolean
+}): Promise<number> {
+  const { data, atual, teacherOnsite } = opts
+
+  if (data.status !== "SCHEDULED" && data.status !== "CONFIRMED") {
+    throw new Error(
+      "Marcar como realizada, faltou ou cancelada vale só para esta aula — troque o alcance para \"Só esta\"."
+    )
+  }
+
+  const agora     = new Date()
+  const deltaDias = daysBetween(formatBR(atual.scheduledAt, "yyyy-MM-dd"), data.date)
+
+  const irmas = await prisma.lesson.findMany({
+    where: {
+      recurrenceGroupId: atual.recurrenceGroupId!,
+      status:            { in: ["SCHEDULED", "CONFIRMED"] },
+      // Esta ocorrência sempre entra; as demais, só as que ainda não passaram.
+      OR: [{ id: atual.id }, { scheduledAt: { gte: agora } }],
+    },
+    select:  { id: true, scheduledAt: true },
+    orderBy: { scheduledAt: "asc" },
+  })
+
+  const alvos = irmas.map((l) => ({
+    id:          l.id,
+    scheduledAt: parseBrazilDateTime(shiftDay(formatBR(l.scheduledAt, "yyyy-MM-dd"), deltaDias), data.time),
+    duration:    data.duration,
+  }))
+
+  const conflitos = await findSeriesConflicts({
+    teacherId:   data.teacherId,
+    teacherName: opts.teacherName,
+    needsRoom:   occupiesRoom(data.modality, teacherOnsite),
+    slots:       alvos.filter((a) => a.scheduledAt >= agora),
+  })
+  if (conflitos.length > 0) throw new Error(seriesConflictMessage(conflitos))
+
+  await prisma.$transaction([
+    // Campos que valem para a série toda
+    prisma.lesson.updateMany({
+      where: { id: { in: alvos.map((a) => a.id) } },
+      data:  {
+        teacherId: data.teacherId,
+        subjectId: data.subjectId,
+        modality:  data.modality,
+        duration:  data.duration,
+        teacherOnsite,
+      },
+    }),
+    // Cada ocorrência tem a sua data — só o deslocamento é comum
+    ...alvos.map((a) =>
+      prisma.lesson.update({ where: { id: a.id }, data: { scheduledAt: a.scheduledAt } }),
+    ),
+    // O que é desta aula e não da série
+    prisma.lesson.update({
+      where: { id: atual.id },
+      data:  {
+        status:        data.status,
+        topicsCovered: data.topicsCovered || null,
+        teacherNotes:  data.teacherNotes  || null,
+      },
+    }),
+  ])
+
+  return alvos.length
 }
 
 // ─── Criar Aulão ──────────────────────────────────────────────────────────────
@@ -1489,27 +1637,48 @@ export async function rescheduleAndApproveRequestAction(
 
 // ─── Criar Compromisso do Professor ──────────────────────────────────────────
 
-export async function createTeacherCommitmentAction(data: {
+export interface CommitmentInput {
   teacherId: string
   title:     string
   date:      string
   time:      string
   duration?: number
-}): Promise<ActionResult> {
+  /**
+   * Ocupa o expediente inteiro do dia (ver configurações de funcionamento).
+   * Quando ligado, horário e duração digitados são ignorados — é o "período
+   * todo" de quem vai passar o dia fora e não quer calcular minutos.
+   */
+  allDay?:   boolean
+  /**
+   * false = anotação: aparece na agenda do professor mas não segura o horário.
+   * Serve para o recado que não é compromisso ("confirmar material com a mãe").
+   */
+  blocks?:   boolean
+}
+
+export async function createTeacherCommitmentAction(data: CommitmentInput): Promise<ActionResult> {
   return comResultado(async () => { await criarCompromisso(data); return undefined })
 }
 
-async function criarCompromisso(data: {
-  teacherId: string
-  title:     string
-  date:      string
-  time:      string
-  duration?: number
-}) {
+async function criarCompromisso(data: CommitmentInput) {
   await requireCollaboratorOrAdmin()
 
-  const duration    = data.duration ?? 60
-  const scheduledAt = parseBrazilDateTime(data.date, data.time)
+  const blocks = data.blocks ?? true
+
+  // "Período todo" recorta o expediente configurado da escola: começa na
+  // abertura e termina no fechamento daquele dia.
+  let scheduledAt: Date
+  let duration:    number
+  if (data.allDay) {
+    const cfg = await getOperationalConfig()
+    const hhmm = (min: number) =>
+      `${String(Math.floor(min / 60)).padStart(2, "0")}:${String(min % 60).padStart(2, "0")}`
+    scheduledAt = parseBrazilDateTime(data.date, hhmm(cfg.startMin))
+    duration    = Math.max(60, cfg.endMin - cfg.startMin)
+  } else {
+    scheduledAt = parseBrazilDateTime(data.date, data.time)
+    duration    = data.duration ?? 60
+  }
 
   const teacher = await prisma.teacher.findUnique({
     where:  { id: data.teacherId },
@@ -1517,7 +1686,10 @@ async function criarCompromisso(data: {
   })
   if (!teacher) throw new Error("Professor não encontrado")
 
-  await assertTeacherFree({ scheduledAt, duration, teacherId: data.teacherId }, teacher.user.name)
+  // Anotação não disputa horário: pode conviver com as aulas do dia.
+  if (blocks) {
+    await assertTeacherFree({ scheduledAt, duration, teacherId: data.teacherId }, teacher.user.name)
+  }
 
   await prisma.lesson.create({
     data: {
@@ -1529,9 +1701,12 @@ async function criarCompromisso(data: {
       // Compromisso nasce CONFIRMED de propósito: é um bloqueio interno da agenda
       // do professor, sem aluno nem responsável para confirmar. Se ficasse
       // SCHEDULED, apareceria eternamente como "aguardando confirmação".
-      status:     "CONFIRMED",
-      lessonType: "COMPROMISSO",
-      title:      data.title,
+      status:       "CONFIRMED",
+      lessonType:   "COMPROMISSO",
+      title:        data.title,
+      blocksAgenda: blocks,
+      // Anotação nunca ocupa sala, nem quando presencial.
+      teacherOnsite: blocks,
     },
   })
 

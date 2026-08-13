@@ -8,10 +8,14 @@ import { Button }   from "@/components/ui/button"
 import { Badge }    from "@/components/ui/badge"
 import { createDuoLessonAction } from "@/lib/actions/lesson-request"
 import { toast }    from "sonner"
-import { Users, Loader2, MapPin, Wifi, Building2, Home, X } from "lucide-react"
+import { Users, Loader2, MapPin, Wifi, Building2, Home, X, Repeat } from "lucide-react"
 import { format }   from "date-fns"
+import { ptBR as ptBRLocale } from "date-fns/locale"
 import { mensagemDeErro } from "@/lib/error-message"
 import { ouFalhe } from "@/lib/action-result"
+import { weeklySlots } from "@/lib/recurrence"
+import { RecurringPreviewDialog, type RecurringParams } from "@/components/shared/recurring-preview-dialog"
+import { TeacherSubjectPicker } from "@/components/shared/teacher-subject-picker"
 
 interface StudentOption { id: string; name: string; remainingLessons?: number }
 interface TeacherOption {
@@ -42,6 +46,9 @@ export function CreateDuoLessonDialog({ open, onClose, students, teachers, defau
   const [time,        setTime]        = useState(defaultTime ?? "09:00")
   const [modality,    setModality]    = useState<"PRESENCIAL" | "ONLINE">("PRESENCIAL")
   const [teacherOnsite, setTeacherOnsite] = useState(false)
+  const [isRecurring, setIsRecurring] = useState(false)
+  const [occurrences, setOccurrences] = useState(4)
+  const [recurringParams, setRecurringParams] = useState<RecurringParams | null>(null)
   const [pending, start] = useTransition()
 
   const teacher     = teachers.find(t => t.id === teacherId)
@@ -56,10 +63,10 @@ export function CreateDuoLessonDialog({ open, onClose, students, teachers, defau
     )
   }
 
-  function handleTeacherChange(id: string) {
-    setTeacherId(id)
-    setSubjectId("")
-    if (teachers.find(t => t.id === id)?.teachingMode === "ONLINE_ONLY") {
+  function handlePickerChange(next: { teacherId: string; subjectId: string }) {
+    setTeacherId(next.teacherId)
+    setSubjectId(next.subjectId)
+    if (teachers.find(t => t.id === next.teacherId)?.teachingMode === "ONLINE_ONLY") {
       setModality("ONLINE")
     }
   }
@@ -72,6 +79,8 @@ export function CreateDuoLessonDialog({ open, onClose, students, teachers, defau
     setTime(defaultTime ?? "09:00")
     setModality("PRESENCIAL")
     setTeacherOnsite(false)
+    setIsRecurring(false)
+    setOccurrences(4)
     onClose()
   }
 
@@ -82,6 +91,20 @@ export function CreateDuoLessonDialog({ open, onClose, students, teachers, defau
     }
     if (!teacherId || !subjectId) {
       toast.error("Selecione professor e matéria")
+      return
+    }
+
+    // Série recorrente: a revisão confere a agenda de todas as datas e o saldo
+    // de cada aluno antes de gravar qualquer coisa.
+    if (isRecurring) {
+      setRecurringParams({
+        teacherId,
+        studentIds: selectedStudentIds,
+        subjectId,
+        modality,
+        duration:   60,
+        slots:      weeklySlots(date, time, occurrences),
+      })
       return
     }
 
@@ -109,6 +132,7 @@ export function CreateDuoLessonDialog({ open, onClose, students, teachers, defau
     .filter(Boolean)
 
   return (
+    <>
     <Dialog open={open} onOpenChange={(o) => { if (!o) handleClose() }}>
       <DialogContent className="w-[calc(100%-2rem)] sm:max-w-lg max-h-[90vh] overflow-x-hidden overflow-y-auto">
         <DialogHeader>
@@ -184,40 +208,13 @@ export function CreateDuoLessonDialog({ open, onClose, students, teachers, defau
             </div>
           </div>
 
-          {/* Professor */}
-          <div>
-            <label className="text-xs font-medium">
-              Professor <span className="text-destructive">*</span>
-            </label>
-            <select
-              value={teacherId}
-              onChange={e => handleTeacherChange(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-            >
-              <option value="">Selecionar professor...</option>
-              {teachers.map(t => (
-                <option key={t.id} value={t.id}>{t.name}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Matéria */}
-          <div>
-            <label className="text-xs font-medium">
-              Matéria <span className="text-destructive">*</span>
-            </label>
-            <select
-              value={subjectId}
-              onChange={e => setSubjectId(e.target.value)}
-              disabled={!teacher?.subjects?.length}
-              className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-50"
-            >
-              <option value="">Selecionar matéria...</option>
-              {(teacher?.subjects ?? []).map(s => (
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}
-            </select>
-          </div>
+          {/* Matéria + professor, filtrando um pelo outro */}
+          <TeacherSubjectPicker
+            teachers={teachers}
+            teacherId={teacherId}
+            subjectId={subjectId}
+            onChange={handlePickerChange}
+          />
 
           {/* Data e Hora */}
           <div className="grid grid-cols-2 gap-3">
@@ -310,6 +307,40 @@ export function CreateDuoLessonDialog({ open, onClose, students, teachers, defau
               </div>
             </div>
           )}
+
+          {/* Recorrência semanal */}
+          <div className="space-y-2">
+            <button
+              type="button"
+              onClick={() => setIsRecurring(v => !v)}
+              className={`w-full flex items-center justify-center gap-2 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                isRecurring
+                  ? "bg-primary/10 text-primary border-primary/40"
+                  : "bg-muted text-muted-foreground border-border hover:bg-muted/80"
+              }`}
+            >
+              <Repeat className="w-4 h-4" />
+              {isRecurring ? "Aula recorrente (ativada)" : "Repetir semanalmente"}
+            </button>
+
+            {isRecurring && (
+              <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-2">
+                <p className="text-[11px] text-muted-foreground">
+                  1 aula por semana, sempre {date ? format(new Date(`${date}T00:00:00`), "EEEE", { locale: ptBRLocale }) : "no mesmo dia"} às {time},
+                  descontando 1 aula do pacote de cada aluno por ocorrência.
+                  Você verá a agenda de todas as datas antes de confirmar.
+                </p>
+                <div className="flex items-center gap-2">
+                  <label className="text-xs whitespace-nowrap">Quantas semanas</label>
+                  <input
+                    type="number" min={2} max={52} value={occurrences}
+                    onChange={e => setOccurrences(Math.max(2, Math.min(52, parseInt(e.target.value, 10) || 2)))}
+                    className="h-8 w-20 rounded-lg border border-input bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         <DialogFooter className="mt-2">
@@ -319,11 +350,31 @@ export function CreateDuoLessonDialog({ open, onClose, students, teachers, defau
           <Button onClick={submit} disabled={pending}>
             {pending
               ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Criando...</>
+              : isRecurring
+              ? <><Repeat className="w-4 h-4 mr-2" /> Revisar série</>
               : <><Users className="w-4 h-4 mr-2" /> Criar Aula em Grupo (pacote)</>
             }
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+      {/* Revisão da série antes de gravar */}
+      <RecurringPreviewDialog
+        params={recurringParams}
+        label={selectedStudentNames.map(n => String(n).split(" ")[0]).join(" + ")}
+        onClose={() => setRecurringParams(null)}
+        onCreated={(r) => {
+          setRecurringParams(null)
+          const n = `${r.created} aula${r.created !== 1 ? "s" : ""}`
+          if (r.conflicts.length > 0) {
+            toast.warning(`${n} criada${r.created !== 1 ? "s" : ""}, mas ${r.conflicts.length} horário(s) ficaram indisponíveis no meio do caminho`)
+          } else {
+            toast.success(`Série recorrente criada: ${n}`)
+          }
+          handleClose()
+        }}
+      />
+    </>
   )
 }

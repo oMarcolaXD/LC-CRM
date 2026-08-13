@@ -311,6 +311,9 @@ model Lesson {
   studentFeedback   String?
   priceOverride     Decimal?         @db.Decimal(10, 2)
   teacherOnsite     Boolean          @default(false)
+  /// false = anotação na agenda: aparece para o professor mas não ocupa o horário
+  /// nem disputa sala. Só faz sentido em COMPROMISSO — aula sempre bloqueia.
+  blocksAgenda      Boolean          @default(true)
   roomId            String?
   room              Room?            @relation(fields: [roomId], references: [id], onDelete: SetNull)
   recurrenceGroupId String?

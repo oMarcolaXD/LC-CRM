@@ -1,12 +1,12 @@
 "use client"
 
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import Link from "next/link"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import {
   Users, MapPin, Wifi, Plus, Library, Tag, CheckCircle2,
-  Clock, ChevronRight, Repeat2,
+  Clock, ChevronRight, Repeat2, Search, X,
 } from "lucide-react"
 import { Button }                    from "@/components/ui/button"
 import { Badge }                     from "@/components/ui/badge"
@@ -46,6 +46,17 @@ export interface StudentOption {
 
 type Filter = "proximos" | "historico" | "todos"
 
+/** Busca sem acento e sem caixa — "matematica" acha "Matemática". */
+function normalizar(s: string): string {
+  return s.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase()
+}
+
+/** "2026-08" → rótulo do seletor de mês. */
+function rotuloMes(chave: string): string {
+  const [ano, mes] = chave.split("-").map(Number)
+  return format(new Date(ano, mes - 1, 1), "MMMM 'de' yyyy", { locale: ptBR })
+}
+
 // ─── Status helpers ───────────────────────────────────────────────────────────
 
 const STATUS_LABEL: Record<string, string> = {
@@ -76,20 +87,58 @@ export function AuloesListClient({
   students: StudentOption[]
 }) {
   const [filter, setFilter]           = useState<Filter>("proximos")
+  const [busca, setBusca]             = useState("")
+  const [professor, setProfessor]     = useState("")
+  const [tipo, setTipo]               = useState<"" | "AULAO" | "GROUP">("")
+  const [mes, setMes]                 = useState("")
   const [showAulaoDialog, setShowAulaoDialog]   = useState(false)
   const [showGroupDialog, setShowGroupDialog]   = useState(false)
 
   const today = new Date()
   const todayStr = format(today, "yyyy-MM-dd")
 
-  const filtered = auloes.filter(a => {
-    if (filter === "proximos")  return ["SCHEDULED", "CONFIRMED"].includes(a.status)
-    if (filter === "historico") return ["COMPLETED", "CANCELLED", "MISSED"].includes(a.status)
-    return true
-  })
+  // Opções dos seletores saem da própria lista: só aparece professor/mês que
+  // de fato tem aulão — evita varrer um combo cheio de opção vazia.
+  const professores = useMemo(() => {
+    const mapa = new Map<string, string>()
+    for (const a of auloes) mapa.set(a.teacherId, a.teacherName)
+    return [...mapa].map(([id, name]) => ({ id, name })).sort((x, y) => x.name.localeCompare(y.name))
+  }, [auloes])
+
+  const meses = useMemo(() => {
+    const chaves = new Set(auloes.map(a => a.scheduledAt.slice(0, 7)))
+    return [...chaves].sort().reverse()
+  }, [auloes])
+
+  const filtered = useMemo(() => {
+    const termo = normalizar(busca.trim())
+
+    const lista = auloes.filter(a => {
+      if (filter === "proximos"  && !["SCHEDULED", "CONFIRMED"].includes(a.status))            return false
+      if (filter === "historico" && !["COMPLETED", "CANCELLED", "MISSED"].includes(a.status))  return false
+      if (professor && a.teacherId !== professor)                                              return false
+      if (tipo      && a.lessonType !== tipo)                                                  return false
+      if (mes       && a.scheduledAt.slice(0, 7) !== mes)                                      return false
+      if (!termo) return true
+      return normalizar(`${a.title ?? ""} ${a.teacherName} ${a.subjectName}`).includes(termo)
+    })
+
+    // Em "Próximos", o mais perto vem primeiro — é o que a secretaria procura.
+    // No histórico, o mais recente.
+    return lista.sort((x, y) =>
+      filter === "proximos"
+        ? x.scheduledAt.localeCompare(y.scheduledAt)
+        : y.scheduledAt.localeCompare(x.scheduledAt)
+    )
+  }, [auloes, filter, busca, professor, tipo, mes])
 
   const proximosCount  = auloes.filter(a => ["SCHEDULED", "CONFIRMED"].includes(a.status)).length
   const historicoCount = auloes.filter(a => ["COMPLETED", "CANCELLED", "MISSED"].includes(a.status)).length
+  const filtrosAtivos  = !!(busca.trim() || professor || tipo || mes)
+
+  function limparFiltros() {
+    setBusca(""); setProfessor(""); setTipo(""); setMes("")
+  }
 
   return (
     <>
@@ -133,17 +182,82 @@ export function AuloesListClient({
         </div>
       </div>
 
+      {/* Busca e filtros — com 50 aulões na lista, achar um pelo nome é o caminho */}
+      <div className="mb-4 space-y-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative flex-1 min-w-[12rem]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <input
+              type="search"
+              value={busca}
+              onChange={e => setBusca(e.target.value)}
+              placeholder="Buscar por título, professor ou matéria..."
+              className="w-full h-9 rounded-lg border border-input bg-background pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+            />
+          </div>
+
+          <select
+            value={professor}
+            onChange={e => setProfessor(e.target.value)}
+            className="h-9 rounded-lg border border-input bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+          >
+            <option value="">Todos os professores</option>
+            {professores.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+
+          <select
+            value={tipo}
+            onChange={e => setTipo(e.target.value as "" | "AULAO" | "GROUP")}
+            className="h-9 rounded-lg border border-input bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+          >
+            <option value="">Aulões e grupos</option>
+            <option value="AULAO">Só aulões</option>
+            <option value="GROUP">Só grupos</option>
+          </select>
+
+          <select
+            value={mes}
+            onChange={e => setMes(e.target.value)}
+            className="h-9 rounded-lg border border-input bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+          >
+            <option value="">Qualquer mês</option>
+            {meses.map(m => <option key={m} value={m}>{rotuloMes(m)}</option>)}
+          </select>
+
+          {filtrosAtivos && (
+            <Button size="sm" variant="ghost" className="gap-1 text-xs" onClick={limparFiltros}>
+              <X className="w-3.5 h-3.5" />
+              Limpar
+            </Button>
+          )}
+        </div>
+
+        {filtrosAtivos && (
+          <p className="text-xs text-muted-foreground">
+            {filtered.length} resultado{filtered.length !== 1 ? "s" : ""}
+            {filter === "proximos" ? " entre os próximos" : filter === "historico" ? " no histórico" : ""}
+          </p>
+        )}
+      </div>
+
       {/* Lista de aulões */}
       {filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground gap-3">
           <Library className="w-10 h-10 opacity-30" />
           <p className="text-sm">
-            {filter === "proximos"  ? "Nenhum aulão ou grupo agendado"  :
-             filter === "historico" ? "Nenhum histórico encontrado"      : "Nenhum aulão cadastrado"}
+            {filtrosAtivos          ? "Nenhum aulão bate com esses filtros" :
+             filter === "proximos"  ? "Nenhum aulão ou grupo agendado"      :
+             filter === "historico" ? "Nenhum histórico encontrado"         : "Nenhum aulão cadastrado"}
           </p>
-          <Button size="sm" variant="outline" className="mt-1" onClick={() => setShowAulaoDialog(true)}>
-            <Plus className="w-3.5 h-3.5 mr-1.5" /> Criar aulão
-          </Button>
+          {filtrosAtivos ? (
+            <Button size="sm" variant="outline" className="mt-1" onClick={limparFiltros}>
+              <X className="w-3.5 h-3.5 mr-1.5" /> Limpar filtros
+            </Button>
+          ) : (
+            <Button size="sm" variant="outline" className="mt-1" onClick={() => setShowAulaoDialog(true)}>
+              <Plus className="w-3.5 h-3.5 mr-1.5" /> Criar aulão
+            </Button>
+          )}
         </div>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

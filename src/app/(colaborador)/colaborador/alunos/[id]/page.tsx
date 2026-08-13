@@ -161,6 +161,7 @@ export default async function StudentDetailPage({ params, searchParams }: Props)
         id: true, scheduledAt: true, status: true,
         subjectId: true, modality: true, duration: true,
         topicsCovered: true, teacherNotes: true, studentRating: true,
+        recurrenceGroupId: true,
         subject: { select: { name: true } },
         teacher: { select: { id: true, user: { select: { name: true } } } },
       },
@@ -200,6 +201,7 @@ export default async function StudentDetailPage({ params, searchParams }: Props)
         id: true, scheduledAt: true, status: true,
         subjectId: true, modality: true, duration: true,
         topicsCovered: true, teacherNotes: true, studentRating: true,
+        recurrenceGroupId: true,
         subject: { select: { name: true } },
         teacher: { select: { id: true, user: { select: { name: true } } } },
       },
@@ -842,6 +844,7 @@ export default async function StudentDetailPage({ params, searchParams }: Props)
                                   duration:      l.duration,
                                   topicsCovered: l.topicsCovered,
                                   teacherNotes:  l.teacherNotes,
+                                  recurrenceGroupId: l.recurrenceGroupId,
                                 }}
                                 studentId={id}
                                 teachers={teachersForDialog}

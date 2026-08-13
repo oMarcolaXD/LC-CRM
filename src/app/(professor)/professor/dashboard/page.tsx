@@ -12,6 +12,8 @@ import {
 } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { formatBR, toBrazilDate, nowBrazil } from "@/lib/datetime"
+import { teacherWhereForSession } from "@/lib/teacher-session"
+import type { Prisma } from "@prisma/client"
 
 function brl(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })
@@ -35,7 +37,7 @@ function relAgo(date: Date, now: Date): string {
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
-async function getProfData(email: string) {
+async function getProfData(where: Prisma.TeacherWhereInput) {
   const now = nowBrazil()
 
   const months = Array.from({ length: 6 }, (_, i) => {
@@ -48,7 +50,7 @@ async function getProfData(email: string) {
   const prevEnd   = endOfMonth(subMonths(now, 1))
 
   const teacher = await prisma.teacher.findFirst({
-    where:   { user: { email } },
+    where,
     include: { user: true, subjects: { include: { subject: true } } },
   })
   if (!teacher) return null
@@ -301,9 +303,9 @@ const TL_COLOR = {
 
 export default async function ProfessorDashboard() {
   const session = await auth()
-  if (!session?.user?.email) redirect("/login")
+  if (!session?.user) redirect("/login")
 
-  const d = await getProfData(session.user.email)
+  const d = await getProfData(teacherWhereForSession(session))
   if (!d) {
     return (
       <div className="flex items-center justify-center py-24 text-muted-foreground text-sm">

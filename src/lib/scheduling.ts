@@ -82,9 +82,10 @@ export interface TeacherSlotQuery extends Slot {
 export async function findTeacherConflicts(q: TeacherSlotQuery): Promise<ConflictingLesson[]> {
   const candidates = await prisma.lesson.findMany({
     where: {
-      teacherId:   q.teacherId,
-      status:      { in: [...BLOCKING_STATUSES] },
-      scheduledAt: candidateWindow(q),
+      teacherId:    q.teacherId,
+      status:       { in: [...BLOCKING_STATUSES] },
+      blocksAgenda: true,
+      scheduledAt:  candidateWindow(q),
       ...(q.excludeLessonId ? { id: { not: q.excludeLessonId } } : {}),
     },
     select:  CONFLICT_SELECT,
@@ -111,26 +112,33 @@ export async function loadTeacherAgendaFor(
   return prisma.lesson.findMany({
     where: {
       teacherId,
-      status: { in: [...BLOCKING_STATUSES] },
-      OR:     windowsFor(slots),
+      status:       { in: [...BLOCKING_STATUSES] },
+      blocksAgenda: true,
+      OR:           windowsFor(slots),
     },
     select:  CONFLICT_SELECT,
     orderBy: { scheduledAt: "asc" },
   })
 }
 
+/** Slot que carrega o id da aula — necessário para ignorar a própria aula. */
+export interface SlotWithId extends Slot {
+  id: string
+}
+
 /** Aulas que ocupam sala e podem alcançar qualquer um dos slots. */
-export async function loadRoomAgendaFor(slots: Slot[]): Promise<Slot[]> {
+export async function loadRoomAgendaFor(slots: Slot[]): Promise<SlotWithId[]> {
   if (slots.length === 0) return []
   return prisma.lesson.findMany({
     where: {
-      status: { in: [...BLOCKING_STATUSES] },
+      status:       { in: [...BLOCKING_STATUSES] },
+      blocksAgenda: true,
       AND: [
         { OR: [{ modality: "PRESENCIAL" }, { modality: "ONLINE", teacherOnsite: true }] },
         { OR: windowsFor(slots) },
       ],
     },
-    select: { scheduledAt: true, duration: true },
+    select: { id: true, scheduledAt: true, duration: true },
   })
 }
 
@@ -194,8 +202,9 @@ export async function countRoomConflicts(q: RoomSlotQuery): Promise<number> {
         { modality: "PRESENCIAL" },
         { modality: "ONLINE", teacherOnsite: true },
       ],
-      status:      { in: [...BLOCKING_STATUSES] },
-      scheduledAt: candidateWindow(q),
+      status:       { in: [...BLOCKING_STATUSES] },
+      blocksAgenda: true,
+      scheduledAt:  candidateWindow(q),
       ...(q.excludeLessonId ? { id: { not: q.excludeLessonId } } : {}),
     },
     select: { scheduledAt: true, duration: true },
@@ -219,6 +228,86 @@ export async function assertRoomFree(
   if (await countRoomConflicts(q) >= roomCount) {
     throw new Error(roomsFullMessage(roomCount, opts.suggestOnline ?? true))
   }
+}
+
+// ─── Mover uma série inteira de uma vez ──────────────────────────────────────
+// Editar "toda a série" desloca N aulas no mesmo movimento. A validação precisa
+// (a) olhar todos os horários novos numa varredura só e (b) ignorar as próprias
+// aulas que estão sendo movidas — senão cada ocorrência conflitaria consigo
+// mesma, já que no banco ela ainda está no horário antigo.
+
+export interface SeriesConflict {
+  /** Aula da série que não coube no horário novo. */
+  id:     string
+  when:   string   // "12/08 às 14:00"
+  reason: string
+}
+
+export async function findSeriesConflicts(opts: {
+  teacherId:    string
+  teacherName?: string
+  needsRoom:    boolean
+  /** Ocorrências já no horário NOVO, cada uma com o id da aula que será movida. */
+  slots:        SlotWithId[]
+}): Promise<SeriesConflict[]> {
+  if (opts.slots.length === 0) return []
+
+  const movendo = new Set(opts.slots.map((s) => s.id))
+
+  const [teacherAgenda, roomAgenda, roomCount] = await Promise.all([
+    loadTeacherAgendaFor(opts.teacherId, opts.slots),
+    opts.needsRoom ? loadRoomAgendaFor(opts.slots) : Promise.resolve([]),
+    opts.needsRoom ? getRoomCount() : Promise.resolve(0),
+  ])
+
+  const outrasAulas = teacherAgenda.filter((l) => !movendo.has(l.id))
+  const outrasSalas = roomAgenda.filter((l) => !movendo.has(l.id))
+  const quem        = opts.teacherName?.trim().split(" ")[0] ?? "O professor"
+
+  const conflicts: SeriesConflict[] = []
+  const jaAceitos: Slot[] = []
+
+  for (const slot of opts.slots) {
+    const when = formatBR(slot.scheduledAt, "dd/MM 'às' HH:mm")
+
+    // Duas ocorrências da mesma série podem cair uma sobre a outra depois do
+    // deslocamento (duas aulas no mesmo dia em horários diferentes, por ex.).
+    // O banco não acusa isso: as duas estão sendo movidas ao mesmo tempo.
+    if (jaAceitos.some((a) => overlaps(slot, a))) {
+      conflicts.push({ id: slot.id, when, reason: "choca com outra ocorrência da própria série" })
+      continue
+    }
+
+    if (opts.needsRoom && countOverlapsIn(slot, outrasSalas) >= roomCount) {
+      conflicts.push({
+        id: slot.id,
+        when,
+        reason: `todas as ${roomCount} sala${roomCount !== 1 ? "s" : ""} estão ocupadas`,
+      })
+      continue
+    }
+
+    const clash = findConflictIn(slot, outrasAulas)
+    if (clash) {
+      conflicts.push({ id: slot.id, when, reason: `${quem} já tem ${describeLesson(clash)}` })
+      continue
+    }
+
+    jaAceitos.push(slot)
+  }
+
+  return conflicts
+}
+
+/**
+ * Mensagem única para a série que não pôde ser movida. Nada é alterado quando há
+ * conflito: mover metade da série deixaria a agenda pior do que estava.
+ */
+export function seriesConflictMessage(conflicts: SeriesConflict[]): string {
+  const shown = conflicts.slice(0, 5).map((c) => `${c.when} — ${c.reason}`).join("; ")
+  const rest  = conflicts.length > 5 ? ` (e mais ${conflicts.length - 5})` : ""
+  return `Conflito em ${conflicts.length} ocorrência${conflicts.length !== 1 ? "s" : ""} da série: `
+       + `${shown}${rest}. Nada foi alterado — ajuste esses horários ou edite só esta ocorrência.`
 }
 
 // ─── Horário de funcionamento da escola ──────────────────────────────────────

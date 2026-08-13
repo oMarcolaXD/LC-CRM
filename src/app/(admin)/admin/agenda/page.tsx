@@ -108,6 +108,7 @@ export default async function AdminAgendaPage({ searchParams }: AgendaPageProps)
       groupMates:    l.participants.slice(1).map(p => p.student.name ?? "Aluno"),
       packageStatus: "pago" as const,
       lessonType:    "INDIVIDUAL" as const,
+      blocksAgenda:  l.blocksAgenda,
       title:         null,
       capacity:      null,
     }

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState, useTransition } from "react"
 import {
-  AlertTriangle, CalendarClock, Check, Loader2, RefreshCw, Trash2, Wallet, History,
+  AlertTriangle, CalendarClock, Check, Loader2, RefreshCw, Trash2, Wallet, History, Users,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input }  from "@/components/ui/input"
@@ -21,19 +21,21 @@ import {
 } from "@/lib/actions/lesson-request"
 
 export interface RecurringParams {
-  teacherId: string
-  studentId: string
-  subjectId: string
-  modality:  "PRESENCIAL" | "ONLINE"
-  duration:  number
-  slots:     SlotRef[]
+  teacherId:  string
+  /** 1 aluno = série individual; 2 a 4 = aula em grupo pelo pacote. */
+  studentIds: string[]
+  subjectId:  string
+  modality:   "PRESENCIAL" | "ONLINE"
+  duration:   number
+  slots:      SlotRef[]
 }
 
 interface Props {
-  params:      RecurringParams | null
-  studentName: string
-  onClose:     () => void
-  onCreated:   (result: { created: number; conflicts: { date: string; reason: string }[] }) => void
+  params:  RecurringParams | null
+  /** Nome do aluno (série individual) ou da turma ("Ana + João"). */
+  label:   string
+  onClose: () => void
+  onCreated: (result: { created: number; conflicts: { date: string; reason: string }[] }) => void
 }
 
 const VERDICT_STYLE: Record<SlotVerdict, { label: string; row: string; chip: string }> = {
@@ -69,7 +71,7 @@ function fmtAulas(n: number): string {
   return `${label} aula${n === 1 ? "" : "s"}`
 }
 
-export function RecurringPreviewDialog({ params, studentName, onClose, onCreated }: Props) {
+export function RecurringPreviewDialog({ params, label, onClose, onCreated }: Props) {
   const [slots, setSlots]     = useState<SlotRef[]>([])
   const [preview, setPreview] = useState<RecurringPreview | null>(null)
   // Editar uma exceção invalida a verificação anterior — nada é criado sem
@@ -85,11 +87,11 @@ export function RecurringPreviewDialog({ params, studentName, onClose, onCreated
     startCheck(async () => {
       try {
         const result = ouFalhe(await previewRecurringLessonsAction({
-          teacherId: params.teacherId,
-          studentId: params.studentId,
-          slots:     list,
-          modality:  params.modality,
-          duration:  params.duration,
+          teacherId:  params.teacherId,
+          studentIds: params.studentIds,
+          slots:      list,
+          modality:   params.modality,
+          duration:   params.duration,
         }))
         setPreview(result)
         setSlots(result.slots.map(({ date, time }) => ({ date, time })))
@@ -136,12 +138,12 @@ export function RecurringPreviewDialog({ params, studentName, onClose, onCreated
     startSave(async () => {
       try {
         const result = ouFalhe(await createRecurringLessonsAction({
-          teacherId: params.teacherId,
-          studentId: params.studentId,
-          subjectId: params.subjectId,
+          teacherId:  params.teacherId,
+          studentIds: params.studentIds,
+          subjectId:  params.subjectId,
           slots,
-          modality:  params.modality,
-          duration:  params.duration,
+          modality:   params.modality,
+          duration:   params.duration,
         }))
         onCreated(result)
       } catch (e) {
@@ -151,7 +153,8 @@ export function RecurringPreviewDialog({ params, studentName, onClose, onCreated
   }
 
   const rows: (RecurringSlotPreview | SlotRef)[] = stale ? slots : (preview?.slots ?? [])
-  const busy = checking || saving
+  const busy    = checking || saving
+  const emGrupo = (params?.studentIds.length ?? 1) > 1
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v && !saving) onClose() }}>
@@ -159,7 +162,7 @@ export function RecurringPreviewDialog({ params, studentName, onClose, onCreated
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <CalendarClock className="w-4 h-4 text-primary" />
-            Revisar série — {studentName}
+            Revisar série — {label}
           </DialogTitle>
         </DialogHeader>
 
@@ -177,11 +180,31 @@ export function RecurringPreviewDialog({ params, studentName, onClose, onCreated
                   {preview.blockedCount} indisponí{preview.blockedCount === 1 ? "vel" : "veis"}
                 </span>
               )}
-              <span className="inline-flex items-center gap-1.5 rounded-lg bg-muted px-2.5 py-1 font-medium text-muted-foreground">
+              <span
+                className="inline-flex items-center gap-1.5 rounded-lg bg-muted px-2.5 py-1 font-medium text-muted-foreground"
+                title={emGrupo ? "Saldo do aluno com menos aulas — é ele quem limita a série" : undefined}
+              >
                 <Wallet className="w-3.5 h-3.5" />
-                saldo {fmtAulas(preview.balanceRemaining)} → {fmtAulas(preview.balanceAfter)}
+                {emGrupo && "menor "}saldo {fmtAulas(preview.balanceRemaining)} → {fmtAulas(preview.balanceAfter)}
               </span>
             </div>
+
+            {emGrupo && (
+              <div className="rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-xs space-y-1">
+                <p className="flex items-center gap-1.5 font-medium text-foreground">
+                  <Users className="w-3.5 h-3.5 text-primary" />
+                  Aula em grupo — cada ocorrência desconta do pacote de todos
+                </p>
+                <ul className="text-muted-foreground">
+                  {preview.students.map(s => (
+                    <li key={s.name} className="flex justify-between gap-3">
+                      <span>{s.name}</span>
+                      <span className="tabular-nums">{fmtAulas(s.balance)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             {preview.blockedCount > 0 ? (
               <p className="text-xs text-muted-foreground">
