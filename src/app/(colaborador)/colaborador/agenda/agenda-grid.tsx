@@ -1332,23 +1332,51 @@ export function AgendaGrid({
   startOfToday.setHours(0, 0, 0, 0)
   const isPastDay = parsed.getTime() < startOfToday.getTime()
 
-  // Recalcula disponibilidade dos professores conforme o dia navegado.
-  // No futuro/hoje, ordena por maior disponibilidade; no passado (sem
-  // disponibilidade projetada), ordena por quem teve mais aulas no dia.
+  // ── Ordem das colunas ───────────────────────────────────────────────────────
+  // O que acontece no dia manda; a disponibilidade só organiza quem está livre.
+  //
+  // Antes a ordem era só por disponibilidade semanal, e o efeito era o oposto do
+  // desejado: o professor com o dia cheio caía na décima coluna enquanto quem
+  // não tinha nada marcado abria a agenda. O movimento do dia — justamente o que
+  // a secretaria acompanha — ficava escondido atrás da rolagem horizontal.
+  const cargaDoDia = new Map(
+    teachers.map(t => {
+      const itens = visibleLessons.filter(l => l.teacherId === t.id)
+      return [t.id, {
+        // Compromisso e anotação contam para trazer a coluna à esquerda, mas
+        // quem tem aula de verdade vem antes de quem só tem um recado no dia.
+        aulas:    itens.filter(l => l.lessonType !== "COMPROMISSO").length,
+        itens:    itens.length,
+        primeiro: itens.length > 0 ? Math.min(...itens.map(l => l.startMin)) : Infinity,
+      }]
+    }),
+  )
+
   const effectiveTeachers = teachers
     .map(t => ({
       ...t,
       slots: isPastDay ? [] : computeSlots(t.rawAvailability, getDay(parsed)),
     }))
     .sort((a, b) => {
-      if (isPastDay) {
-        const cntA = visibleLessons.filter(l => l.teacherId === a.id).length
-        const cntB = visibleLessons.filter(l => l.teacherId === b.id).length
-        return cntB - cntA
+      const ca = cargaDoDia.get(a.id)!
+      const cb = cargaDoDia.get(b.id)!
+
+      // 1. Quem tem algo marcado hoje vem primeiro
+      if ((ca.itens > 0) !== (cb.itens > 0)) return ca.itens > 0 ? -1 : 1
+
+      if (ca.itens > 0) {
+        // 2. Entre os ocupados: mais aulas primeiro, depois quem começa mais cedo
+        if (ca.aulas !== cb.aulas)       return cb.aulas - ca.aulas
+        if (ca.primeiro !== cb.primeiro) return ca.primeiro - cb.primeiro
       }
+
+      // 3. Entre os livres: maior janela de disponibilidade primeiro
+      //    (no passado não há disponibilidade projetada, então cai no nome)
       const minA = a.slots.reduce((sum, s) => sum + (s.end - s.start), 0)
       const minB = b.slots.reduce((sum, s) => sum + (s.end - s.start), 0)
-      return minB - minA
+      if (minA !== minB) return minB - minA
+
+      return a.name.localeCompare(b.name)
     })
 
   const [view, setView]                     = useState<ViewMode>(initialView)
@@ -2026,7 +2054,9 @@ export function AgendaGrid({
                   <span className="text-[9px] text-muted-foreground leading-tight">sala{roomCount !== 1 ? "s" : ""}</span>
                 </div>
                 {effectiveTeachers.map(t => {
-                  const count        = byTeacher(t.id).length
+                  const carga        = cargaDoDia.get(t.id)!
+                  const count        = carga.aulas
+                  const compromissos = carga.itens - carga.aulas
                   // Só exibe pendências se o professor tem disponibilidade hoje
                   const pendingCount = t.slots.length > 0
                     ? pendingRequests.filter(r => r.teacherId === t.id).length
@@ -2073,6 +2103,11 @@ export function AgendaGrid({
                         {count > 0 ? (
                           <span className="text-[10px] text-muted-foreground tabular-nums">
                             {count} aula{count !== 1 ? "s" : ""}
+                          </span>
+                        ) : compromissos > 0 ? (
+                          // "1 aula" para quem só tem um recado no dia enganava
+                          <span className="text-[10px] text-muted-foreground tabular-nums">
+                            {compromissos} compromisso{compromissos !== 1 ? "s" : ""}
                           </span>
                         ) : (
                           <span className="text-[10px] text-muted-foreground/40">livre</span>

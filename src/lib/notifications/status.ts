@@ -30,14 +30,10 @@ export function getNotificationStatus(): NotificationStatus {
   const silent = devMode || (!whatsapp && !email)
 
   if (!silent) {
-    // Um canal só configurado ainda merece nota, mas não é bloqueio
-    if (!whatsapp) {
-      return {
-        whatsapp, email, devMode, silent,
-        aviso:        "WhatsApp não configurado — as confirmações saem só por e-mail.",
-        comoResolver: "Preencha ZAPI_INSTANCE_ID e ZAPI_TOKEN nas variáveis de ambiente.",
-      }
-    }
+    // Envio automático de WhatsApp (Z-API) é opcional aqui: a escola dispara as
+    // mensagens à mão pelo botão de WhatsApp de cada aluno. Enquanto o e-mail
+    // estiver de pé, não há o que avisar — o banner só repetia todo dia uma
+    // decisão que já foi tomada. Falta de e-mail continua sendo aviso.
     if (!email) {
       return {
         whatsapp, email, devMode, silent,
