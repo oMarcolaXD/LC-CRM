@@ -22,23 +22,39 @@ export default async function FinanceiroPage() {
   const start = new Date(year, month, 1)
   const end   = new Date(year, month + 1, 0, 23, 59, 59)
 
-  const [pagamentos, repasses, aulasCompletadas, pacotesAtivos, alerts] = await Promise.all([
-    prisma.payment.findMany({ orderBy: { dueDate: "asc" }, take: 100 }),
+  // Sem filtro por período e sem `take`: a versão anterior lia as 100 cobranças
+  // de vencimento mais ANTIGO e calculava os KPIs em cima delas — o que fazia a
+  // receita do mês corrente aparecer como R$ 0,00 assim que a base passou de 100
+  // cobranças. Os agregados abaixo são calculados no banco, sobre tudo.
+  const [pagosMes, aberto, repasses, aulasCompletadas, pacotesAtivos, vencimentos, alerts] = await Promise.all([
+    prisma.payment.aggregate({
+      where: { status: "PAID", paidAt: { gte: start, lte: end } },
+      _sum:  { amount: true, feeAmount: true },
+    }),
+    prisma.payment.groupBy({
+      by:    ["status"],
+      where: { status: { not: "PAID" } },
+      _sum:  { amount: true },
+    }),
     prisma.teacherPayout.findMany({
       where:   { month: month + 1, year },
       include: { teacher: { include: { user: true } } },
     }),
     prisma.lesson.count({ where: { status: "COMPLETED", scheduledAt: { gte: start, lte: end } } }),
     prisma.lessonPackage.count({ where: { status: "ACTIVE" } }),
+    prisma.payment.findMany({
+      where:   { status: "PENDING" },
+      orderBy: { dueDate: "asc" },
+      take:    5,
+    }),
     getPayoutAlerts(),
   ])
 
-  const pagosMes       = pagamentos.filter((p) => p.status === "PAID" && p.paidAt && p.paidAt >= start)
-  const receitaBruta   = pagosMes.reduce((s, p) => s + Number(p.amount), 0)
-  const taxasMes       = pagosMes.reduce((s, p) => s + Number(p.feeAmount ?? 0), 0)
+  const receitaBruta   = Number(pagosMes._sum.amount ?? 0)
+  const taxasMes       = Number(pagosMes._sum.feeAmount ?? 0)
   const receitaLiquida = receitaBruta - taxasMes
-  const aReceber       = pagamentos.filter((p) => p.status === "PENDING").reduce((s, p) => s + Number(p.amount), 0)
-  const inadimplente   = pagamentos.filter((p) => p.status === "OVERDUE").reduce((s, p) => s + Number(p.amount), 0)
+  const aReceber       = Number(aberto.find((g) => g.status === "PENDING")?._sum.amount ?? 0)
+  const inadimplente   = Number(aberto.find((g) => g.status === "OVERDUE")?._sum.amount ?? 0)
   const totalRepasses  = repasses.reduce((s, r) => s + Number(r.totalAmount), 0)
 
   const kpis = [
@@ -52,11 +68,6 @@ export default async function FinanceiroPage() {
     { title: "Pacotes Ativos",    value: pacotesAtivos,      icon: Users,       color: "text-purple-600", bg: "bg-purple-50"   },
   ]
 
-  const vencimentos = pagamentos
-    .filter((p) => p.status === "PENDING")
-    .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime())
-    .slice(0, 5)
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -67,6 +78,7 @@ export default async function FinanceiroPage() {
           <LinkButton href="/admin/financeiro/pacotes/analise" variant="outline" size="sm">Análise</LinkButton>
           <LinkButton href="/admin/financeiro/pagamentos"  variant="outline" size="sm">Cobranças</LinkButton>
           <LinkButton href="/admin/financeiro/professores" variant="outline" size="sm">Professores</LinkButton>
+          <LinkButton href="/admin/financeiro/despesas"    variant="outline" size="sm">Despesas</LinkButton>
           <LinkButton href="/admin/financeiro/taxas"       variant="outline" size="sm">Taxas</LinkButton>
         </div>
       </div>

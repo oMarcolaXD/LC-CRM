@@ -91,6 +91,23 @@ enum EducationLevel {
   VESTIBULAR // Preparatório vestibular
 }
 
+enum ExpenseCategory {
+  ALUGUEL
+  SALARIOS // equipe administrativa (professor é TeacherPayout, não despesa)
+  MARKETING
+  SOFTWARE
+  MATERIAL
+  IMPOSTOS
+  CONTABILIDADE
+  MANUTENCAO
+  OUTROS
+}
+
+enum ExpenseRecurrence {
+  UNICA
+  MENSAL
+}
+
 // ─── Usuário Base ─────────────────────────────────────────────────────────────
 
 model User {
@@ -566,6 +583,40 @@ model CardFeeRate {
 
   @@index([method])
   @@map("card_fee_rates")
+}
+
+// ─── Despesas da Empresa ──────────────────────────────────────────────────────
+
+/// Custo fixo ou variável da operação — aluguel, marketing, software, impostos.
+/// NÃO inclui repasse de professor (isso é TeacherPayout) nem taxa de cartão
+/// (isso é Payment.feeAmount): sem essa separação o DRE contaria duas vezes.
+///
+/// `competencia` é o 1º dia do mês a que a despesa pertence (é por ela que o DRE
+/// agrupa); `paidAt` é quando o dinheiro saiu de fato (é por ele que o fluxo de
+/// caixa agrupa). Uma despesa de competência de março paga em abril aparece no
+/// resultado de março e no caixa de abril — que é o comportamento correto.
+///
+/// Despesa mensal é gravada como N linhas (uma por mês) ligadas por
+/// `recurrenceGroupId`, mesmo padrão do parcelamento em Payment. Assim cada mês
+/// pode ter valor diferente e ser quitado ou excluído isoladamente.
+model Expense {
+  id                String            @id @default(cuid())
+  description       String
+  category          ExpenseCategory
+  amount            Decimal           @db.Decimal(10, 2)
+  competencia       DateTime // 1º dia do mês de competência
+  paidAt            DateTime?
+  recurrence        ExpenseRecurrence @default(UNICA)
+  recurrenceGroupId String?
+  notes             String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  @@index([competencia])
+  @@index([category])
+  @@index([recurrenceGroupId])
+  @@index([paidAt])
+  @@map("expenses")
 }
 
 // ─── Metas Mensais ────────────────────────────────────────────────────────────

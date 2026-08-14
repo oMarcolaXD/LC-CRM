@@ -9,11 +9,11 @@ import { DashboardGreeting } from "@/components/shared/dashboard-greeting"
 import Link            from "next/link"
 import { cn }          from "@/lib/utils"
 import {
-  format, subMonths, startOfMonth, endOfMonth, startOfDay, endOfDay,
-  differenceInDays, startOfYear, endOfYear, subYears,
+  format, startOfDay, endOfDay, differenceInDays,
 } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { formatBR, nowBrazil } from "@/lib/datetime"
+import { getPeriodBounds } from "@/lib/reports/period"
 
 function brl(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })
@@ -24,98 +24,11 @@ function pct(v: number) {
 
 // ─── Período ──────────────────────────────────────────────────────────────────
 
-type Periodo = "mes" | "mes-anterior" | "3meses" | "6meses" | "ano"
+// getPeriodBounds vive em @/lib/reports/period e é compartilhado com
+// /admin/relatorios. O dashboard oferece só um subconjunto das opções.
+const VALID_PERIODOS = ["mes", "mes-anterior", "3meses", "6meses", "ano"] as const
 
-const VALID_PERIODOS: Periodo[] = ["mes", "mes-anterior", "3meses", "6meses", "ano"]
-
-type ChartPoint = { start: Date; end: Date; label: string }
-
-function getPeriodBounds(periodo: Periodo, now: Date): {
-  start:       Date
-  end:         Date
-  prevStart:   Date
-  prevEnd:     Date
-  periodLabel: string
-  chartPoints: ChartPoint[]
-  isMonthly:   boolean   // true → receitaGoal já é mensal
-} {
-  switch (periodo) {
-    case "mes-anterior": {
-      const ref = subMonths(now, 1)
-      return {
-        start:       startOfMonth(ref),
-        end:         endOfMonth(ref),
-        prevStart:   startOfMonth(subMonths(now, 2)),
-        prevEnd:     endOfMonth(subMonths(now, 2)),
-        periodLabel: format(ref, "MMMM · yyyy", { locale: ptBR }),
-        chartPoints: Array.from({ length: 6 }, (_, i) => {
-          const d = subMonths(ref, 5 - i)
-          return { start: startOfMonth(d), end: endOfMonth(d), label: format(d, "MMM", { locale: ptBR }) }
-        }),
-        isMonthly: true,
-      }
-    }
-    case "3meses": {
-      const s = startOfMonth(subMonths(now, 2))
-      return {
-        start:       s,
-        end:         endOfMonth(now),
-        prevStart:   startOfMonth(subMonths(now, 5)),
-        prevEnd:     endOfMonth(subMonths(now, 3)),
-        periodLabel: `${format(s, "MMM", { locale: ptBR })} – ${format(now, "MMM yyyy", { locale: ptBR })}`,
-        chartPoints: Array.from({ length: 3 }, (_, i) => {
-          const d = subMonths(now, 2 - i)
-          return { start: startOfMonth(d), end: endOfMonth(d), label: format(d, "MMM", { locale: ptBR }) }
-        }),
-        isMonthly: false,
-      }
-    }
-    case "6meses": {
-      const s = startOfMonth(subMonths(now, 5))
-      return {
-        start:       s,
-        end:         endOfMonth(now),
-        prevStart:   startOfMonth(subMonths(now, 11)),
-        prevEnd:     endOfMonth(subMonths(now, 6)),
-        periodLabel: `${format(s, "MMM", { locale: ptBR })} – ${format(now, "MMM yyyy", { locale: ptBR })}`,
-        chartPoints: Array.from({ length: 6 }, (_, i) => {
-          const d = subMonths(now, 5 - i)
-          return { start: startOfMonth(d), end: endOfMonth(d), label: format(d, "MMM", { locale: ptBR }) }
-        }),
-        isMonthly: false,
-      }
-    }
-    case "ano": {
-      const monthsElapsed = now.getMonth() + 1
-      return {
-        start:       startOfYear(now),
-        end:         endOfMonth(now),
-        prevStart:   startOfYear(subYears(now, 1)),
-        prevEnd:     endOfYear(subYears(now, 1)),
-        periodLabel: format(now, "yyyy"),
-        chartPoints: Array.from({ length: monthsElapsed }, (_, i) => {
-          const d = new Date(now.getFullYear(), i, 1)
-          return { start: startOfMonth(d), end: endOfMonth(d), label: format(d, "MMM", { locale: ptBR }) }
-        }),
-        isMonthly: false,
-      }
-    }
-    default: { // "mes"
-      return {
-        start:       startOfMonth(now),
-        end:         endOfMonth(now),
-        prevStart:   startOfMonth(subMonths(now, 1)),
-        prevEnd:     endOfMonth(subMonths(now, 1)),
-        periodLabel: format(now, "MMMM · yyyy", { locale: ptBR }),
-        chartPoints: Array.from({ length: 6 }, (_, i) => {
-          const d = subMonths(now, 5 - i)
-          return { start: startOfMonth(d), end: endOfMonth(d), label: format(d, "MMM", { locale: ptBR }) }
-        }),
-        isMonthly: true,
-      }
-    }
-  }
-}
+type Periodo = typeof VALID_PERIODOS[number]
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
@@ -405,7 +318,9 @@ export default async function AdminOpsPage({
   searchParams: Promise<{ periodo?: string }>
 }) {
   const { periodo: rawPeriodo } = await searchParams
-  const periodo = (VALID_PERIODOS.includes(rawPeriodo as Periodo) ? rawPeriodo : "mes") as Periodo
+  const periodo = ((VALID_PERIODOS as readonly string[]).includes(rawPeriodo ?? "")
+    ? rawPeriodo
+    : "mes") as Periodo
 
   const [d, session] = await Promise.all([getOpsData(periodo), auth()])
   const { receitaDeltaNum, aulasDeltaNum } = d
