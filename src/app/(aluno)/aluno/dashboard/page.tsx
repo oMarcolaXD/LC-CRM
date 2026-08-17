@@ -2,6 +2,7 @@ import { auth }             from "@/lib/auth"
 import { prisma }           from "@/lib/prisma"
 import { redirect }         from "next/navigation"
 import { getActiveStudent } from "@/lib/get-active-student"
+import { wherePacoteUtilizavel } from "@/lib/packages"
 import { ModoBadge }        from "@/components/shared/modo-badge"
 import { DashboardGreeting } from "@/components/shared/dashboard-greeting"
 import Link                 from "next/link"
@@ -51,7 +52,8 @@ async function getRespData(guardianUserId: string) {
       take: 10,
     }),
     prisma.lessonPackage.findMany({
-      where:   { studentId: { in: studentIds }, status: "ACTIVE" },
+      // Pacote vencido não é mais crédito, mesmo com saldo (src/lib/packages.ts).
+      where:   { studentId: { in: studentIds }, ...wherePacoteUtilizavel() },
       include: { student: true },
       orderBy: { purchaseDate: "desc" },
     }),

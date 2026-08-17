@@ -23,17 +23,22 @@ export default async function AlunosPage({
   const b       = getPeriodBounds(periodo, now, { de: sp.de, ate: sp.ate })
 
   const base    = await getStudentBase(now)
-  const [revenue, prevRevenue, churn, cohorts, credits, topStudents] = await Promise.all([
+  const chartSpan = [b.chartPoints[0].start, b.chartPoints[b.chartPoints.length - 1].end] as const
+
+  const [revenue, prevRevenue, churn, churnTrend, cohorts, credits, topStudents] = await Promise.all([
     getRevenueSummary(b.start, b.end),
     getRevenueSummary(b.prevStart, b.prevEnd),
-    getChurn(b.chartPoints[0].start, b.chartPoints[b.chartPoints.length - 1].end, now, base.active),
+    // Dois recortes: os cartões falam do período escolhido; os gráficos abaixo
+    // precisam dos meses de contexto, senão em "este mês" viram uma barra só.
+    getChurn(b.start, b.end, now, base.active),
+    getChurn(chartSpan[0], chartSpan[1], now, base.active),
     getCohorts(now, 12),
     getCreditBalances(15),
     getTopStudentsByRevenue(b.start, b.end, 10),
   ])
   const value = await getStudentValue(revenue.gross, base.active)
 
-  const flowSeries = joinLeaveSeries(b.chartPoints, churn)
+  const flowSeries = joinLeaveSeries(b.chartPoints, churnTrend)
   const conc5      = concentration(topStudents, revenue.gross, 5)
 
   const cohortColumns = Array.from({ length: cohorts.maxOffset + 1 }, (_, i) => `M${i}`)
@@ -60,14 +65,14 @@ export default async function AlunosPage({
         <Stat label="Alunos ativos" value={num(base.active)}
           sub={`de ${num(base.total)} cadastrados · ${num(base.inactive)} inativos`} />
         <Stat label="Entraram" value={num(churn.joined)}
-          sub="cadastros novos no intervalo do gráfico"
+          sub="cadastros novos no período"
           spark={flowSeries.map((s) => s.entrada)} sparkColor="var(--success)" />
         <Stat label="Pararam" value={num(churn.lost)}
           sub={`${pct(churn.churnPct, 1)} da base ativa · sem aula há mais de 60 dias`}
           tone={churn.lost > churn.joined ? "negative" : undefined}
           spark={flowSeries.map((s) => s.saida)} sparkColor="var(--danger)" />
         <Stat label="Saldo" value={`${churn.net >= 0 ? "+" : ""}${num(churn.net)}`}
-          sub={churn.net >= 0 ? "a base cresceu no intervalo" : "a base encolheu no intervalo"}
+          sub={churn.net >= 0 ? "a base cresceu no período" : "a base encolheu no período"}
           tone={churn.net >= 0 ? "positive" : "negative"} />
       </StatGrid>
 
@@ -96,7 +101,7 @@ export default async function AlunosPage({
             ? <SimpleBarChart
                 data={flowSeries.map((s) => ({ label: s.label, value: s.entrada }))}
                 color="#10b981" height={220} />
-            : <Empty label="Nenhum cadastro novo no intervalo" />}
+            : <Empty label="Nenhum cadastro novo nos meses do gráfico" />}
         </Panel>
 
         <Panel
@@ -107,7 +112,7 @@ export default async function AlunosPage({
             ? <SimpleBarChart
                 data={flowSeries.map((s) => ({ label: s.label, value: s.saida }))}
                 color="#ef4444" height={220} />
-            : <Empty label="Nenhum aluno perdido no intervalo" hint="Toda a base seguiu tendo aula." />}
+            : <Empty label="Nenhum aluno perdido nos meses do gráfico" hint="Toda a base seguiu tendo aula." />}
         </Panel>
       </div>
 

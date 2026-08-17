@@ -121,16 +121,17 @@ export const ORIGIN_COLOR: Record<RevenueOrigin, string> = {
 /**
  * Receita por origem.
  *
- * Pacote e turma têm FK (`packageId` / `courseId`). Aulão **não tem**: a cobrança
- * criada em `aulao.ts` nasce solta, e o único vínculo é o texto da descrição
- * ("Aulão – …" / "Aula em grupo – …"). Daí o casamento por texto abaixo — se
- * algum dia a Payment ganhar `lessonId`, é este CASE que some.
+ * Pacote, turma e aula têm FK (`packageId` / `courseId` / `lessonId`). O
+ * casamento por texto da descrição segue como último recurso: as cobranças de
+ * aulão criadas antes de `Payment.lessonId` existir nasceram sem vínculo
+ * nenhum, e o texto é a única pista que restou nelas.
  */
 export async function getRevenueByOrigin(start: Date, end: Date) {
   const rows = await prisma.$queryRaw<{ origin: RevenueOrigin; total: number; count: number }[]>`
     SELECT CASE
              WHEN "packageId" IS NOT NULL THEN 'PACOTE'
              WHEN "courseId"  IS NOT NULL THEN 'TURMA'
+             WHEN "lessonId"  IS NOT NULL THEN 'AULAO'
              WHEN description ILIKE 'aulão%' OR description ILIKE 'aula em grupo%' THEN 'AULAO'
              ELSE 'AVULSO'
            END                                     AS origin,
@@ -245,6 +246,8 @@ export async function getDeferredRevenue(): Promise<DeferredRevenue> {
            COUNT(DISTINCT "studentId")::int                                AS students
     FROM lesson_packages
     WHERE status = 'ACTIVE' AND "remainingLessons" > 0
+      -- Pacote fora do prazo não é mais obrigação de entregar aula.
+      AND ("expiresAt" IS NULL OR "expiresAt" >= NOW())
   `
   return {
     total:    row?.total ?? 0,

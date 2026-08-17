@@ -14,6 +14,9 @@ import {
 import { ptBR } from "date-fns/locale"
 import { formatBR, nowBrazil } from "@/lib/datetime"
 import { getPeriodBounds } from "@/lib/reports/period"
+import { whereVencida } from "@/lib/payments"
+import { getQualitySummary } from "@/lib/reports/quality"
+import { wherePacoteUtilizavel } from "@/lib/packages"
 
 function brl(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })
@@ -52,8 +55,9 @@ async function getOpsData(periodo: Periodo) {
       where:  { status: "PAID", paidAt: { gte: fetchFrom } },
       select: { amount: true, paidAt: true },
     }),
+    // Vencido = não pago com data no passado. Ver src/lib/payments.ts.
     prisma.payment.findMany({
-      where:   { status: "OVERDUE" },
+      where:   whereVencida(now),
       include: { student: { include: { user: true } } },
       orderBy: { dueDate: "asc" },
       take:    50,
@@ -63,7 +67,7 @@ async function getOpsData(periodo: Periodo) {
       select: { status: true, scheduledAt: true },
     }),
     prisma.student.count({
-      where: { packages: { some: { status: "ACTIVE", remainingLessons: { gt: 0 } } } },
+      where: { packages: { some: wherePacoteUtilizavel(now) } },
     }),
     prisma.lessonRequest.count({ where: { status: "PENDING" } }),
     prisma.lesson.findMany({
@@ -80,7 +84,7 @@ async function getOpsData(periodo: Periodo) {
       take:    10,
     }),
     prisma.lessonPackage.count({
-      where: { status: "ACTIVE", remainingLessons: { gt: 0, lte: 2 } },
+      where: { ...wherePacoteUtilizavel(now), remainingLessons: { gt: 0, lte: 2 } },
     }),
   ])
 
@@ -322,7 +326,12 @@ export default async function AdminOpsPage({
     ? rawPeriodo
     : "mes") as Periodo
 
-  const [d, session] = await Promise.all([getOpsData(periodo), auth()])
+  const [d, session, qualidade] = await Promise.all([
+    getOpsData(periodo),
+    auth(),
+    // A aba Qualidade só ajuda quem lembra de abri-la — o resumo vem para cá.
+    getQualitySummary(nowBrazil()),
+  ])
   const { receitaDeltaNum, aulasDeltaNum } = d
 
   const firstName = (session?.user?.name ?? "").split(" ")[0] || "Admin"
@@ -512,6 +521,45 @@ export default async function AdminOpsPage({
 
         {/* Right column */}
         <div className="flex min-h-0 flex-col gap-4">
+
+          {/* Qualidade dos dados */}
+          {(qualidade.critical > 0 || qualidade.warning > 0) && (
+            <Link
+              href="/admin/relatorios/qualidade"
+              className="block overflow-hidden rounded-[10px] border border-border bg-card transition-colors hover:bg-[var(--hover)]"
+              style={{ borderLeft: `3px solid ${qualidade.critical > 0 ? "var(--danger)" : "var(--warn)"}` }}
+            >
+              <div className="flex items-start justify-between gap-3 p-[12px_14px_8px]">
+                <div className="min-w-0">
+                  <p className="text-[13px] font-semibold tracking-[-0.01em]">Qualidade dos dados</p>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">
+                    {qualidade.critical > 0
+                      ? `${qualidade.critical} problema${qualidade.critical !== 1 ? "s" : ""} crítico${qualidade.critical !== 1 ? "s" : ""}`
+                      : `${qualidade.warning} ponto${qualidade.warning !== 1 ? "s" : ""} de atenção`}
+                    {qualidade.atRisk > 0 && ` · ${brl(qualidade.atRisk)} em jogo`}
+                  </p>
+                </div>
+                <span className="shrink-0 text-[11px] font-medium" style={{ color: "var(--primary)" }}>
+                  Auditar →
+                </span>
+              </div>
+              <ul className="flex flex-col gap-1 px-[14px] pb-[14px]">
+                {qualidade.top.map((t) => (
+                  <li key={t.title} className="flex items-baseline gap-2 text-[12px] leading-snug">
+                    <span
+                      className="shrink-0 font-mono text-[11px] font-semibold tabular-nums"
+                      style={{ color: t.severity === "critico" ? "var(--danger)" : "var(--warn)" }}
+                    >
+                      {t.count}
+                    </span>
+                    <span className="text-muted-foreground">
+                      {t.unit} · {t.title.toLowerCase()}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </Link>
+          )}
 
           {/* Alertas */}
           <div className="overflow-hidden rounded-[10px] border border-border bg-card">

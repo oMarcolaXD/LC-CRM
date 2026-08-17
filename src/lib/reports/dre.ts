@@ -53,6 +53,14 @@ export interface DreResult {
   monthlyExpenses: number
 }
 
+/**
+ * Quadro do período.
+ *
+ * `points` tem de ser `bounds.periodMonths` — meses DENTRO de [start, end].
+ * Passar `chartPoints` aqui é o erro que zerava as colunas: os dados vêm de
+ * [start, end], então qualquer mês de fora do período aparece vazio. Para a
+ * curva de tendência com meses de contexto, use `getProfitSeries`.
+ */
 export async function getDRE(
   start: Date,
   end: Date,
@@ -130,4 +138,26 @@ export async function getDRE(
     contributionPerHour,
     monthlyExpenses,
   }
+}
+
+/**
+ * Curva de receita, custo e lucro sobre os meses de CONTEXTO.
+ *
+ * Existe separada de `getDRE` porque a pergunta é outra: o quadro responde
+ * "como fechou o período", esta responde "para onde a coisa está indo". Por
+ * isso busca os dados no span dos próprios pontos, e não no recorte escolhido
+ * — é o que faz os meses anteriores aparecerem preenchidos em "este mês".
+ */
+export async function getProfitSeries(
+  points: ChartPoint[],
+  basis: RevenueBasis = "caixa",
+): Promise<DreMonth[]> {
+  if (points.length === 0) return []
+  const { months } = await getDRE(
+    points[0].start,
+    points[points.length - 1].end,
+    points,
+    basis,
+  )
+  return months
 }

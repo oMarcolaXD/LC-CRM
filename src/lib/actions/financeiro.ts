@@ -7,6 +7,9 @@ import { redirect }      from "next/navigation"
 import { z }             from "zod"
 import { randomUUID }    from "crypto"
 import { calcFee, type FeeRate } from "@/lib/fees"
+import { comResultado, type ActionResult } from "@/lib/action-result"
+import { temMetodo } from "@/lib/payments"
+import { loadRateHistory, rateAt } from "@/lib/teacher-rates"
 
 async function requireAdmin() {
   const session = await auth()
@@ -44,6 +47,11 @@ export async function getActiveFeeRatesAction(): Promise<FeeRate[]> {
 }
 
 // ─── Criar Pacote para Aluno ──────────────────────────────────────────────────
+
+// A cobrança nasce junto com o pacote, sempre. Antes este formulário criava só
+// o pacote: o aluno ficava com crédito de aula e não existia nada a receber.
+// Foi a origem de 62 pacotes sem cobrança (R$ 49 mil entregues e não faturados)
+// encontrados pela auditoria em Relatórios › Qualidade.
 const packageSchema = z.object({
   studentId:       z.string().min(1),
   totalLessons:    z.coerce.number().min(0.5).refine(
@@ -52,6 +60,10 @@ const packageSchema = z.object({
   ),
   pricePerLesson:  z.coerce.number().min(0),
   expiresInDays:   z.coerce.number().int().min(1).optional(),
+  dueDate:         z.string().min(1, "Informe o vencimento da cobrança"),
+  method:          z.string().optional(),
+  /** Marcar quando o pacote é histórico e já foi pago. */
+  jaPago:          z.coerce.boolean().optional(),
 })
 
 export async function createPackageAction(formData: FormData) {
@@ -60,19 +72,51 @@ export async function createPackageAction(formData: FormData) {
   if (!parsed.success) {
     redirect(`/admin/financeiro/pacotes?error=${encodeURIComponent(parsed.error.issues[0]?.message ?? "Dados inválidos")}`)
   }
-  const { studentId, totalLessons, pricePerLesson, expiresInDays } = parsed.data
+  const { studentId, totalLessons, pricePerLesson, expiresInDays, dueDate, method, jaPago } = parsed.data
+
+  const valor = totalLessons * pricePerLesson
+  if (valor > 0 && jaPago && !temMetodo(method)) {
+    redirect(`/admin/financeiro/pacotes?error=${encodeURIComponent("Informe a forma de pagamento para registrar o pacote como pago")}`)
+  }
+
   const expiresAt = expiresInDays
     ? new Date(Date.now() + expiresInDays * 86400_000)
     : null
+  const feeRates = await loadFeeRates()
+  const lessonsLabel = totalLessons % 1 === 0
+    ? String(totalLessons)
+    : totalLessons.toFixed(1).replace(".", ",")
 
-  await prisma.lessonPackage.create({
-    data: {
-      studentId, totalLessons, remainingLessons: totalLessons,
-      pricePerLesson, expiresAt: expiresAt ?? undefined, status: "ACTIVE",
-    },
+  await prisma.$transaction(async (tx) => {
+    const pkg = await tx.lessonPackage.create({
+      data: {
+        studentId, totalLessons, remainingLessons: totalLessons,
+        pricePerLesson, expiresAt: expiresAt ?? undefined, status: "ACTIVE",
+      },
+    })
+
+    // Pacote de cortesia (preço zero) não gera cobrança — não há o que cobrar.
+    if (valor > 0) {
+      await tx.payment.create({
+        data: {
+          studentId,
+          packageId:   pkg.id,
+          amount:      valor,
+          dueDate:     new Date(dueDate),
+          paidAt:      jaPago ? new Date(dueDate) : null,
+          status:      jaPago ? "PAID" : "PENDING",
+          method:      temMetodo(method) ? method!.trim() : null,
+          feeAmount:   calcFee(feeRates, method ?? null, 1, valor),
+          description: `Pacote de ${lessonsLabel} aulas`,
+        },
+      })
+    }
   })
+
   revalidatePath("/admin/financeiro/pacotes")
-  redirect("/admin/financeiro/pacotes?success=Pacote+criado+com+sucesso")
+  revalidatePath("/admin/financeiro/pagamentos")
+  revalidatePath("/admin/relatorios", "layout")
+  redirect("/admin/financeiro/pacotes?success=Pacote+e+cobran%C3%A7a+criados")
 }
 
 // ─── Criar Pacote (colaborador ou admin) ─────────────────────────────────────
@@ -202,17 +246,50 @@ export async function createPaymentAction(formData: FormData) {
 }
 
 // ─── Marcar Pagamento como Pago ───────────────────────────────────────────────
-export async function markPaymentPaidAction(id: string) {
-  await requireAdmin()
-  await prisma.payment.update({ where: { id }, data: { status: "PAID", paidAt: new Date() } })
-  revalidatePath("/admin/financeiro/pagamentos")
-}
 
-// ─── Marcar Pagamento como Vencido ────────────────────────────────────────────
-export async function markPaymentOverdueAction(id: string) {
-  await requireAdmin()
-  await prisma.payment.update({ where: { id }, data: { status: "OVERDUE" } })
-  revalidatePath("/admin/financeiro/pagamentos")
+/**
+ * Quita a cobrança. A forma de pagamento é obrigatória: sem ela `calcFee` não
+ * acha a regra de taxa, `feeAmount` fica em zero e a receita líquida de todos
+ * os relatórios sai maior do que o valor que caiu na conta.
+ *
+ * `method` pode vir de fora (a tela pergunta quando a cobrança ainda não tem)
+ * ou já estar gravado na própria cobrança.
+ */
+export async function markPaymentPaidAction(
+  id: string,
+  method?: string,
+): Promise<ActionResult<undefined>> {
+  return comResultado(async () => {
+    await requireAdmin()
+
+    const existing = await prisma.payment.findUnique({
+      where:  { id },
+      select: { amount: true, method: true, installmentTotal: true },
+    })
+    if (!existing) throw new Error("Cobrança não encontrada")
+
+    const forma = (method ?? existing.method ?? "").trim()
+    if (!forma) throw new Error("Informe a forma de pagamento para registrar o recebimento")
+
+    const feeRates = await loadFeeRates()
+    await prisma.payment.update({
+      where: { id },
+      data: {
+        status:    "PAID",
+        paidAt:    new Date(),
+        method:    forma,
+        feeAmount: calcFee(feeRates, forma, existing.installmentTotal ?? 1, Number(existing.amount)),
+      },
+    })
+    return undefined
+  }).then((r) => {
+    if (r.ok) {
+      revalidatePath("/admin/financeiro/pagamentos")
+      revalidatePath("/admin/financeiro")
+      revalidatePath("/admin/relatorios", "layout")
+    }
+    return r
+  })
 }
 
 // ─── Repasse do Professor — cálculo automático ────────────────────────────────
@@ -226,17 +303,24 @@ export async function computePayout(teacherId: string, month: number, year: numb
   const start = new Date(year, month - 1, 1)
   const end   = new Date(year, month, 0, 23, 59, 59)
 
-  const [teacher, lessons] = await Promise.all([
+  const [teacher, lessons, history] = await Promise.all([
     prisma.teacher.findUnique({ where: { id: teacherId }, select: { hourlyRate: true } }),
     prisma.lesson.findMany({
       where:  { teacherId, status: "COMPLETED", scheduledAt: { gte: start, lte: end } },
-      select: { duration: true },
+      select: { duration: true, scheduledAt: true },
     }),
+    loadRateHistory([teacherId]),
   ])
 
+  // Cada aula vale a taxa vigente NA DATA DELA. Antes tudo usava o valor atual,
+  // então um reajuste reescrevia o custo de meses já trabalhados.
   const hourlyRate = Number(teacher?.hourlyRate ?? 0)
+  const faixas     = history.get(teacherId)
   const totalUnits = lessons.reduce((sum, l) => sum + l.duration / 60, 0)
-  const totalAmount = totalUnits * hourlyRate
+  const totalAmount = lessons.reduce(
+    (sum, l) => sum + (l.duration / 60) * rateAt(faixas, l.scheduledAt, hourlyRate),
+    0,
+  )
 
   return { totalLessons: totalUnits, totalAmount, hourlyRate, lessonCount: lessons.length }
 }
@@ -321,6 +405,47 @@ export async function updateTeacherPayWindowAction(
   })
   revalidatePath("/admin/financeiro/professores")
   revalidatePath("/admin/financeiro")
+}
+
+// ─── Normalizar status dos pacotes ────────────────────────────────────────────
+
+/**
+ * Alinha o status gravado dos pacotes com a realidade: sem saldo vira
+ * ESGOTADO, fora do prazo vira EXPIRADO.
+ *
+ * As telas já derivam a situação pela data (ver src/lib/packages.ts), então
+ * isto não muda nenhum número — serve para o banco parar de contar histórias
+ * diferentes das telas e para a aba Qualidade parar de acusar o resíduo.
+ */
+export async function normalizePackagesAction(): Promise<ActionResult<{ esgotados: number; expirados: number }>> {
+  return comResultado(async () => {
+    await requireAdmin()
+    const agora = new Date()
+
+    const [esgotados, expirados] = await prisma.$transaction([
+      prisma.lessonPackage.updateMany({
+        where: { status: "ACTIVE", remainingLessons: { lte: 0 } },
+        data:  { status: "EXHAUSTED" },
+      }),
+      prisma.lessonPackage.updateMany({
+        where: {
+          status:           "ACTIVE",
+          remainingLessons: { gt: 0 },
+          expiresAt:        { lt: agora },
+        },
+        data: { status: "EXPIRED" },
+      }),
+    ])
+
+    return { esgotados: esgotados.count, expirados: expirados.count }
+  }).then((r) => {
+    if (r.ok) {
+      revalidatePath("/admin/financeiro/pacotes")
+      revalidatePath("/admin/financeiro")
+      revalidatePath("/admin/relatorios", "layout")
+    }
+    return r
+  })
 }
 
 // ─── Config de Taxas de Cartão (CRUD) ─────────────────────────────────────────
@@ -415,6 +540,12 @@ export async function updatePaymentAction(data: {
   const session = await auth()
   if (!session?.user || !["ADMIN", "COLLABORATOR"].includes(session.user.role)) {
     throw new Error("Sem permissão")
+  }
+
+  // Quitar exige forma de pagamento: sem ela a taxa fica em zero e a receita
+  // líquida dos relatórios sai maior do que o valor recebido de fato.
+  if (data.status === "PAID" && !temMetodo(data.method)) {
+    throw new Error("Informe a forma de pagamento para marcar como paga")
   }
 
   // Recalcula a taxa: método/valor podem ter mudado. Usa o nº de parcelas do

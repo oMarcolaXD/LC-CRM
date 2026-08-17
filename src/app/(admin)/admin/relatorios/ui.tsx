@@ -1,7 +1,7 @@
 import * as React from "react"
 import { cn } from "@/lib/utils"
 import { Sparkline } from "@/components/shared/kpi-card"
-import type { Delta } from "@/lib/reports/format"
+import { brl, type Delta } from "@/lib/reports/format"
 
 // Peças visuais compartilhadas pelas abas de relatório.
 //
@@ -188,6 +188,138 @@ export function Bar({ ratio, color = "var(--primary)" }: { ratio: number; color?
         style={{ width: `${Math.max(0, Math.min(1, ratio)) * 100}%`, background: color }}
       />
     </div>
+  )
+}
+
+// ─── Composição do dinheiro ───────────────────────────────────────────────────
+
+export interface FlowSlice {
+  label: string
+  value: number
+  color: string
+}
+
+/**
+ * Para onde foi cada real que entrou.
+ *
+ * Substituiu uma cascata: com taxas e despesas frequentemente em zero, a cascata
+ * virava barra flutuante sem rótulo e ainda desenhava um bloco fantasma onde o
+ * valor era zero (o arredondamento da barra tem altura mesmo com span 0). Aqui
+ * fatia zerada simplesmente não aparece, e cada linha diz o valor e a fatia.
+ *
+ * Prejuízo: as deduções passam de 100% do que entrou. A barra fica cheia de
+ * vermelho e o resultado aparece negativo, em vez de somar mais de 100%.
+ */
+export function MoneyFlow({
+  gross, deductions, resultLabel = "Lucro",
+}: {
+  gross:      number
+  deductions: FlowSlice[]
+  resultLabel?: string
+}) {
+  const totalOut = deductions.reduce((s, d) => s + d.value, 0)
+  const result   = gross - totalOut
+  const share    = (v: number) => (gross > 0 ? (v / gross) * 100 : 0)
+
+  const visible = deductions.filter((d) => d.value > 0)
+  // Com prejuízo, as deduções ocupam a barra inteira, proporcionais entre si.
+  const scale = result >= 0 ? gross : totalOut
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex h-7 w-full overflow-hidden rounded-[6px]" style={{ background: "var(--border)" }}>
+        {visible.map((d) => {
+          const w = scale > 0 ? (d.value / scale) * 100 : 0
+          return (
+            <div
+              key={d.label}
+              title={`${d.label}: ${brl(d.value)}`}
+              className="flex items-center justify-center overflow-hidden whitespace-nowrap px-1 font-mono text-[10px] font-semibold text-white"
+              style={{ width: `${w}%`, background: d.color }}
+            >
+              {w >= 12 ? `${Math.round(w)}%` : ""}
+            </div>
+          )
+        })}
+        {result > 0 && (
+          <div
+            title={`${resultLabel}: ${brl(result)}`}
+            className="flex flex-1 items-center justify-center overflow-hidden whitespace-nowrap px-1 font-mono text-[10px] font-semibold text-white"
+            style={{ background: "var(--success)" }}
+          >
+            {share(result) >= 12 ? `${Math.round(share(result))}%` : ""}
+          </div>
+        )}
+      </div>
+
+      <table className="w-full border-collapse text-[12.5px]">
+        <tbody>
+          <FlowRow label="Receita bruta" value={gross} pct={gross > 0 ? 100 : 0} color="var(--primary)" strong />
+          {deductions.map((d) => (
+            <FlowRow
+              key={d.label}
+              label={d.label}
+              value={d.value > 0 ? -d.value : null}
+              pct={d.value > 0 ? share(d.value) : null}
+              color={d.color}
+            />
+          ))}
+          <FlowRow
+            label={result >= 0 ? resultLabel : "Prejuízo"}
+            value={result}
+            pct={share(result)}
+            color={result >= 0 ? "var(--success)" : "var(--danger)"}
+            strong
+            top
+          />
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function FlowRow({
+  label, value, pct: p, color, strong, top,
+}: {
+  label: string
+  value: number | null
+  pct:   number | null
+  color: string
+  strong?: boolean
+  top?:  boolean
+}) {
+  const muted = value == null
+  return (
+    <tr className={cn(top && "border-t border-border")}>
+      <td className="py-[5px] pr-2">
+        <span className="inline-flex items-center gap-2">
+          <span
+            className="h-2 w-2 shrink-0 rounded-full"
+            style={{ background: muted ? "var(--border)" : color }}
+          />
+          <span className={cn(strong && "font-semibold", muted && "text-muted-foreground")}>
+            {label}
+          </span>
+        </span>
+      </td>
+      <td
+        className={cn(
+          "py-[5px] text-right font-mono",
+          strong && "font-semibold",
+          muted && "text-muted-foreground",
+          value != null && value < 0 && "text-muted-foreground",
+        )}
+        style={{ fontFeatureSettings: '"tnum"' }}
+      >
+        {value == null ? "—" : `${value < 0 ? "− " : ""}${brl(Math.abs(value))}`}
+      </td>
+      <td
+        className="w-[52px] py-[5px] text-right font-mono text-muted-foreground"
+        style={{ fontFeatureSettings: '"tnum"' }}
+      >
+        {p == null ? "" : `${Math.round(p)}%`}
+      </td>
+    </tr>
   )
 }
 

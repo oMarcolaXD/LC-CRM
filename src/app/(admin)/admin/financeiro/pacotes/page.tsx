@@ -7,7 +7,9 @@ import { LinkButton }     from "@/components/shared/link-button"
 import { Input }          from "@/components/ui/input"
 import { Label }          from "@/components/ui/label"
 import { createPackageAction } from "@/lib/actions/financeiro"
+import { PAYMENT_METHODS }     from "@/lib/payments"
 import { PackageStatusButton } from "./package-status-button"
+import { NormalizeButton }     from "./normalize-button"
 import { BookOpen, Plus, AlertCircle, BarChart3 } from "lucide-react"
 import { format }         from "date-fns"
 import { ptBR }           from "date-fns/locale"
@@ -49,9 +51,12 @@ export default async function PacotesPage({ searchParams }: PacotesPageProps) {
     <div className="space-y-6">
       <PageHeader title="PACOTES DE AULAS" backHref="/admin/financeiro"
         description="Crie e gerencie os pacotes de aulas dos alunos">
-        <LinkButton href="/admin/financeiro/pacotes/analise" variant="outline" size="sm">
-          <BarChart3 className="w-4 h-4 mr-1" /> Análise de vendas
-        </LinkButton>
+        <div className="flex gap-2">
+          <NormalizeButton />
+          <LinkButton href="/admin/financeiro/pacotes/analise" variant="outline" size="sm">
+            <BarChart3 className="w-4 h-4 mr-1" /> Análise de vendas
+          </LinkButton>
+        </div>
       </PageHeader>
 
       {success && <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm">{decodeURIComponent(success)}</div>}
@@ -91,7 +96,40 @@ export default async function PacotesPage({ searchParams }: PacotesPageProps) {
                 <Label htmlFor="expiresInDays">Validade (dias)</Label>
                 <Input id="expiresInDays" name="expiresInDays" type="number" min="1" placeholder="90 (deixe vazio = sem prazo)" />
               </div>
-              <Button type="submit" className="w-full">Criar Pacote</Button>
+
+              {/* A cobrança nasce junto com o pacote. Sem isso o aluno ficava com
+                  crédito de aula e não existia nada a receber — foi a origem de
+                  62 pacotes não faturados achados pela auditoria. */}
+              <div className="rounded-lg border border-border p-3 space-y-3">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Cobrança do pacote
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="dueDate">Vencimento *</Label>
+                    <Input id="dueDate" name="dueDate" type="date" required />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="method">Forma de pagamento</Label>
+                    <select id="method" name="method"
+                      className="flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+                      <option value="">A definir</option>
+                      {PAYMENT_METHODS.map((m) => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="checkbox" name="jaPago" value="true"
+                    className="h-4 w-4 rounded border-input accent-primary" />
+                  Já foi pago (pacote retroativo)
+                </label>
+                <p className="text-[11px] leading-snug text-muted-foreground">
+                  Marcando como pago, a forma de pagamento passa a ser obrigatória — é ela que
+                  define a taxa da maquininha e, com isso, a receita líquida.
+                </p>
+              </div>
+
+              <Button type="submit" className="w-full">Criar Pacote e Cobrança</Button>
             </form>
           </CardContent>
         </Card>

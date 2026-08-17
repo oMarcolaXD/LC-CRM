@@ -1,5 +1,8 @@
 import { prisma }      from "@/lib/prisma"
 import { getPayoutAlerts } from "@/lib/actions/financeiro"
+import { whereAVencer, whereVencida } from "@/lib/payments"
+import { wherePacoteUtilizavel } from "@/lib/packages"
+import { nowBrazil } from "@/lib/datetime"
 import { PageHeader }  from "@/components/shared/page-header"
 import { LinkButton }  from "@/components/shared/link-button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -16,7 +19,7 @@ function brl(value: number) {
 }
 
 export default async function FinanceiroPage() {
-  const now   = new Date()
+  const now   = nowBrazil()
   const month = now.getMonth()
   const year  = now.getFullYear()
   const start = new Date(year, month, 1)
@@ -26,24 +29,25 @@ export default async function FinanceiroPage() {
   // de vencimento mais ANTIGO e calculava os KPIs em cima delas — o que fazia a
   // receita do mês corrente aparecer como R$ 0,00 assim que a base passou de 100
   // cobranças. Os agregados abaixo são calculados no banco, sobre tudo.
-  const [pagosMes, aberto, repasses, aulasCompletadas, pacotesAtivos, vencimentos, alerts] = await Promise.all([
+  const [pagosMes, aVencer, vencido, repasses, aulasCompletadas, pacotesAtivos, vencimentos, alerts] = await Promise.all([
     prisma.payment.aggregate({
       where: { status: "PAID", paidAt: { gte: start, lte: end } },
       _sum:  { amount: true, feeAmount: true },
     }),
-    prisma.payment.groupBy({
-      by:    ["status"],
-      where: { status: { not: "PAID" } },
-      _sum:  { amount: true },
-    }),
+    // "Vencido" vem da data, não do status gravado — ninguém marcava OVERDUE à
+    // mão, e por isso este cartão mostrava R$ 0,00 de inadimplência enquanto
+    // havia dezenas de cobranças no vermelho. Ver src/lib/payments.ts.
+    prisma.payment.aggregate({ where: whereAVencer(now), _sum: { amount: true } }),
+    prisma.payment.aggregate({ where: whereVencida(now), _sum: { amount: true } }),
     prisma.teacherPayout.findMany({
       where:   { month: month + 1, year },
       include: { teacher: { include: { user: true } } },
     }),
     prisma.lesson.count({ where: { status: "COMPLETED", scheduledAt: { gte: start, lte: end } } }),
-    prisma.lessonPackage.count({ where: { status: "ACTIVE" } }),
+    // Ativo de verdade: com saldo e dentro do prazo (src/lib/packages.ts).
+    prisma.lessonPackage.count({ where: wherePacoteUtilizavel(now) }),
     prisma.payment.findMany({
-      where:   { status: "PENDING" },
+      where:   whereAVencer(now),
       orderBy: { dueDate: "asc" },
       take:    5,
     }),
@@ -53,8 +57,8 @@ export default async function FinanceiroPage() {
   const receitaBruta   = Number(pagosMes._sum.amount ?? 0)
   const taxasMes       = Number(pagosMes._sum.feeAmount ?? 0)
   const receitaLiquida = receitaBruta - taxasMes
-  const aReceber       = Number(aberto.find((g) => g.status === "PENDING")?._sum.amount ?? 0)
-  const inadimplente   = Number(aberto.find((g) => g.status === "OVERDUE")?._sum.amount ?? 0)
+  const aReceber       = Number(aVencer._sum.amount ?? 0)
+  const inadimplente   = Number(vencido._sum.amount ?? 0)
   const totalRepasses  = repasses.reduce((s, r) => s + Number(r.totalAmount), 0)
 
   const kpis = [

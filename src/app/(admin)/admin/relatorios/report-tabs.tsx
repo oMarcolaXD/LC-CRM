@@ -19,6 +19,7 @@ const TABS = [
   { href: "/admin/relatorios/cobranca",    label: "Cobrança"    },
   { href: "/admin/relatorios/alunos",      label: "Alunos"      },
   { href: "/admin/relatorios/professores", label: "Professores" },
+  { href: "/admin/relatorios/qualidade",   label: "Qualidade"   },
 ] as const
 
 export function ReportTabs() {

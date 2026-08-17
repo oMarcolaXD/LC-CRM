@@ -23,13 +23,14 @@ import { getAging, getDebtors, getReceivables, getRecovery } from "@/lib/reports
 import { getStudentBase, getChurn, getStudentValue, getCreditBalances } from "@/lib/reports/students"
 import { getTeacherPerformance } from "@/lib/reports/teachers"
 import { getLessonStats } from "@/lib/reports/operations"
+import { getQualityReport } from "@/lib/reports/quality"
 
 import { format } from "date-fns"
 
 export const dynamic = "force-dynamic"
 
 const REPORTS = [
-  "resumo", "receita", "dre", "caixa", "cobranca", "alunos", "professores",
+  "resumo", "receita", "dre", "caixa", "cobranca", "alunos", "professores", "qualidade",
 ] as const
 type ReportName = typeof REPORTS[number]
 
@@ -111,7 +112,7 @@ async function buildSections(
     }
 
     case "dre": {
-      const dre = await getDRE(b.start, b.end, b.chartPoints)
+      const dre = await getDRE(b.start, b.end, b.periodMonths)
       const cols = dre.months.map((m) => m.label)
       const line = (label: string, pick: (i: number) => number, total: number) =>
         [label, ...dre.months.map((_, i) => pick(i)), total]
@@ -151,7 +152,7 @@ async function buildSections(
 
     case "caixa": {
       const [flow, projection] = await Promise.all([
-        getCashFlow(b.chartPoints),
+        getCashFlow(b.periodMonths),
         getProjection(now, 90),
       ])
       return [
@@ -214,7 +215,7 @@ async function buildSections(
       const base = await getStudentBase(now)
       const [revenue, churn, credits] = await Promise.all([
         getRevenueSummary(b.start, b.end),
-        getChurn(b.chartPoints[0].start, b.chartPoints[b.chartPoints.length - 1].end, now, base.active),
+        getChurn(b.start, b.end, now, base.active),
         getCreditBalances(200),
       ])
       const value = await getStudentValue(revenue.gross, base.active)
@@ -271,12 +272,35 @@ async function buildSections(
       ]
     }
 
+    case "qualidade": {
+      // Auditoria varre a base inteira, então ignora o período — igual à tela.
+      const q = await getQualityReport(now)
+      return [
+        {
+          title: "Resumo da auditoria",
+          headers: ["Críticos", "Atenção", "Valor envolvido", "Verificações limpas"],
+          rows: [[q.critical, q.warning, q.atRisk, q.clean]],
+        },
+        {
+          title: "Verificações",
+          headers: ["Severidade", "Verificação", "Ocorrências", "Valor envolvido", "Por que importa"],
+          rows: q.checks.map((c) => [c.severity, c.title, c.count, c.amount ?? null, c.why]),
+        },
+        {
+          title: "Ocorrências (amostra por verificação)",
+          headers: ["Verificação", "Item", "Detalhe", "Valor"],
+          rows: q.checks.flatMap((c) =>
+            c.items.map((i) => [c.title, i.label, i.detail, i.amount ?? null])),
+        },
+      ]
+    }
+
     default: { // "resumo"
       const [revenue, costs, expenses, dre, receivables, deferred] = await Promise.all([
         getRevenueSummary(b.start, b.end),
         getTeacherCosts(b.start, b.end),
         getExpenses(b.start, b.end),
-        getDRE(b.start, b.end, b.chartPoints),
+        getDRE(b.start, b.end, b.periodMonths),
         getReceivables(now),
         getDeferredRevenue(),
       ])

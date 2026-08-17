@@ -1,4 +1,6 @@
 import { prisma }     from "@/lib/prisma"
+import { situacao, type SituacaoCobranca } from "@/lib/payments"
+import { nowBrazil }  from "@/lib/datetime"
 import { notFound }   from "next/navigation"
 import { PageHeader } from "@/components/shared/page-header"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -41,9 +43,13 @@ export default async function AlunoFinanceiroPage({ params }: Props) {
   if (!student) notFound()
 
   const allPayments = student.payments
-  const pago     = allPayments.filter((p) => p.status === "PAID").reduce((t, p) => t + Number(p.amount), 0)
-  const pendente = allPayments.filter((p) => p.status === "PENDING").reduce((t, p) => t + Number(p.amount), 0)
-  const vencido  = allPayments.filter((p) => p.status === "OVERDUE").reduce((t, p) => t + Number(p.amount), 0)
+  // Situação derivada da data, não do status gravado (src/lib/payments.ts).
+  const now  = nowBrazil()
+  const soma = (sit: SituacaoCobranca) =>
+    allPayments.filter((p) => situacao(p, now) === sit).reduce((t, p) => t + Number(p.amount), 0)
+  const pago     = soma("PAID")
+  const pendente = soma("PENDING")
+  const vencido  = soma("OVERDUE")
   const taxas    = allPayments.filter((p) => p.status === "PAID").reduce((t, p) => t + Number(p.feeAmount ?? 0), 0)
 
   const avulsos = allPayments.filter((p) => !p.packageId)

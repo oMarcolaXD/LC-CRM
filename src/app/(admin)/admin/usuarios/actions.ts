@@ -158,8 +158,17 @@ export async function createUserAction(
     }
 
     if (role === "TEACHER") {
-      await tx.teacher.create({
+      const t = await tx.teacher.create({
         data: { userId: user.id, hourlyRate: hourlyRate ?? 0, bio, teachingMode: (teachingMode ?? "HYBRID") as TeacherMode },
+      })
+      // Primeira vigência do valor/hora, com data lá atrás: assim nenhuma aula
+      // fica sem taxa aplicável. Ver src/lib/teacher-rates.ts.
+      await tx.teacherRate.create({
+        data: {
+          teacherId:     t.id,
+          hourlyRate:    hourlyRate ?? 0,
+          effectiveFrom: new Date("1970-01-01T00:00:00.000Z"),
+        },
       })
     }
     if (role === "GUARDIAN") {
@@ -225,11 +234,34 @@ export async function updateUserAction(id: string, formData: FormData) {
       })
     }
     if (role === "TEACHER") {
-      await tx.teacher.upsert({
+      const t = await tx.teacher.upsert({
         where:  { userId: id },
         update: { hourlyRate: hourlyRate ?? 0, bio, teachingMode: (teachingMode ?? "HYBRID") as TeacherMode },
         create: { userId: id, hourlyRate: hourlyRate ?? 0, bio, teachingMode: (teachingMode ?? "HYBRID") as TeacherMode },
       })
+
+      // Reajuste vira uma vigência nova começando HOJE — o custo das aulas já
+      // dadas continua com a taxa antiga. Sem isto, aumentar o valor/hora
+      // reescrevia o resultado de meses já fechados.
+      const novo   = hourlyRate ?? 0
+      const ultima = await tx.teacherRate.findFirst({
+        where:   { teacherId: t.id },
+        orderBy: { effectiveFrom: "desc" },
+        select:  { hourlyRate: true },
+      })
+      if (!ultima) {
+        await tx.teacherRate.create({
+          data: { teacherId: t.id, hourlyRate: novo, effectiveFrom: new Date("1970-01-01T00:00:00.000Z") },
+        })
+      } else if (Number(ultima.hourlyRate) !== novo) {
+        const hoje = new Date()
+        hoje.setHours(0, 0, 0, 0)
+        await tx.teacherRate.upsert({
+          where:  { teacherId_effectiveFrom: { teacherId: t.id, effectiveFrom: hoje } },
+          update: { hourlyRate: novo },
+          create: { teacherId: t.id, hourlyRate: novo, effectiveFrom: hoje },
+        })
+      }
     }
     if (role === "GUARDIAN") {
       const guardian = await tx.guardian.upsert({

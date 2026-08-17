@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/select"
 import { Plus, Pencil, Trash2, Loader2, Percent } from "lucide-react"
 import { mensagemDeErro } from "@/lib/error-message"
+import { PAYMENT_METHODS } from "@/lib/payments"
 
 interface Rate {
   id:              string
@@ -28,8 +29,10 @@ interface Rate {
   active:          boolean
 }
 
-// Métodos que costumam ter taxa. Casam com Payment.method usado nos modais.
-const METHODS = ["Cartão de crédito", "Cartão de débito", "Boleto", "Pix", "TED", "Transferência"]
+// Lista única, compartilhada com os formulários de cobrança. O texto tem de
+// bater exatamente, porque é por ele que calcFee acha a taxa. Ver
+// src/lib/payments.ts.
+const METHODS = PAYMENT_METHODS
 
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
 

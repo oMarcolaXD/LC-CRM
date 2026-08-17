@@ -17,6 +17,7 @@ const REPORT_BY_PATH: Record<string, string> = {
   "/admin/relatorios/cobranca":    "cobranca",
   "/admin/relatorios/alunos":      "alunos",
   "/admin/relatorios/professores": "professores",
+  "/admin/relatorios/qualidade":   "qualidade",
 }
 
 export function ReportActions() {

@@ -1,15 +1,17 @@
 // Atribuição de receita a uma aula.
 //
-// ── Por que é heurística ──────────────────────────────────────────────────────
-// `Payment` não tem `lessonId`. Uma cobrança aponta no máximo para um pacote
-// (`packageId`) ou uma turma (`courseId`) — e a do aulão não aponta para nada.
-// Logo, "quanto esta aula faturou" não existe no banco: precisa ser estimado.
+// ── Por que ainda é heurística ────────────────────────────────────────────────
+// `Payment.lessonId` existe desde a migration 20260814180000 e resolve o caso
+// do aulão: ali o valor é o da cobrança, sem estimativa. Mas aula individual
+// paga por pacote continua sem vínculo — o pacote cobre N aulas e nenhuma
+// cobrança aponta para uma delas em particular. Para essas, o valor é estimado.
 //
 // A regra, em ordem de confiança:
-//   1. `priceOverride`  → preço explícito por aluno (aulão / aula avulsa)
-//   2. turma            → valor do contrato ÷ nº de aulas da turma, por aluno
-//   3. pacote           → preço/aula do pacote mais recente do aluno × horas
-//   4. nada disso       → 0 (aula de cortesia, reposição, compromisso)
+//   1. cobrança ligada à aula (`lessonId`) → valor exato
+//   2. `priceOverride`  → preço explícito por aluno (aulão / aula avulsa)
+//   3. turma            → valor do contrato ÷ nº de aulas da turma, por aluno
+//   4. pacote           → preço/aula do pacote mais próximo do aluno × horas
+//   5. nada disso       → 0 (aula de cortesia, reposição, compromisso)
 //
 // O total atribuído NÃO fecha com a receita de caixa e não deve: caixa é quando
 // o dinheiro entrou, atribuição é qual aula o gerou. Serve para comparar
@@ -34,6 +36,10 @@ const LESSON_VALUE_CTE = `
         CASE
           -- Aula sem nenhum aluno inscrito não fatura, mesmo tendo preço.
           WHEN p."studentId" IS NULL         THEN NULL
+          -- Cobrança ligada a esta aula e a este aluno: valor exato, sem
+          -- estimativa. Só existe para aulão/grupo criados depois de
+          -- Payment.lessonId — nos demais casos cai nas regras abaixo.
+          WHEN pay.amount IS NOT NULL        THEN pay.amount
           WHEN l."priceOverride" IS NOT NULL THEN l."priceOverride"
           WHEN l."courseId" IS NOT NULL
             THEN COALESCE(c."pricePerStudent", 0) / NULLIF(cl.total, 0)
@@ -49,13 +55,25 @@ const LESSON_VALUE_CTE = `
       WHERE l2."courseId" = l."courseId" AND l2.status <> 'CANCELLED'
     ) cl ON l."courseId" IS NOT NULL
     LEFT JOIN LATERAL (
+      -- Prefere o pacote vigente na data da aula; não havendo, usa o mais
+      -- próximo no tempo. A escola costuma lançar o pacote depois de já ter
+      -- dado as aulas, e exigir purchaseDate <= scheduledAt zerava a receita
+      -- de toda aula anterior ao lançamento.
       SELECT lp."pricePerLesson"
       FROM lesson_packages lp
       WHERE lp."studentId" = p."studentId"
-        AND lp."purchaseDate" <= l."scheduledAt"
-      ORDER BY lp."purchaseDate" DESC
+        AND lp."pricePerLesson" > 0
+      ORDER BY (lp."purchaseDate" <= l."scheduledAt") DESC,
+               ABS(EXTRACT(EPOCH FROM (lp."purchaseDate" - l."scheduledAt")))
       LIMIT 1
     ) pkg ON p."studentId" IS NOT NULL
+    LEFT JOIN LATERAL (
+      SELECT pm.amount
+      FROM payments pm
+      WHERE pm."lessonId" = l.id AND pm."studentId" = p."studentId"
+      ORDER BY pm."createdAt" ASC
+      LIMIT 1
+    ) pay ON p."studentId" IS NOT NULL
     WHERE l.status = 'COMPLETED'
       AND l."lessonType" <> 'COMPROMISSO'
       AND l."scheduledAt" >= $1 AND l."scheduledAt" <= $2

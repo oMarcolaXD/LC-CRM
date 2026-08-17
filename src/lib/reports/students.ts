@@ -38,6 +38,7 @@ export async function getStudentBase(now: Date): Promise<StudentBase> {
       SELECT "studentId" AS student_id
       FROM lesson_packages
       WHERE status = 'ACTIVE' AND "remainingLessons" > 0
+        AND ("expiresAt" IS NULL OR "expiresAt" >= NOW())
       GROUP BY "studentId"
     )
     SELECT COUNT(*)::int                                                   AS total,
@@ -102,6 +103,7 @@ export async function getChurn(
       FROM last_lesson ll
       LEFT JOIN lesson_packages lp
         ON lp."studentId" = ll.student_id AND lp.status = 'ACTIVE' AND lp."remainingLessons" > 0
+       AND (lp."expiresAt" IS NULL OR lp."expiresAt" >= NOW())
       WHERE ll.last_at >= ${start} AND ll.last_at <= ${end}
         AND ll.last_at < ${cutoff}
         AND lp.id IS NULL
@@ -326,6 +328,7 @@ export async function getCreditBalances(take = 20): Promise<CreditRow[]> {
     FROM lesson_packages lp
     JOIN students s ON s.id = lp."studentId"
     WHERE lp.status = 'ACTIVE' AND lp."remainingLessons" > 0
+      AND (lp."expiresAt" IS NULL OR lp."expiresAt" >= NOW())
     GROUP BY s.id, s.name, s.ra
     ORDER BY value DESC
     LIMIT ${take}

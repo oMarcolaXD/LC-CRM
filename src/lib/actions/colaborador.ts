@@ -20,6 +20,7 @@ import { calcFee, type FeeRate } from "@/lib/fees"
 import { comResultado, type ActionResult } from "@/lib/action-result"
 import { normalizeGrade } from "@/lib/constants/grades"
 import { gerarRA }        from "@/lib/ra"
+import { temMetodo }      from "@/lib/payments"
 
 /** Carrega as regras de taxa de cartão ativas (para snapshot em Payment.feeAmount). */
 async function loadFeeRates(): Promise<FeeRate[]> {
@@ -526,14 +527,37 @@ export async function addStudentPaymentAction(input: {
 
 // ─── Marcar Pagamento como Pago ───────────────────────────────────────────────
 
-export async function markPaymentPaidColaboradorAction(id: string) {
+/**
+ * Quita a cobrança. A forma de pagamento é obrigatória: sem ela a taxa da
+ * maquininha não é calculada, `feeAmount` fica em zero e a receita líquida de
+ * todos os relatórios sai maior do que o valor que caiu na conta. A tela
+ * pergunta o método quando a cobrança ainda não tem um.
+ */
+export async function markPaymentPaidColaboradorAction(id: string, method?: string) {
   await requireCollaboratorOrAdmin()
+
+  const existing = await prisma.payment.findUnique({
+    where:  { id },
+    select: { amount: true, method: true, installmentTotal: true },
+  })
+  if (!existing) throw new Error("Cobrança não encontrada")
+
+  const forma = (method ?? existing.method ?? "").trim()
+  if (!forma) throw new Error("Informe a forma de pagamento para registrar o recebimento")
+
+  const rates = await loadFeeRates()
   await prisma.payment.update({
     where: { id },
-    data:  { status: "PAID", paidAt: new Date() },
+    data:  {
+      status:    "PAID",
+      paidAt:    new Date(),
+      method:    forma,
+      feeAmount: calcFee(rates, forma, existing.installmentTotal ?? 1, Number(existing.amount)),
+    },
   })
   revalidatePath("/colaborador/financeiro")
   revalidatePath("/admin/financeiro/pagamentos")
+  revalidatePath("/admin/relatorios", "layout")
 }
 
 // ─── Enviar confirmações em massa (rodada do dia) ─────────────────────────────
@@ -845,9 +869,14 @@ export async function updatePaymentStatusAction(id: string, status: "PENDING" | 
 
   const payment = await prisma.payment.findUnique({
     where: { id },
-    select: { studentId: true },
+    select: { studentId: true, method: true },
   })
   if (!payment) throw new Error("Pagamento não encontrado")
+
+  // Sem forma de pagamento a taxa não é calculada e a receita líquida infla.
+  if (status === "PAID" && !temMetodo(payment.method)) {
+    throw new Error("Informe a forma de pagamento antes de marcar como paga — use o botão de editar a cobrança")
+  }
 
   await prisma.payment.update({
     where: { id },

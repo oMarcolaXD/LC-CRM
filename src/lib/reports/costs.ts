@@ -5,11 +5,11 @@
 // para que as três telas nunca discordem:
 //
 //   custo(professor, mês) = TeacherPayout.totalAmount   se o repasse já existe
-//                         = horas COMPLETED × hourlyRate   caso contrário
+//                         = Σ horas × taxa vigente na data da aula   caso contrário
 //
-// O snapshot vence porque `hourlyRate` é global e sem histórico: se a dona
-// aumentar o valor/hora de um professor, o cálculo ao vivo reescreveria meses já
-// pagos. O TeacherPayout congela o que realmente saiu do caixa.
+// Duas proteções contra reajuste retroativo: o TeacherPayout congela o que
+// realmente saiu do caixa, e `teacher_rates` guarda desde quando cada valor/hora
+// vale — a aula de março custa a taxa de março, não a de hoje.
 //
 // COMPROMISSO entra no custo de propósito: `computePayout` (a fonte de verdade
 // do que é pago ao professor) não filtra por tipo de aula, então excluí-lo aqui
@@ -47,17 +47,31 @@ export interface TeacherCosts {
  */
 export async function getTeacherCosts(start: Date, end: Date): Promise<TeacherCosts> {
   const [rows, payouts, teachers] = await Promise.all([
+    // As horas vêm agregadas por professor e mês, mas o custo NÃO sai daqui:
+    // cada aula vale a taxa vigente na data dela (teacher_rates), então o valor
+    // é resolvido em JS logo abaixo. Sem isso, um reajuste reescreveria o custo
+    // de meses já trabalhados.
     prisma.$queryRaw<{
-      teacherId: string; month: Date; hours: number; lessons: number
+      teacherId: string; month: Date; hours: number; lessons: number; cost: number
     }[]>`
       SELECT l."teacherId"                              AS "teacherId",
              DATE_TRUNC('month', l."scheduledAt")       AS month,
              (SUM(l.duration)::float8 / 60)             AS hours,
-             COUNT(*)::int                              AS lessons
+             COUNT(*)::int                              AS lessons,
+             COALESCE(SUM(
+               (l.duration::numeric / 60) * COALESCE(
+                 (SELECT tr."hourlyRate" FROM teacher_rates tr
+                   WHERE tr."teacherId" = l."teacherId"
+                     AND tr."effectiveFrom" <= l."scheduledAt"
+                   ORDER BY tr."effectiveFrom" DESC LIMIT 1),
+                 t."hourlyRate"
+               )
+             ), 0)::float8                              AS cost
       FROM lessons l
+      JOIN teachers t ON t.id = l."teacherId"
       WHERE l.status = 'COMPLETED'
         AND l."scheduledAt" >= ${start} AND l."scheduledAt" <= ${end}
-      GROUP BY l."teacherId", DATE_TRUNC('month', l."scheduledAt")
+      GROUP BY l."teacherId", DATE_TRUNC('month', l."scheduledAt"), t."hourlyRate"
     `,
     prisma.teacherPayout.findMany({
       select: { teacherId: true, month: true, year: true, totalAmount: true, status: true },
@@ -82,7 +96,7 @@ export async function getTeacherCosts(start: Date, end: Date): Promise<TeacherCo
     const rate = rateOf.get(r.teacherId) ?? 0
 
     const snap    = payoutOf.get(`${r.teacherId}|${key}`)
-    const cost    = snap ? Number(snap.totalAmount) : r.hours * rate
+    const cost    = snap ? Number(snap.totalAmount) : r.cost
     const isSnap  = !!snap
 
     total += cost

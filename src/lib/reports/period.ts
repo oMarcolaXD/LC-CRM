@@ -48,8 +48,18 @@ export interface PeriodBounds {
   prevStart:   Date
   prevEnd:     Date
   periodLabel: string
-  /** Meses do gráfico. Sempre ≥ 1; para "este mês" mostra os 6 últimos como contexto. */
+  /**
+   * Meses de CONTEXTO para gráficos de tendência e sparklines. Pode extrapolar
+   * o período: em "este mês" traz os 6 últimos, senão o gráfico teria uma barra
+   * só. Quem usa isto tem de buscar os dados no span destes pontos — nunca em
+   * [start, end], ou os meses de fora aparecem zerados.
+   */
   chartPoints: ChartPoint[]
+  /**
+   * Meses DENTRO do período — é o que as tabelas e o DRE usam como colunas.
+   * Sempre coerente com [start, end], então total = soma das colunas.
+   */
+  periodMonths: ChartPoint[]
   /** true quando o recorte é exatamente um mês (metas mensais valem direto) */
   isMonthly:   boolean
 }
@@ -121,6 +131,17 @@ export function getPeriodBounds(
   now: Date,
   custom?: { de?: string | null; ate?: string | null },
 ): PeriodBounds {
+  const b = computeBounds(periodo, now, custom)
+  // Derivado de [start, end] em um só lugar: nenhuma tela precisa lembrar de
+  // recortar os meses, e o total de uma tabela sempre fecha com as colunas.
+  return { ...b, periodMonths: monthsIn(startOfMonth(b.start), endOfMonth(b.end)) }
+}
+
+function computeBounds(
+  periodo: Periodo,
+  now: Date,
+  custom?: { de?: string | null; ate?: string | null },
+): Omit<PeriodBounds, "periodMonths"> {
   switch (periodo) {
     case "mes-anterior": {
       const ref = subMonths(now, 1)

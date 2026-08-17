@@ -3,16 +3,13 @@ import {
   getPeriodBounds, parsePeriodo, type ReportSearchParams,
 } from "@/lib/reports/period"
 import { brl, brlRound, pct, num, delta, deltaPP, margin } from "@/lib/reports/format"
-import {
-  getRevenueSummary, getRevenueByMonth, getDeferredRevenue,
-} from "@/lib/reports/revenue"
-import { getTeacherCosts, getExpenses, seriesFrom } from "@/lib/reports/costs"
-import { getDRE } from "@/lib/reports/dre"
+import { getRevenueSummary, getDeferredRevenue } from "@/lib/reports/revenue"
+import { getTeacherCosts, getExpenses } from "@/lib/reports/costs"
+import { getDRE, getProfitSeries } from "@/lib/reports/dre"
 import { getReceivables } from "@/lib/reports/receivables"
 import { EXPENSE_CATEGORY_LABEL } from "@/lib/expenses"
 import { ComboChart } from "@/components/charts/combo-chart"
-import { WaterfallChart } from "@/components/charts/waterfall-chart"
-import { Panel, StatGrid, Stat, Empty, Note, Bar } from "./ui"
+import { Panel, StatGrid, Stat, Empty, Note, Bar, MoneyFlow } from "./ui"
 import Link from "next/link"
 import { AlertTriangle, TrendingDown, Info, CheckCircle2 } from "lucide-react"
 
@@ -32,7 +29,7 @@ export default async function VisaoGeralPage({
     revenue, prevRevenue,
     costs, prevCosts,
     expenses, prevExpenses,
-    dre, revenueByMonth, deferred, receivables,
+    dre, trend, deferred, receivables,
   ] = await Promise.all([
     getRevenueSummary(b.start, b.end),
     getRevenueSummary(b.prevStart, b.prevEnd),
@@ -40,8 +37,11 @@ export default async function VisaoGeralPage({
     getTeacherCosts(b.prevStart, b.prevEnd),
     getExpenses(b.start, b.end),
     getExpenses(b.prevStart, b.prevEnd),
-    getDRE(b.start, b.end, b.chartPoints),
-    getRevenueByMonth(b.chartPoints[0].start, b.chartPoints[b.chartPoints.length - 1].end),
+    // Quadro do período (KPIs, ponto de equilíbrio) × curva de contexto
+    // (gráfico e sparklines). São recortes diferentes de propósito: misturar os
+    // dois é o que fazia os meses anteriores aparecerem zerados.
+    getDRE(b.start, b.end, b.periodMonths),
+    getProfitSeries(b.chartPoints),
     getDeferredRevenue(),
     getReceivables(now),
   ])
@@ -56,30 +56,21 @@ export default async function VisaoGeralPage({
   const prevProfit = prevNet - prevCosts.total - prevExpenses.total
   const prevPct    = margin(prevProfit, prevNet)
 
-  // ── Séries dos sparklines (cobrem os meses do gráfico, não só o recorte) ────
-  const seriesRevenue = b.chartPoints.map((p) => {
-    const r = revenueByMonth.get(p.key)
-    return (r?.gross ?? 0) - (r?.fees ?? 0)
-  })
-  const seriesTeacher = seriesFrom(b.chartPoints, costs.byMonth)
-  const seriesExpense = seriesFrom(b.chartPoints, expenses.byMonth)
-  const seriesProfit  = seriesRevenue.map((v, i) => v - seriesTeacher[i] - seriesExpense[i])
+  // ── Séries de contexto: cobrem os meses do gráfico, não só o recorte ───────
+  const seriesRevenue = trend.map((m) => m.netRevenue)
+  const seriesCost    = trend.map((m) => m.teacherCost + m.expenses)
+  const seriesProfit  = trend.map((m) => m.profit)
 
-  const comboData = dre.months.map((m) => ({
+  const comboData = trend.map((m) => ({
     label:   m.label,
     receita: m.netRevenue,
     custo:   m.teacherCost + m.expenses,
     lucro:   m.profit,
     margem:  m.profitPct,
   }))
-
-  const waterfall = [
-    { label: "Receita bruta", value: revenue.gross,  kind: "total"     as const },
-    { label: "Taxas",         value: revenue.fees,   kind: "deduction" as const },
-    { label: "Professores",   value: costs.total,    kind: "deduction" as const },
-    { label: "Despesas",      value: expenses.total, kind: "deduction" as const },
-    { label: "Lucro",         value: 0,              kind: "total"     as const },
-  ]
+  const trendLabel = trend.length > 1
+    ? `${trend[0].label} – ${trend[trend.length - 1].label}`
+    : b.periodLabel
 
   const alerts = buildAlerts({
     profit, profitPct, prevPct,
@@ -90,8 +81,6 @@ export default async function VisaoGeralPage({
     expensesMissing: expenses.total === 0,
     negativeTeachers: [],
   })
-
-  const hasData = revenue.gross > 0 || costs.total > 0 || expenses.total > 0
 
   return (
     <div className="flex flex-col gap-4">
@@ -115,7 +104,7 @@ export default async function VisaoGeralPage({
           value={brlRound(totalCost)}
           delta={delta(totalCost, prevCosts.total + prevExpenses.total, false)}
           sub={`${brl(costs.total)} professores + ${brl(expenses.total)} despesas`}
-          spark={seriesTeacher.map((v, i) => v + seriesExpense[i])}
+          spark={seriesCost}
           sparkColor="var(--subtle)"
         />
         <Stat
@@ -195,20 +184,36 @@ export default async function VisaoGeralPage({
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.4fr_1fr]">
         <Panel
           title="Receita, custo e margem"
-          subtitle="Barras em reais (eixo esquerdo) · linha de margem em % (eixo direito)"
+          subtitle={`${trendLabel} · barras em reais (eixo esquerdo), linha de margem em % (eixo direito)`}
         >
-          {hasData
-            ? <ComboChart data={comboData} />
-            : <Empty label="Sem movimento financeiro no período" />}
+          {comboData.some((d) => d.receita !== 0 || d.custo !== 0)
+            ? <>
+                <ComboChart data={comboData} />
+                {trend.length > 1 && (
+                  <Note>
+                    Este gráfico mostra os últimos {trend.length} meses como contexto, mesmo
+                    quando o filtro acima é de um mês só — é o que permite ver a tendência.
+                    Os números dos cartões continuam sendo do período escolhido.
+                  </Note>
+                )}
+              </>
+            : <Empty label="Sem movimento financeiro no intervalo" />}
         </Panel>
 
         <Panel
           title="Para onde foi o dinheiro"
-          subtitle={`Do que entrou em ${b.periodLabel.toLowerCase()} até o que sobrou`}
+          subtitle={`De cada real que entrou em ${b.periodLabel.toLowerCase()}`}
         >
           {revenue.gross > 0
             ? <>
-                <WaterfallChart steps={waterfall} />
+                <MoneyFlow
+                  gross={revenue.gross}
+                  deductions={[
+                    { label: "Taxas de cartão e boleto", value: revenue.fees,   color: "#f59e0b" },
+                    { label: "Repasse aos professores",  value: costs.total,    color: "#94a3b8" },
+                    { label: "Despesas da empresa",      value: expenses.total, color: "#f87171" },
+                  ]}
+                />
                 <Note>
                   Taxas e repasses saem do que foi recebido; despesas entram pelo mês de
                   competência, mesmo que ainda não tenham sido pagas.

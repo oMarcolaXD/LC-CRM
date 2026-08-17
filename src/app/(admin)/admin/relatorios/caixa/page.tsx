@@ -23,7 +23,9 @@ export default async function CaixaPage({
   const b       = getPeriodBounds(periodo, now, { de: sp.de, ate: sp.ate })
 
   const [flow, projection, upcoming] = await Promise.all([
-    getCashFlow(b.chartPoints),
+    // Meses do período: os totais "Entrou/Saiu" precisam bater com o filtro do
+    // topo. A visão de futuro fica por conta da projeção, logo abaixo.
+    getCashFlow(b.periodMonths),
     getProjection(now, 90),
     getUpcoming(now, 45, 30),
   ])
@@ -49,7 +51,7 @@ export default async function CaixaPage({
 
       <StatGrid cols={4}>
         <Stat label="Entrou" value={brlRound(flow.totalIn)}
-          sub="pagamentos quitados no intervalo do gráfico"
+          sub="pagamentos quitados no período"
           spark={flow.months.map((m) => m.inflow)} sparkColor="var(--primary)" />
         <Stat label="Saiu" value={brlRound(flow.totalOut)}
           sub="repasses pagos + despesas quitadas"
@@ -85,7 +87,7 @@ export default async function CaixaPage({
         subtitle="Barras acima = entradas · abaixo = saídas · linha = acumulado da série"
       >
         {flow.totalIn === 0 && flow.totalOut === 0 ? (
-          <Empty label="Nenhum movimento de caixa no intervalo" />
+          <Empty label="Nenhum movimento de caixa no período" />
         ) : (
           <>
             <CashFlowChart data={chartData} />
@@ -116,8 +118,8 @@ export default async function CaixaPage({
               </tbody>
             </Table>
             <Note>
-              O acumulado começa em zero no primeiro mês do gráfico — é a variação de caixa do
-              período, não o saldo da conta bancária. A taxa de cartão não aparece como saída
+              O acumulado começa em zero no primeiro mês do período — é a variação de caixa
+              dele, não o saldo da conta bancária. A taxa de cartão não aparece como saída
               porque já vem descontada do valor depositado.
             </Note>
           </>

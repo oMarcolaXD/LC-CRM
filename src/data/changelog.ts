@@ -1,4 +1,4 @@
-export const CURRENT_VERSION = "0.4.0"
+export const CURRENT_VERSION = "0.5.0"
 
 export interface ChangelogEntry {
   version: string
@@ -11,6 +11,28 @@ export interface ChangelogEntry {
 // As entradas de um mesmo lançamento são separadas por público: o modal filtra
 // por perfil e usa a versão como chave, então cada público tem a sua versão.
 export const changelog: ChangelogEntry[] = [
+  {
+    version: "0.5.0",
+    date: "17/08/2026",
+    roles: ["ADMIN", "COLLABORATOR"],
+    title: "Correções no Financeiro e Auditoria de Dados",
+    items: [
+      "Corrigido: cobrança vencida e não paga agora aparece como vencida em todas as telas, sem depender de alguém marcar à mão. Havia R$ 17 mil no vermelho que o sistema mostrava como “pendente”",
+      "Corrigido: o cadastro de cobrança oferecia “PIX” e a tela de taxas cadastrava “Pix”. Como os textos não batiam, nenhuma taxa de maquininha era calculada e a receita líquida saía maior do que o valor real. Agora é uma lista única de formas de pagamento",
+      "Criar pacote passou a gerar a cobrança junto, com vencimento obrigatório e opção “já foi pago”. Antes o pacote nascia sozinho e o aluno ficava com crédito sem nada a receber",
+      "Marcar uma cobrança como paga agora pede a forma de pagamento quando ela não tem — é ela que define a taxa e, com isso, quanto realmente entrou",
+      "Pacote fora do prazo deixou de contar como saldo disponível: não infla mais o passivo de aulas nem mantém o aluno na lista de ativos",
+      "Novo botão “Ajustar status” em Financeiro › Pacotes: marca como esgotado o que zerou e como expirado o que passou do prazo",
+      "Valor/hora do professor virou obrigatório. Sem ele o custo desse professor entrava como zero no DRE e o lucro aparecia maior do que é",
+      "O valor/hora agora tem histórico: um reajuste passa a valer de hoje para frente e não reescreve mais o custo de meses já trabalhados",
+      "Cobrança de aulão passou a ficar ligada à aula que a gerou. A receita por professor, matéria e modalidade deixa de ser estimativa nesses casos",
+      "Aula e aulão não podem mais ser marcados como realizados sem nenhum aluno vinculado — eram aulas que entravam no custo do professor sem ter a quem cobrar",
+      "Nova aba Relatórios › Qualidade: 13 verificações que varrem a base procurando pacote sem cobrança, cobrança duplicada, aula sem receita, conflito de agenda e outras inconsistências, com o valor envolvido e onde resolver",
+      "O painel inicial passou a mostrar um resumo dessa auditoria, para problema novo não ficar meses invisível",
+      "Corrigido: no gráfico de receita, custo e margem dos relatórios, os meses anteriores apareciam zerados",
+      "Corrigido: o gráfico “para onde foi o dinheiro” desenhava um bloco fantasma onde o valor era zero. Virou uma barra de composição com os valores escritos",
+    ],
+  },
   {
     version: "0.4.0",
     date: "14/08/2026",

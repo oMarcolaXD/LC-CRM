@@ -85,6 +85,7 @@ export async function enrollStudentInAulaoAction(lessonId: string, studentId: st
           prisma.payment.create({
             data: {
               studentId,
+              lessonId,   // vínculo direto: antes só o texto da descrição ligava
               amount:      lesson.priceOverride!,
               dueDate:     lesson.scheduledAt,
               description: `${lesson.lessonType === "AULAO" ? "Aulão" : "Aula em grupo"} – ${lesson.subject?.name ?? "–"} (${scheduledAtFmt})`,
@@ -419,6 +420,7 @@ async function editarAulao(input: UpdateAulaoInput): Promise<UpdateAulaoResult> 
 
       await sincronizarCobrancas(tx, {
         studentIds:  alvo.participants,
+        lessonId:    alvo.id,
         dueDateAtual: alvo.antes,
         scheduledAt: alvo.scheduledAt,
         price,
@@ -449,6 +451,8 @@ async function sincronizarCobrancas(
   tx: Prisma.TransactionClient,
   opts: {
     studentIds:   string[]
+    /** Aula dona das cobranças — grava o vínculo direto em Payment.lessonId. */
+    lessonId:     string
     /** Data da aula ANTES da edição — é por ela que as cobranças são achadas. */
     dueDateAtual: Date
     scheduledAt:  Date
@@ -495,6 +499,7 @@ async function sincronizarCobrancas(
     await tx.payment.createMany({
       data: semCobranca.map(studentId => ({
         studentId,
+        lessonId: opts.lessonId,   // vínculo direto cobrança ↔ aula
         amount:  opts.price,
         dueDate: opts.scheduledAt,
         description: opts.description,
@@ -625,6 +630,12 @@ export async function completeAulaoAction(lessonId: string) {
   if (!["AULAO", "GROUP"].includes(lesson.lessonType)) throw new Error("Esta aula não é um aulão")
   if (lesson.status === "COMPLETED") throw new Error("Aulão já marcado como realizado")
   if (lesson.status === "CANCELLED") throw new Error("Não é possível realizar um aulão cancelado")
+
+  // Aulão sem inscrito entra no custo do professor e não gera cobrança nenhuma.
+  const inscritos = await prisma.lessonParticipant.count({ where: { lessonId } })
+  if (inscritos === 0) {
+    throw new Error("Inscreva pelo menos um aluno antes de marcar o aulão como realizado")
+  }
 
   await prisma.lesson.update({ where: { id: lessonId }, data: { status: "COMPLETED" } })
 

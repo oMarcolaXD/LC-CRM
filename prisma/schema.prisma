@@ -154,7 +154,7 @@ model PasswordResetToken {
 // ─── Perfis ───────────────────────────────────────────────────────────────────
 
 model Student {
-  id String @id @default(cuid())
+  id             String          @id @default(cuid())
   // R.A. (Registro do Aluno) — 6 dígitos aleatórios, identificador visível do
   // aluno em fichas, buscas e recibos. O `id` segue como chave interna (FKs).
   ra             String          @unique
@@ -222,6 +222,7 @@ model Teacher {
   payDayEnd   Int?
 
   subjects  TeacherSubject[]
+  rates     TeacherRate[]
   lessons   Lesson[]
   requests  LessonRequest[]
   materials Material[]
@@ -343,6 +344,7 @@ model Lesson {
   participants         LessonParticipant[]
   homework             Homework[]
   cancellationRequests LessonCancellationRequest[]
+  payments             Payment[]
 
   @@index([teacherId])
   @@index([status])
@@ -545,12 +547,22 @@ model Payment {
   courseId String?
   course   Course? @relation(fields: [courseId], references: [id], onDelete: Cascade)
 
+  /// Aula que originou esta cobrança (aulão e aula em grupo avulsa).
+  ///
+  /// Sem isto, a única pista de que uma cobrança veio de um aulão era o texto
+  /// da descrição ("Aulão – Matemática (12/08)"), e a receita por professor,
+  /// matéria e modalidade dos relatórios era estimada. SetNull, e não Cascade:
+  /// apagar a aula não pode apagar o dinheiro já recebido por ela.
+  lessonId String?
+  lesson   Lesson? @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+
   @@index([studentId])
   @@index([status])
   @@index([dueDate])
   @@index([installmentGroupId])
   @@index([packageId])
   @@index([courseId])
+  @@index([lessonId])
   @@map("payments")
 }
 
@@ -583,6 +595,30 @@ model CardFeeRate {
 
   @@index([method])
   @@map("card_fee_rates")
+}
+
+// ─── Histórico de Valor/Hora ──────────────────────────────────────────────────
+
+/// Valor/hora do professor com data de vigência.
+///
+/// `Teacher.hourlyRate` continua sendo o valor atual (é o que as telas editam);
+/// esta tabela guarda desde quando cada valor vale. Sem ela, reajustar um
+/// professor reescrevia o custo de todos os meses ainda não pagos — o resultado
+/// de um mês fechado mudava sozinho depois de um aumento.
+///
+/// O custo de uma aula usa a taxa vigente na data DELA, não a de hoje.
+model TeacherRate {
+  id            String   @id @default(cuid())
+  teacherId     String
+  teacher       Teacher  @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  hourlyRate    Decimal  @db.Decimal(10, 2)
+  /// A partir de quando este valor passa a valer (inclusive).
+  effectiveFrom DateTime
+  createdAt     DateTime @default(now())
+
+  @@unique([teacherId, effectiveFrom])
+  @@index([teacherId, effectiveFrom])
+  @@map("teacher_rates")
 }
 
 // ─── Despesas da Empresa ──────────────────────────────────────────────────────

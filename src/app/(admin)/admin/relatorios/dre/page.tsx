@@ -26,7 +26,9 @@ export default async function DrePage({
   const b       = getPeriodBounds(periodo, now, { de: sp.de, ate: sp.ate })
 
   const [dre, byTeacher, bySubject, byModality, byType, costs] = await Promise.all([
-    getDRE(b.start, b.end, b.chartPoints),
+    // periodMonths, não chartPoints: as colunas do quadro têm de ser os meses
+    // do período, senão sobram colunas vazias e o total não fecha com elas.
+    getDRE(b.start, b.end, b.periodMonths),
     getAttributedByTeacher(b.start, b.end),
     getAttributedBySubject(b.start, b.end),
     getAttributedByModality(b.start, b.end),

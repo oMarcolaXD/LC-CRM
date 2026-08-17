@@ -246,6 +246,14 @@ export async function updateLessonStatusAction(
     throw new Error("Esta aula já foi finalizada e não pode ser alterada")
   }
 
+  // Aula realizada sem aluno entra no custo do professor e não tem a quem
+  // cobrar — é a origem das "aulas sem receita" da aba Qualidade. Cancelar e
+  // marcar falta continuam livres: aí é justamente o caso de não ter aluno.
+  if (status === "COMPLETED" && lesson.participants.length === 0
+      && lesson.lessonType !== "COMPROMISSO") {
+    throw new Error("Vincule pelo menos um aluno antes de marcar a aula como realizada")
+  }
+
   const isGroup = lesson.participants.length > 1
 
   // Aula em grupo cancelada: cancela esta aula (já contém todos os alunos)
