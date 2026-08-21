@@ -36,7 +36,7 @@ export async function assignHomeworkAction(
   // Professor só pode atribuir lição às suas próprias aulas
   if (session.user.role === "TEACHER") {
     const teacher = await prisma.teacher.findFirst({
-      where: { user: { email: session.user.email ?? "" } },
+      where: { userId: session.user.id },
     })
     if (!teacher || lesson.teacherId !== teacher.id) {
       throw new Error("Sem permissão para esta aula")

@@ -4,11 +4,12 @@ import { PageHeader }  from "@/components/shared/page-header"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { AvailabilityForm } from "./availability-form"
 import type { Availability } from "@/lib/availability"
+import { teacherWhereForSession } from "@/lib/teacher-session"
 
 export default async function DisponibilidadePage() {
   const session = await auth()
   const teacher = await prisma.teacher.findFirst({
-    where: { user: { email: session?.user?.email ?? "" } },
+    where: teacherWhereForSession(session),
   })
 
   const availability = (teacher?.availability ?? {}) as unknown as Availability

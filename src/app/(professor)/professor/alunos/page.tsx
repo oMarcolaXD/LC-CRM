@@ -9,6 +9,8 @@ import {
 } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { formatBR, nowBrazil, toBrazilDate } from "@/lib/datetime"
+import { teacherWhereForSession } from "@/lib/teacher-session"
+import type { Prisma } from "@prisma/client"
 
 function relDate(date: Date, now: Date): string {
   // `now` já vem no relógio de Brasília (nowBrazil); alinhamos a data da aula
@@ -23,12 +25,12 @@ function relDate(date: Date, now: Date): string {
   return formatBR(date, "dd MMM", { locale: ptBR })
 }
 
-async function getMeusAlunos(email: string): Promise<AlunoProf[] | null> {
+async function getMeusAlunos(where: Prisma.TeacherWhereInput): Promise<AlunoProf[] | null> {
   const now = nowBrazil()
   const sixMonthsAgo = startOfMonth(subMonths(now, 5))
 
   const teacher = await prisma.teacher.findFirst({
-    where: { user: { email } },
+    where,
     select: { id: true },
   })
   if (!teacher) return null
@@ -151,9 +153,9 @@ async function getMeusAlunos(email: string): Promise<AlunoProf[] | null> {
 
 export default async function ProfessorAlunosPage() {
   const session = await auth()
-  if (!session?.user?.email) redirect("/login")
+  if (!session?.user) redirect("/login")
 
-  const alunos = await getMeusAlunos(session.user.email)
+  const alunos = await getMeusAlunos(teacherWhereForSession(session))
 
   if (!alunos) {
     return (

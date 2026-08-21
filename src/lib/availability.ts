@@ -2,19 +2,18 @@
 // { "1": [{"start": "09:00", "end": "12:00"}, {"start": "14:00", "end": "18:00"}], "3": [...] }
 // Chave = dia da semana (0=Dom, 1=Seg, ..., 6=Sab)
 
+import { parseBrazilDateTime } from "@/lib/datetime"
+
 export interface TimeSlot   { start: string; end: string }
 export type Availability    = Record<string, TimeSlot[]>  // dia -> intervalos
+
+/** Aula já marcada que ocupa a agenda do professor. */
+export interface BookedLesson { scheduledAt: Date; duration?: number | null }
 
 export const DAY_NAMES = ["Domingo","Segunda","Terça","Quarta","Quinta","Sexta","Sábado"]
 export const DAY_SHORT = ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"]
 
-export interface BookedLessonSlot {
-  scheduledAt?: Date | string
-  preferredAt?: Date | string
-  duration?:    number
-}
-
-/** Gera slots de N min dentro dos intervalos disponíveis de um dia */
+/** Gera slots de 1h dentro dos intervalos disponíveis de um dia */
 function slotsForInterval(slot: TimeSlot, durationMin = 60): string[] {
   const result: string[] = []
   const [sh, sm] = slot.start.split(":").map(Number)
@@ -30,26 +29,35 @@ function slotsForInterval(slot: TimeSlot, durationMin = 60): string[] {
   return result
 }
 
-/** Lista todos os slots disponíveis para uma data específica */
+/**
+ * Lista os slots livres de uma data ("yyyy-MM-dd").
+ *
+ * A comparação com as aulas já marcadas é feita em tempo absoluto: o slot vira
+ * um instante via `parseBrazilDateTime` e é testado por sobreposição real de
+ * intervalos. Comparar "HH:mm" daria errado no servidor em UTC, e comparar só o
+ * início deixaria passar uma aula de 90min que invade o slot seguinte.
+ */
 export function getAvailableSlotsForDate(
-  date:          Date | string,
-  availability:  Availability,
-  bookedLessons: (Date | string | BookedLessonSlot)[],
-  durationMin =  60,
+  dateStr:      string,        // "yyyy-MM-dd"
+  availability: Availability,
+  booked:       BookedLesson[],
+  durationMin = 60,
 ): string[] {
-  const targetDate = date instanceof Date ? new Date(date.getTime()) : new Date(date)
-  if (isNaN(targetDate.getTime())) return []
+  // Meio-dia evita que o fuso do servidor jogue o dia da semana para o vizinho.
+  const dow   = parseBrazilDateTime(dateStr, "12:00").getDay().toString()
+  const slots = availability[dow] ?? []
 
-  const dow      = targetDate.getDay().toString()
-  const slots    = availability[dow] ?? []
-  const allSlots = slots.flatMap((s) => slotsForInterval(s, durationMin))
-
-  return allSlots.filter((hhmm) => {
-    const [h, m] = hhmm.split(":").map(Number)
-    const slotAt = new Date(targetDate)
-    slotAt.setHours(h, m, 0, 0)
-    return !hasConflict(slotAt, bookedLessons, durationMin)
-  })
+  return slots
+    .flatMap((s) => slotsForInterval(s, durationMin))
+    .filter((hhmm) => {
+      const start = parseBrazilDateTime(dateStr, hhmm).getTime()
+      const end   = start + durationMin * 60_000
+      return !booked.some((b) => {
+        const bStart = b.scheduledAt.getTime()
+        const bEnd   = bStart + (b.duration ?? 60) * 60_000
+        return start < bEnd && bStart < end
+      })
+    })
 }
 
 /** Retorna os dias disponíveis nos próximos N dias (incluindo hoje) */
@@ -89,54 +97,18 @@ export function getAvailableDates(
   return result
 }
 
-/** Verifica se uma data/hora conflita com aulas existentes usando sobreposição de intervalos [start, end) */
-export function hasConflict(
-  requestedAt:   Date | string,
-  bookedLessons: (Date | string | BookedLessonSlot)[],
-  durationMin =  60,
-): boolean {
-  const reqDate  = requestedAt instanceof Date ? requestedAt : new Date(requestedAt)
-  const reqStart = reqDate.getTime()
-  if (isNaN(reqStart)) return false
-  const reqEnd   = reqStart + durationMin * 60 * 1000
-
-  return bookedLessons.some((b) => {
-    if (!b) return false
-    let bRaw: Date | string | undefined
-    let bDur = 60
-
-    if (b instanceof Date || typeof b === "string") {
-      bRaw = b
-    } else if (typeof b === "object") {
-      bRaw = b.scheduledAt ?? b.preferredAt
-      if (typeof b.duration === "number") bDur = b.duration
-    }
-
-    if (!bRaw) return false
-    const bDate  = bRaw instanceof Date ? bRaw : new Date(bRaw)
-    const bStart = bDate.getTime()
-    if (isNaN(bStart)) return false
-    const bEnd   = bStart + bDur * 60 * 1000
-
-    return bStart < reqEnd && bEnd > reqStart
-  })
-}
-
 /** Verifica se uma data/hora está dentro da disponibilidade */
 export function isWithinAvailability(
-  requestedAt:  Date | string,
+  requestedAt:  Date,
   availability: Availability,
   durationMin = 60,
 ): boolean {
-  const reqDate = requestedAt instanceof Date ? requestedAt : new Date(requestedAt)
-  if (isNaN(reqDate.getTime())) return false
-
-  const dow   = reqDate.getDay().toString()
+  const dow   = requestedAt.getDay().toString()
   const slots = availability[dow] ?? []
   if (slots.length === 0) return false
 
-  const h   = reqDate.getHours()
-  const m   = reqDate.getMinutes()
+  const h   = requestedAt.getHours()
+  const m   = requestedAt.getMinutes()
   const cur = h * 60 + m
 
   return slots.some(({ start, end }) => {

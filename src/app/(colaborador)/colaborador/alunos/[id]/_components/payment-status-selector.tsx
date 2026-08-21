@@ -4,6 +4,7 @@ import { useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { updatePaymentStatusAction } from "@/lib/actions/colaborador"
+import { mensagemDeErro } from "@/lib/error-message"
 
 interface Props {
   paymentId: string
@@ -21,7 +22,7 @@ export function PaymentStatusSelector({ paymentId, currentStatus }: Props) {
         toast.success("Status do pagamento atualizado")
         router.refresh()
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Erro ao atualizar status do pagamento")
+        toast.error(mensagemDeErro(e, "Erro ao atualizar status do pagamento"))
       }
     })
   }

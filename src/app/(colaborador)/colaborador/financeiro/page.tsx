@@ -1,4 +1,7 @@
 import { prisma }        from "@/lib/prisma"
+import { situacao, whereSituacao, SITUACAO_LABEL, SITUACAO_VARIANT, type SituacaoCobranca } from "@/lib/payments"
+import { nowBrazil }     from "@/lib/datetime"
+import { wherePacoteUtilizavel } from "@/lib/packages"
 import { PageHeader }    from "@/components/shared/page-header"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge }         from "@/components/ui/badge"
@@ -10,11 +13,7 @@ import { ptBR }          from "date-fns/locale"
 
 function brl(v: number) { return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) }
 
-const STATUS_CFG = {
-  PENDING: { label: "Pendente", variant: "secondary"   as const },
-  PAID:    { label: "Pago",     variant: "default"     as const },
-  OVERDUE: { label: "Vencido",  variant: "destructive" as const },
-}
+// Situação derivada da data, não do status gravado. Ver src/lib/payments.ts.
 
 interface FinanceiroPageProps {
   searchParams: Promise<{ filter?: string }>
@@ -22,29 +21,36 @@ interface FinanceiroPageProps {
 
 export default async function ColaboradorFinanceiroPage({ searchParams }: FinanceiroPageProps) {
   const { filter } = await searchParams
+  const now = nowBrazil()
+  const aba = (["PENDING", "PAID", "OVERDUE"] as const).includes(filter as SituacaoCobranca)
+    ? (filter as SituacaoCobranca)
+    : null
 
-  const [payments, packages] = await Promise.all([
+  const [payments, packages, totalRows] = await Promise.all([
     prisma.payment.findMany({
-      where:   filter ? { status: filter as "PENDING" | "PAID" | "OVERDUE" } : undefined,
+      where:   aba ? whereSituacao(aba, now) : undefined,
       include: { student: { include: { user: true } } },
       orderBy: { dueDate: "asc" },
       take:    100,
     }),
     prisma.lessonPackage.findMany({
-      where:   { status: "ACTIVE" },
+      where:   wherePacoteUtilizavel(now),
       include: { student: { include: { user: true } } },
       orderBy: { remainingLessons: "asc" },
     }),
+    // Totais sobre a base inteira: antes somavam só as 100 linhas exibidas e
+    // mudavam conforme a aba selecionada.
+    prisma.payment.findMany({ select: { amount: true, status: true, dueDate: true } }),
   ])
 
-  const totals = { PENDING: 0, PAID: 0, OVERDUE: 0 }
-  payments.forEach((p) => { totals[p.status] += Number(p.amount) })
+  const totals: Record<SituacaoCobranca, number> = { PENDING: 0, PAID: 0, OVERDUE: 0 }
+  totalRows.forEach((p) => { totals[situacao(p, now)] += Number(p.amount) })
 
   const FILTER_TABS = [
     { v: "",        l: "Todas"    },
-    { v: "PENDING", l: "Pendentes" },
-    { v: "OVERDUE", l: "Vencidas"  },
-    { v: "PAID",    l: "Pagas"     },
+    { v: "PENDING", l: "A vencer" },
+    { v: "OVERDUE", l: "Vencidas" },
+    { v: "PAID",    l: "Pagas"    },
   ]
 
   return (
@@ -59,7 +65,7 @@ export default async function ColaboradorFinanceiroPage({ searchParams }: Financ
         {(["PENDING", "PAID", "OVERDUE"] as const).map((s) => (
           <Card key={s} className={s === "OVERDUE" && totals.OVERDUE > 0 ? "border-destructive/40" : ""}>
             <CardContent className="p-4 text-center">
-              <p className="text-xs text-muted-foreground uppercase tracking-wide">{STATUS_CFG[s].label}</p>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide">{SITUACAO_LABEL[s]}</p>
               <p className="text-lg font-bold mt-1">{brl(totals[s])}</p>
             </CardContent>
           </Card>
@@ -96,12 +102,12 @@ export default async function ColaboradorFinanceiroPage({ searchParams }: Financ
               {payments.map((p) => (
                 <div key={p.id}
                   className={`flex items-center justify-between gap-3 p-3 rounded-lg border ${
-                    p.status === "OVERDUE" ? "border-destructive/30 bg-destructive/5" : "border-border"
+                    situacao(p, now) === "OVERDUE" ? "border-destructive/30 bg-destructive/5" : "border-border"
                   }`}>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="text-sm font-medium">{p.student.name ?? "Aluno"}</p>
-                      {p.status === "OVERDUE" && (
+                      {situacao(p, now) === "OVERDUE" && (
                         <AlertCircle className="w-3.5 h-3.5 text-destructive" />
                       )}
                     </div>
@@ -118,8 +124,8 @@ export default async function ColaboradorFinanceiroPage({ searchParams }: Financ
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <p className="text-sm font-bold">{brl(Number(p.amount))}</p>
-                    <Badge variant={STATUS_CFG[p.status].variant}>{STATUS_CFG[p.status].label}</Badge>
-                    <PaymentActions id={p.id} status={p.status} />
+                    <Badge variant={SITUACAO_VARIANT[situacao(p, now)]}>{SITUACAO_LABEL[situacao(p, now)]}</Badge>
+                    <PaymentActions id={p.id} status={p.status} method={p.method} />
                     <EditPaymentDialog
                       studentName={p.student.name ?? "Aluno"}
                       payment={{

@@ -13,8 +13,9 @@ import {
 import { importStudentsAction, type ImportResult } from "@/lib/actions/colaborador"
 
 // ─── Colunas esperadas ──────────────────────────────────────────────────────
+// O aluno não tem telefone próprio — o contato é sempre o do responsável.
 const COLUMNS = [
-  "nome", "email", "senha", "telefone", "dataNascimento",
+  "nome", "email", "senha", "dataNascimento",
   "serie", "escola", "nomeResponsavel", "telefoneResponsavel", "emailResponsavel",
 ] as const
 
@@ -24,7 +25,6 @@ const COLUMN_LABELS: Record<typeof COLUMNS[number], string> = {
   nome:                "Nome",
   email:               "E-mail",
   senha:               "Senha",
-  telefone:            "Telefone",
   dataNascimento:      "Data de Nascimento",
   serie:               "Série",
   escola:              "Escola",
@@ -51,8 +51,8 @@ function parseCSV(text: string): Record<string, string>[] {
 // ─── Template CSV content ────────────────────────────────────────────────────
 const TEMPLATE_CSV =
   COLUMNS.join(",") + "\n" +
-  "Lucas Oliveira,lucas@email.com,Aluno@2025,(11) 99999-0000,15/03/2010,9º Ano EF,Colégio São Paulo,Maria Oliveira,(11) 99999-0001,maria@email.com\n" +
-  "Ana Beatriz,ana@email.com,Aluno@2025,(21) 98888-1111,22/07/2008,2º Ano EM,Escola Estadual,,,"
+  "Lucas Oliveira,lucas@email.com,Aluno@2025,(11) 99999-0000,15/03/2010,9º EF,Colégio São Paulo,Maria Oliveira,(11) 99999-0001,maria@email.com\n" +
+  "Ana Beatriz,ana@email.com,Aluno@2025,(21) 98888-1111,22/07/2008,2º EM,Escola Estadual,,,"
 
 function downloadTemplate() {
   const blob = new Blob([TEMPLATE_CSV], { type: "text/csv;charset=utf-8;" })
@@ -319,9 +319,8 @@ export default function ImportarAlunosPage() {
                   ["nome",                "Sim",  "Lucas Oliveira"],
                   ["email",               "Sim",  "lucas@email.com"],
                   ["senha",               "Não",  "Padrão: Aluno@2025"],
-                  ["telefone",            "Não",  "(11) 99999-0000"],
                   ["dataNascimento",       "Não",  "DD/MM/AAAA — ex: 15/03/2010"],
-                  ["serie",               "Não",  "9º Ano EF · 2º Ano EM · Graduação"],
+                  ["serie",               "Não",  "9º EF · 2º EM · Superior"],
                   ["escola",              "Não",  "Colégio São Paulo"],
                   ["nomeResponsavel",      "Não",  "Maria Oliveira"],
                   ["telefoneResponsavel",  "Não",  "(11) 99999-0001"],

@@ -13,6 +13,9 @@ import {
   Users, Loader2, MapPin, Wifi, Building2, Home, X, BookOpen,
 } from "lucide-react"
 import { format } from "date-fns"
+import { mensagemDeErro } from "@/lib/error-message"
+import { ouFalhe } from "@/lib/action-result"
+import { TeacherSubjectPicker } from "@/components/shared/teacher-subject-picker"
 
 interface StudentOption { id: string; name: string }
 interface TeacherOption {
@@ -82,10 +85,10 @@ export function CreateAulaoDialog({ open, onClose, students, teachers, defaultDa
     )
   }
 
-  function handleTeacherChange(id: string) {
-    setTeacherId(id)
-    setSubjectId("")
-    if (teachers.find(t => t.id === id)?.teachingMode === "ONLINE_ONLY") {
+  function handlePickerChange(next: { teacherId: string; subjectId: string }) {
+    setTeacherId(next.teacherId)
+    setSubjectId(next.subjectId)
+    if (teachers.find(t => t.id === next.teacherId)?.teachingMode === "ONLINE_ONLY") {
       setModality("ONLINE")
     }
   }
@@ -120,7 +123,7 @@ export function CreateAulaoDialog({ open, onClose, students, teachers, defaultDa
 
     start(async () => {
       try {
-        const result = await createAulaoAction({
+        const result = ouFalhe(await createAulaoAction({
           teacherId,
           subjectId,
           title:           title.trim(),
@@ -134,7 +137,7 @@ export function CreateAulaoDialog({ open, onClose, students, teachers, defaultDa
           studentIds:      selectedStudentIds,
           teacherOnsite:   modality === "ONLINE" ? teacherOnsite : undefined,
           recurrence:      recurrence ? { rule: recurrence, endsAt: recurrenceEndsAt } : undefined,
-        })
+        }))
         toast.success("Aulão criado com sucesso")
         router.refresh()
         if (result?.id) {
@@ -154,7 +157,7 @@ export function CreateAulaoDialog({ open, onClose, students, teachers, defaultDa
         }
         handleClose()
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Erro ao criar aulão")
+        toast.error(mensagemDeErro(e, "Erro ao criar aulão"))
       }
     })
   }
@@ -184,36 +187,13 @@ export function CreateAulaoDialog({ open, onClose, students, teachers, defaultDa
             />
           </div>
 
-          {/* Professor */}
-          <div>
-            <label className="text-xs font-medium">Professor <span className="text-destructive">*</span></label>
-            <select
-              value={teacherId}
-              onChange={e => handleTeacherChange(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-            >
-              <option value="">Selecionar professor...</option>
-              {teachers.map(t => (
-                <option key={t.id} value={t.id}>{t.name}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Matéria */}
-          <div>
-            <label className="text-xs font-medium">Matéria <span className="text-destructive">*</span></label>
-            <select
-              value={subjectId}
-              onChange={e => setSubjectId(e.target.value)}
-              disabled={!teacher?.subjects?.length}
-              className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-50"
-            >
-              <option value="">Selecionar matéria...</option>
-              {(teacher?.subjects ?? []).map(s => (
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}
-            </select>
-          </div>
+          {/* Matéria + professor, filtrando um pelo outro */}
+          <TeacherSubjectPicker
+            teachers={teachers}
+            teacherId={teacherId}
+            subjectId={subjectId}
+            onChange={handlePickerChange}
+          />
 
           {/* Data, Hora e Duração */}
           <div className="grid grid-cols-3 gap-3">

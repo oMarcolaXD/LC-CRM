@@ -4,6 +4,7 @@ import { useState } from "react"
 import { CheckCircle } from "lucide-react"
 import { ConfirmacoesModal } from "./confirmacoes-modal"
 import type { ConfirmacaoItem } from "./confirmacoes-modal"
+import type { NotificationStatus } from "@/lib/notifications/status"
 
 export type { ConfirmacaoItem }
 
@@ -11,12 +12,14 @@ interface DayStarterBannerProps {
   scheduledCount:   number
   confirmacaoItems: ConfirmacaoItem[]
   dateLabel:        string
+  notificationStatus: NotificationStatus
 }
 
 export function DayStarterBanner({
   scheduledCount,
   confirmacaoItems,
   dateLabel,
+  notificationStatus,
 }: DayStarterBannerProps) {
   const [modalOpen, setModalOpen] = useState(false)
 
@@ -83,6 +86,7 @@ export function DayStarterBanner({
         onClose={() => setModalOpen(false)}
         items={confirmacaoItems}
         dateLabel={dateLabel}
+        notificationStatus={notificationStatus}
       />
     </>
   )

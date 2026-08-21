@@ -9,11 +9,14 @@ import { DashboardGreeting } from "@/components/shared/dashboard-greeting"
 import Link            from "next/link"
 import { cn }          from "@/lib/utils"
 import {
-  format, subMonths, startOfMonth, endOfMonth, startOfDay, endOfDay,
-  differenceInDays, startOfYear, endOfYear, subYears,
+  format, startOfDay, endOfDay, differenceInDays,
 } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { formatBR, nowBrazil } from "@/lib/datetime"
+import { getPeriodBounds } from "@/lib/reports/period"
+import { whereVencida } from "@/lib/payments"
+import { getQualitySummary } from "@/lib/reports/quality"
+import { wherePacoteUtilizavel } from "@/lib/packages"
 
 function brl(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })
@@ -24,98 +27,11 @@ function pct(v: number) {
 
 // ─── Período ──────────────────────────────────────────────────────────────────
 
-type Periodo = "mes" | "mes-anterior" | "3meses" | "6meses" | "ano"
+// getPeriodBounds vive em @/lib/reports/period e é compartilhado com
+// /admin/relatorios. O dashboard oferece só um subconjunto das opções.
+const VALID_PERIODOS = ["mes", "mes-anterior", "3meses", "6meses", "ano"] as const
 
-const VALID_PERIODOS: Periodo[] = ["mes", "mes-anterior", "3meses", "6meses", "ano"]
-
-type ChartPoint = { start: Date; end: Date; label: string }
-
-function getPeriodBounds(periodo: Periodo, now: Date): {
-  start:       Date
-  end:         Date
-  prevStart:   Date
-  prevEnd:     Date
-  periodLabel: string
-  chartPoints: ChartPoint[]
-  isMonthly:   boolean   // true → receitaGoal já é mensal
-} {
-  switch (periodo) {
-    case "mes-anterior": {
-      const ref = subMonths(now, 1)
-      return {
-        start:       startOfMonth(ref),
-        end:         endOfMonth(ref),
-        prevStart:   startOfMonth(subMonths(now, 2)),
-        prevEnd:     endOfMonth(subMonths(now, 2)),
-        periodLabel: format(ref, "MMMM · yyyy", { locale: ptBR }),
-        chartPoints: Array.from({ length: 6 }, (_, i) => {
-          const d = subMonths(ref, 5 - i)
-          return { start: startOfMonth(d), end: endOfMonth(d), label: format(d, "MMM", { locale: ptBR }) }
-        }),
-        isMonthly: true,
-      }
-    }
-    case "3meses": {
-      const s = startOfMonth(subMonths(now, 2))
-      return {
-        start:       s,
-        end:         endOfMonth(now),
-        prevStart:   startOfMonth(subMonths(now, 5)),
-        prevEnd:     endOfMonth(subMonths(now, 3)),
-        periodLabel: `${format(s, "MMM", { locale: ptBR })} – ${format(now, "MMM yyyy", { locale: ptBR })}`,
-        chartPoints: Array.from({ length: 3 }, (_, i) => {
-          const d = subMonths(now, 2 - i)
-          return { start: startOfMonth(d), end: endOfMonth(d), label: format(d, "MMM", { locale: ptBR }) }
-        }),
-        isMonthly: false,
-      }
-    }
-    case "6meses": {
-      const s = startOfMonth(subMonths(now, 5))
-      return {
-        start:       s,
-        end:         endOfMonth(now),
-        prevStart:   startOfMonth(subMonths(now, 11)),
-        prevEnd:     endOfMonth(subMonths(now, 6)),
-        periodLabel: `${format(s, "MMM", { locale: ptBR })} – ${format(now, "MMM yyyy", { locale: ptBR })}`,
-        chartPoints: Array.from({ length: 6 }, (_, i) => {
-          const d = subMonths(now, 5 - i)
-          return { start: startOfMonth(d), end: endOfMonth(d), label: format(d, "MMM", { locale: ptBR }) }
-        }),
-        isMonthly: false,
-      }
-    }
-    case "ano": {
-      const monthsElapsed = now.getMonth() + 1
-      return {
-        start:       startOfYear(now),
-        end:         endOfMonth(now),
-        prevStart:   startOfYear(subYears(now, 1)),
-        prevEnd:     endOfYear(subYears(now, 1)),
-        periodLabel: format(now, "yyyy"),
-        chartPoints: Array.from({ length: monthsElapsed }, (_, i) => {
-          const d = new Date(now.getFullYear(), i, 1)
-          return { start: startOfMonth(d), end: endOfMonth(d), label: format(d, "MMM", { locale: ptBR }) }
-        }),
-        isMonthly: false,
-      }
-    }
-    default: { // "mes"
-      return {
-        start:       startOfMonth(now),
-        end:         endOfMonth(now),
-        prevStart:   startOfMonth(subMonths(now, 1)),
-        prevEnd:     endOfMonth(subMonths(now, 1)),
-        periodLabel: format(now, "MMMM · yyyy", { locale: ptBR }),
-        chartPoints: Array.from({ length: 6 }, (_, i) => {
-          const d = subMonths(now, 5 - i)
-          return { start: startOfMonth(d), end: endOfMonth(d), label: format(d, "MMM", { locale: ptBR }) }
-        }),
-        isMonthly: true,
-      }
-    }
-  }
-}
+type Periodo = typeof VALID_PERIODOS[number]
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
@@ -139,8 +55,9 @@ async function getOpsData(periodo: Periodo) {
       where:  { status: "PAID", paidAt: { gte: fetchFrom } },
       select: { amount: true, paidAt: true },
     }),
+    // Vencido = não pago com data no passado. Ver src/lib/payments.ts.
     prisma.payment.findMany({
-      where:   { status: "OVERDUE" },
+      where:   whereVencida(now),
       include: { student: { include: { user: true } } },
       orderBy: { dueDate: "asc" },
       take:    50,
@@ -150,7 +67,7 @@ async function getOpsData(periodo: Periodo) {
       select: { status: true, scheduledAt: true },
     }),
     prisma.student.count({
-      where: { packages: { some: { status: "ACTIVE", remainingLessons: { gt: 0 } } } },
+      where: { packages: { some: wherePacoteUtilizavel(now) } },
     }),
     prisma.lessonRequest.count({ where: { status: "PENDING" } }),
     prisma.lesson.findMany({
@@ -167,7 +84,7 @@ async function getOpsData(periodo: Periodo) {
       take:    10,
     }),
     prisma.lessonPackage.count({
-      where: { status: "ACTIVE", remainingLessons: { gt: 0, lte: 2 } },
+      where: { ...wherePacoteUtilizavel(now), remainingLessons: { gt: 0, lte: 2 } },
     }),
   ])
 
@@ -405,9 +322,16 @@ export default async function AdminOpsPage({
   searchParams: Promise<{ periodo?: string }>
 }) {
   const { periodo: rawPeriodo } = await searchParams
-  const periodo = (VALID_PERIODOS.includes(rawPeriodo as Periodo) ? rawPeriodo : "mes") as Periodo
+  const periodo = ((VALID_PERIODOS as readonly string[]).includes(rawPeriodo ?? "")
+    ? rawPeriodo
+    : "mes") as Periodo
 
-  const [d, session] = await Promise.all([getOpsData(periodo), auth()])
+  const [d, session, qualidade] = await Promise.all([
+    getOpsData(periodo),
+    auth(),
+    // A aba Qualidade só ajuda quem lembra de abri-la — o resumo vem para cá.
+    getQualitySummary(nowBrazil()),
+  ])
   const { receitaDeltaNum, aulasDeltaNum } = d
 
   const firstName = (session?.user?.name ?? "").split(" ")[0] || "Admin"
@@ -597,6 +521,45 @@ export default async function AdminOpsPage({
 
         {/* Right column */}
         <div className="flex min-h-0 flex-col gap-4">
+
+          {/* Qualidade dos dados */}
+          {(qualidade.critical > 0 || qualidade.warning > 0) && (
+            <Link
+              href="/admin/relatorios/qualidade"
+              className="block overflow-hidden rounded-[10px] border border-border bg-card transition-colors hover:bg-[var(--hover)]"
+              style={{ borderLeft: `3px solid ${qualidade.critical > 0 ? "var(--danger)" : "var(--warn)"}` }}
+            >
+              <div className="flex items-start justify-between gap-3 p-[12px_14px_8px]">
+                <div className="min-w-0">
+                  <p className="text-[13px] font-semibold tracking-[-0.01em]">Qualidade dos dados</p>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">
+                    {qualidade.critical > 0
+                      ? `${qualidade.critical} problema${qualidade.critical !== 1 ? "s" : ""} crítico${qualidade.critical !== 1 ? "s" : ""}`
+                      : `${qualidade.warning} ponto${qualidade.warning !== 1 ? "s" : ""} de atenção`}
+                    {qualidade.atRisk > 0 && ` · ${brl(qualidade.atRisk)} em jogo`}
+                  </p>
+                </div>
+                <span className="shrink-0 text-[11px] font-medium" style={{ color: "var(--primary)" }}>
+                  Auditar →
+                </span>
+              </div>
+              <ul className="flex flex-col gap-1 px-[14px] pb-[14px]">
+                {qualidade.top.map((t) => (
+                  <li key={t.title} className="flex items-baseline gap-2 text-[12px] leading-snug">
+                    <span
+                      className="shrink-0 font-mono text-[11px] font-semibold tabular-nums"
+                      style={{ color: t.severity === "critico" ? "var(--danger)" : "var(--warn)" }}
+                    >
+                      {t.count}
+                    </span>
+                    <span className="text-muted-foreground">
+                      {t.unit} · {t.title.toLowerCase()}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </Link>
+          )}
 
           {/* Alertas */}
           <div className="overflow-hidden rounded-[10px] border border-border bg-card">

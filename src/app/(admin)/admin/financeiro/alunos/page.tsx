@@ -1,4 +1,6 @@
 import { prisma }     from "@/lib/prisma"
+import { situacao, type SituacaoCobranca } from "@/lib/payments"
+import { nowBrazil }  from "@/lib/datetime"
 import Link           from "next/link"
 import { PageHeader } from "@/components/shared/page-header"
 import { Card, CardContent } from "@/components/ui/card"
@@ -15,21 +17,26 @@ export default async function FinanceiroAlunosPage({ searchParams }: Props) {
   const { q } = await searchParams
   const query = q?.trim()
 
+  const now = nowBrazil()
+
   const students = await prisma.student.findMany({
     where: query ? { name: { contains: query, mode: "insensitive" } } : undefined,
     select: {
       id: true, name: true, grade: true,
       packages: { select: { status: true } },
-      payments: { select: { amount: true, status: true } },
+      payments: { select: { amount: true, status: true, dueDate: true } },
     },
     orderBy: { name: "asc" },
     take: 200,
   })
 
   const rows = students.map((s) => {
-    const pago     = s.payments.filter((p) => p.status === "PAID").reduce((t, p) => t + Number(p.amount), 0)
-    const pendente = s.payments.filter((p) => p.status === "PENDING").reduce((t, p) => t + Number(p.amount), 0)
-    const vencido  = s.payments.filter((p) => p.status === "OVERDUE").reduce((t, p) => t + Number(p.amount), 0)
+    // Situação derivada da data, não do status gravado (src/lib/payments.ts).
+    const soma = (sit: SituacaoCobranca) =>
+      s.payments.filter((p) => situacao(p, now) === sit).reduce((t, p) => t + Number(p.amount), 0)
+    const pago     = soma("PAID")
+    const pendente = soma("PENDING")
+    const vencido  = soma("OVERDUE")
     const pacotesAtivos = s.packages.filter((p) => p.status === "ACTIVE").length
     return { id: s.id, name: s.name, grade: s.grade, pago, pendente, vencido, pacotesAtivos }
   })

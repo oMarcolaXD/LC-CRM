@@ -19,6 +19,7 @@ interface Notification {
 
 const TYPE_ICON: Record<string, string> = {
   LESSON_REQUEST:       "📅",
+  LESSON_SCHEDULED:     "🗓️",
   LESSON_CONFIRMED:     "✅",
   LESSON_CANCELLED:     "❌",
   LESSON_COMPLETED:     "🎓",

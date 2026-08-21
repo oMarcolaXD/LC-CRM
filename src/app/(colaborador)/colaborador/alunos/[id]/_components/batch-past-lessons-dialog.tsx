@@ -10,6 +10,7 @@ import {
 import { Button }   from "@/components/ui/button"
 import { Input }    from "@/components/ui/input"
 import { Label }    from "@/components/ui/label"
+import { mensagemDeErro } from "@/lib/error-message"
 import {
   Popover, PopoverContent, PopoverTrigger,
 } from "@/components/ui/popover"
@@ -234,7 +235,7 @@ export function BatchPastLessonsDialog({
         setOpen(false)
         router.refresh()
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Erro ao registrar aulas")
+        toast.error(mensagemDeErro(e, "Erro ao registrar aulas"))
       }
     })
   }

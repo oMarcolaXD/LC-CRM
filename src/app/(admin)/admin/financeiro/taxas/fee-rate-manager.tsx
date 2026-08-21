@@ -16,6 +16,8 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select"
 import { Plus, Pencil, Trash2, Loader2, Percent } from "lucide-react"
+import { mensagemDeErro } from "@/lib/error-message"
+import { PAYMENT_METHODS } from "@/lib/payments"
 
 interface Rate {
   id:              string
@@ -27,8 +29,10 @@ interface Rate {
   active:          boolean
 }
 
-// Métodos que costumam ter taxa. Casam com Payment.method usado nos modais.
-const METHODS = ["Cartão de crédito", "Cartão de débito", "Boleto", "Pix", "TED", "Transferência"]
+// Lista única, compartilhada com os formulários de cobrança. O texto tem de
+// bater exatamente, porque é por ele que calcFee acha a taxa. Ver
+// src/lib/payments.ts.
+const METHODS = PAYMENT_METHODS
 
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
 
@@ -124,7 +128,7 @@ function DeleteButton({ id, onDone }: { id: string; onDone: () => void }) {
           toast.success("Taxa excluída")
           onDone()
         } catch (e) {
-          toast.error(e instanceof Error ? e.message : "Erro ao excluir")
+          toast.error(mensagemDeErro(e, "Erro ao excluir"))
         }
       })}
       className="h-8 px-2 flex items-center justify-center rounded-lg bg-red-600 text-white text-xs font-medium hover:bg-red-700 disabled:opacity-50 transition-colors">
@@ -165,7 +169,7 @@ function FeeRateDialog({
         toast.success(rate ? "Taxa atualizada" : "Taxa criada")
         onSaved()
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Erro ao salvar")
+        toast.error(mensagemDeErro(e, "Erro ao salvar"))
       }
     })
   }

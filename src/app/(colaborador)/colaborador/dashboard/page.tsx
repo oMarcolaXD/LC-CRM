@@ -10,6 +10,7 @@ import {
 } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { toBrazilDate, nowBrazil } from "@/lib/datetime"
+import { whereVencida } from "@/lib/payments"
 
 function brl(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })
@@ -41,8 +42,9 @@ async function getColabData(userId?: string) {
       where:  { scheduledAt: { gte: startOfDay(now), lte: endOfDay(now) } },
       select: { teacherId: true, scheduledAt: true, status: true },
     }),
+    // Vencido = não pago com data no passado. Ver src/lib/payments.ts.
     prisma.payment.findMany({
-      where:   { status: "OVERDUE" },
+      where:   whereVencida(now),
       include: { student: { include: { user: true } } },
       orderBy: { dueDate: "asc" },
       take:    10,

@@ -7,6 +7,8 @@ import { revalidatePath }   from "next/cache"
 import { redirect }         from "next/navigation"
 import bcrypt               from "bcryptjs"
 import { sendWelcomeEmail } from "@/lib/email"
+import { normalizeGrade } from "@/lib/constants/grades"
+import { gerarRA }        from "@/lib/ra"
 import type { Role, EducationLevel, TeacherMode } from "@prisma/client"
 
 function generateStudentPassword(): string {
@@ -78,8 +80,12 @@ export async function createUserAction(
     return { error: "Colaboradores não podem criar administradores" }
   }
 
+  // Aluno adulto ("self") é o próprio responsável, então entra como GUARDIAN.
+  const userRole: Role = (role === "STUDENT" && guardianMode === "self") ? "GUARDIAN" : role as Role
+
   const emailNorm = email && email.trim() ? email.trim() : undefined
-  const phoneNorm = phone ? phone.replace(/\D/g, "") : undefined
+  // Aluno não tem telefone próprio — o contato é sempre o do responsável.
+  const phoneNorm = userRole !== "STUDENT" && phone ? phone.replace(/\D/g, "") : undefined
 
   if (emailNorm) {
     const exists = await prisma.user.findUnique({ where: { email: emailNorm } })
@@ -99,8 +105,6 @@ export async function createUserAction(
   if (!passwordToHash) return { error: "Senha obrigatória para este perfil" }
 
   const hashed = await bcrypt.hash(passwordToHash, 12)
-
-  const userRole: Role = (role === "STUDENT" && guardianMode === "self") ? "GUARDIAN" : role as Role
 
   await prisma.$transaction(async (tx) => {
     const user = await tx.user.create({
@@ -133,7 +137,7 @@ export async function createUserAction(
 
       } else if (guardianMode === "self") {
         await tx.student.create({
-          data: { userId: user.id, name, grade: grade ?? "Não informado", school, educationLevel: educationLevel as EducationLevel | undefined },
+          data: { userId: user.id, ra: await gerarRA(tx), name, grade: normalizeGrade(grade) ?? "Não informado", school, educationLevel: educationLevel as EducationLevel | undefined },
         })
         const selfG = await tx.guardian.create({ data: { userId: user.id, relationship: "Próprio" } })
         await tx.student.update({ where: { userId: user.id }, data: { guardianId: selfG.id } })
@@ -143,8 +147,9 @@ export async function createUserAction(
       await tx.student.create({
         data: {
           userId:         user.id,
+          ra:             await gerarRA(tx),
           name,
-          grade:          grade ?? "Não informado",
+          grade:          normalizeGrade(grade) ?? "Não informado",
           school,
           educationLevel: educationLevel as EducationLevel | undefined,
           guardianId:     resolvedGuardianId,
@@ -153,8 +158,17 @@ export async function createUserAction(
     }
 
     if (role === "TEACHER") {
-      await tx.teacher.create({
+      const t = await tx.teacher.create({
         data: { userId: user.id, hourlyRate: hourlyRate ?? 0, bio, teachingMode: (teachingMode ?? "HYBRID") as TeacherMode },
+      })
+      // Primeira vigência do valor/hora, com data lá atrás: assim nenhuma aula
+      // fica sem taxa aplicável. Ver src/lib/teacher-rates.ts.
+      await tx.teacherRate.create({
+        data: {
+          teacherId:     t.id,
+          hourlyRate:    hourlyRate ?? 0,
+          effectiveFrom: new Date("1970-01-01T00:00:00.000Z"),
+        },
       })
     }
     if (role === "GUARDIAN") {
@@ -202,7 +216,8 @@ export async function updateUserAction(id: string, formData: FormData) {
   const { name, email, password, phone, role, grade, educationLevel, school, hourlyRate, bio, teachingMode, guardianId, relationship } = parsed.data
 
   const emailNorm = email && email.trim() ? email.trim() : null
-  const phoneNorm = phone ? phone.replace(/\D/g, "") : null
+  // Aluno não tem telefone próprio — o contato é sempre o do responsável.
+  const phoneNorm = role !== "STUDENT" && phone ? phone.replace(/\D/g, "") : null
 
   const updateData: Record<string, unknown> = { name, email: emailNorm, phone: phoneNorm, role }
   if (password) updateData.password = await bcrypt.hash(password, 12)
@@ -214,16 +229,39 @@ export async function updateUserAction(id: string, formData: FormData) {
       const gId = guardianId && guardianId.trim() ? guardianId.trim() : undefined
       await tx.student.upsert({
         where:  { userId: id },
-        update: { name: name ?? "Aluno", grade: grade ?? "Não informado", school, educationLevel: educationLevel as EducationLevel | undefined, guardianId: gId ?? null },
-        create: { userId: id, name: name ?? "Aluno", grade: grade ?? "Não informado", school, educationLevel: educationLevel as EducationLevel | undefined, guardianId: gId },
+        update: { name: name ?? "Aluno", grade: normalizeGrade(grade) ?? "Não informado", school, educationLevel: educationLevel as EducationLevel | undefined, guardianId: gId ?? null },
+        create: { userId: id, ra: await gerarRA(tx), name: name ?? "Aluno", grade: normalizeGrade(grade) ?? "Não informado", school, educationLevel: educationLevel as EducationLevel | undefined, guardianId: gId },
       })
     }
     if (role === "TEACHER") {
-      await tx.teacher.upsert({
+      const t = await tx.teacher.upsert({
         where:  { userId: id },
         update: { hourlyRate: hourlyRate ?? 0, bio, teachingMode: (teachingMode ?? "HYBRID") as TeacherMode },
         create: { userId: id, hourlyRate: hourlyRate ?? 0, bio, teachingMode: (teachingMode ?? "HYBRID") as TeacherMode },
       })
+
+      // Reajuste vira uma vigência nova começando HOJE — o custo das aulas já
+      // dadas continua com a taxa antiga. Sem isto, aumentar o valor/hora
+      // reescrevia o resultado de meses já fechados.
+      const novo   = hourlyRate ?? 0
+      const ultima = await tx.teacherRate.findFirst({
+        where:   { teacherId: t.id },
+        orderBy: { effectiveFrom: "desc" },
+        select:  { hourlyRate: true },
+      })
+      if (!ultima) {
+        await tx.teacherRate.create({
+          data: { teacherId: t.id, hourlyRate: novo, effectiveFrom: new Date("1970-01-01T00:00:00.000Z") },
+        })
+      } else if (Number(ultima.hourlyRate) !== novo) {
+        const hoje = new Date()
+        hoje.setHours(0, 0, 0, 0)
+        await tx.teacherRate.upsert({
+          where:  { teacherId_effectiveFrom: { teacherId: t.id, effectiveFrom: hoje } },
+          update: { hourlyRate: novo },
+          create: { teacherId: t.id, hourlyRate: novo, effectiveFrom: hoje },
+        })
+      }
     }
     if (role === "GUARDIAN") {
       const guardian = await tx.guardian.upsert({

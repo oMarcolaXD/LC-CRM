@@ -1,6 +1,6 @@
 // Integração com Resend — ativa quando RESEND_API_KEY estiver no .env
 
-import type { NotificationPayload } from "./types"
+import type { NotificationPayload, ChannelOutcome } from "./types"
 
 function escapeHtml(str: string): string {
   return str
@@ -59,26 +59,34 @@ function buildEmailText(title: string, message: string, data?: Record<string, st
   return text
 }
 
-export async function sendEmail(payload: NotificationPayload): Promise<void> {
+export async function sendEmail(payload: NotificationPayload): Promise<ChannelOutcome> {
   const key = process.env.RESEND_API_KEY
-  if (!key || !payload.email) return
+  if (!key)           return { ok: false, reason: "not_configured" }
+  if (!payload.email) return { ok: false, reason: "no_destination" }
 
   try {
     const { Resend } = await import("resend")
     const resend = new Resend(key)
 
-    await resend.emails.send({
+    const { error } = await resend.emails.send({
       from:    process.env.RESEND_FROM_EMAIL ?? "noreply@licaodecasa.com.br",
       to:      payload.email,
       subject: `[Lição de Casa] ${payload.title}`,
       html:    buildEmailHtml(payload.title, payload.message, payload.data),
       text:    buildEmailText(payload.title, payload.message, payload.data),
     })
+
+    // O Resend devolve o erro no corpo em vez de lançar exceção
+    if (error) {
+      const detail = error.message ?? String(error)
+      console.error("[Email] Recusado", { to: payload.email, type: payload.type, detail })
+      return { ok: false, reason: "failed", detail }
+    }
+
+    return { ok: true }
   } catch (err) {
-    console.error("[Email] Falha ao enviar", {
-      to:    payload.email,
-      type:  payload.type,
-      error: err instanceof Error ? err.message : String(err),
-    })
+    const detail = err instanceof Error ? err.message : String(err)
+    console.error("[Email] Falha ao enviar", { to: payload.email, type: payload.type, error: detail })
+    return { ok: false, reason: "failed", detail }
   }
 }

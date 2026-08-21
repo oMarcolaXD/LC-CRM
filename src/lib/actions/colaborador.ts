@@ -1,10 +1,15 @@
 "use server"
 
 import { prisma }            from "@/lib/prisma"
+import type { Prisma }       from "@prisma/client"
 import { auth }              from "@/lib/auth"
 import { revalidatePath }    from "next/cache"
 import { redirect }          from "next/navigation"
-import { notify }            from "@/lib/notifications"
+import {
+  notify, notifyLessonConfirmedToTeacher,
+  deliveredChannels, nothingDelivered, countsAsSent, describeDeliveryFailure,
+  type DeliveryResult,
+} from "@/lib/notifications"
 import { sendWelcomeEmail }  from "@/lib/email"
 import { ptBR }              from "date-fns/locale"
 import { parseBrazilDateTime, formatBR } from "@/lib/datetime"
@@ -12,6 +17,10 @@ import bcrypt                from "bcryptjs"
 import { z }                 from "zod"
 import { randomUUID }        from "crypto"
 import { calcFee, type FeeRate } from "@/lib/fees"
+import { comResultado, type ActionResult } from "@/lib/action-result"
+import { normalizeGrade } from "@/lib/constants/grades"
+import { gerarRA }        from "@/lib/ra"
+import { temMetodo }      from "@/lib/payments"
 
 /** Carrega as regras de taxa de cartão ativas (para snapshot em Payment.feeAmount). */
 async function loadFeeRates(): Promise<FeeRate[]> {
@@ -66,7 +75,6 @@ const newStudentSchema = z.object({
   name:          z.string().min(3, "Nome deve ter no mínimo 3 caracteres"),
   email:         z.string().email("E-mail inválido").optional().or(z.literal("")),
   password:      z.string().min(6, "Senha deve ter no mínimo 6 caracteres").optional().or(z.literal("")),
-  phone:         z.string().optional(),
   grade:         z.string().optional(),
   school:        z.string().optional(),
   guardianName:  z.string().min(3, "Nome do responsável é obrigatório"),
@@ -84,7 +92,7 @@ export async function createStudentWithGuardianAction(formData: FormData) {
     redirect(`/colaborador/alunos/novo?error=${encodeURIComponent(msg)}`)
   }
 
-  const { name, email, phone, grade, school,
+  const { name, email, grade, school,
           guardianName, guardianPhone, guardianEmail } = parsed.data
 
   // E-mail do aluno é opcional — normaliza vazio para null (login fica pelo responsável)
@@ -155,8 +163,9 @@ export async function createStudentWithGuardianAction(formData: FormData) {
   const gPass = guardianName ? await bcrypt.hash(`Resp@${Math.random().toString(36).slice(2, 8)}`, 12) : ""
 
   await prisma.$transaction(async (tx) => {
+    // Aluno não tem telefone: o contato é sempre o do responsável.
     const studentUser = await tx.user.create({
-      data: { name, email: studentEmail, password: hashed, phone, role: "STUDENT", active: !inactive },
+      data: { name, email: studentEmail, password: hashed, role: "STUDENT", active: !inactive },
     })
 
     let guardianId: string | undefined
@@ -179,8 +188,9 @@ export async function createStudentWithGuardianAction(formData: FormData) {
     const student = await tx.student.create({
       data: {
         userId:    studentUser.id,
+        ra:        await gerarRA(tx),
         name:      studentUser.name,
-        grade:     grade ?? "Não informado",
+        grade:     normalizeGrade(grade) ?? "Não informado",
         school,
         guardianId,
         notes:     inactiveNote,
@@ -268,7 +278,6 @@ const importRowSchema = z.object({
   nome:                z.string().min(1),
   email:               z.string().email(),
   senha:               z.string().min(6).default("Aluno@2025"),
-  telefone:            z.string().optional(),
   dataNascimento:      z.string().optional(),
   serie:               z.string().optional(),
   escola:              z.string().optional(),
@@ -299,7 +308,7 @@ export async function importStudentsAction(rows: unknown[]): Promise<ImportResul
     }
 
     const {
-      nome, email, senha, telefone, serie, escola,
+      nome, email, senha, serie, escola,
       nomeResponsavel, telefoneResponsavel, emailResponsavel,
     } = parsed.data
 
@@ -314,7 +323,7 @@ export async function importStudentsAction(rows: unknown[]): Promise<ImportResul
 
       await prisma.$transaction(async (tx) => {
         const studentUser = await tx.user.create({
-          data: { name: nome, email, password: hashed, phone: telefone, role: "STUDENT" },
+          data: { name: nome, email, password: hashed, role: "STUDENT" },
         })
 
         let guardianId: string | undefined
@@ -340,8 +349,9 @@ export async function importStudentsAction(rows: unknown[]): Promise<ImportResul
         await tx.student.create({
           data: {
             userId:    studentUser.id,
+            ra:        await gerarRA(tx),
             name:      studentUser.name,
-            grade:     serie ?? "Não informado",
+            grade:     normalizeGrade(serie) ?? "Não informado",
             school:    escola,
             guardianId,
           },
@@ -366,7 +376,6 @@ const updateStudentSchema = z.object({
   name:          z.string().min(2, "Nome deve ter no mínimo 2 caracteres"),
   grade:         z.string().min(1, "Série é obrigatória"),
   school:        z.string().optional(),
-  phone:         z.string().optional(),
   email:         z.string().email("E-mail inválido").optional().or(z.literal("")),
   notes:         z.string().optional(),
   tags:          z.string().optional(),
@@ -381,7 +390,6 @@ export async function updateStudentAction(input: {
   name:           string
   grade:          string
   school?:        string
-  phone?:         string
   email?:         string
   notes?:         string
   tags?:          string
@@ -395,7 +403,7 @@ export async function updateStudentAction(input: {
   const parsed = updateStudentSchema.safeParse(input)
   if (!parsed.success) throw new Error(parsed.error.issues[0]?.message ?? "Dados inválidos")
 
-  const { studentId, name, grade, school, phone, email, notes, tags, active,
+  const { studentId, name, grade, school, email, notes, tags, active,
           guardianName, guardianPhone, guardianEmail } = parsed.data
 
   const student = await prisma.student.findUnique({
@@ -411,7 +419,7 @@ export async function updateStudentAction(input: {
   await prisma.$transaction(async (tx) => {
     await tx.student.update({
       where: { id: studentId },
-      data: { name, grade, school: school || null, notes: notes || null, tags: tagList },
+      data: { name, grade: normalizeGrade(grade) ?? grade, school: school || null, notes: notes || null, tags: tagList },
     })
 
     if (student.userId) {
@@ -419,7 +427,6 @@ export async function updateStudentAction(input: {
         where: { id: student.userId },
         data: {
           name,
-          phone: phone || null,
           ...(email ? { email } : {}),
           ...(active !== undefined ? { active } : {}),
         },
@@ -520,27 +527,64 @@ export async function addStudentPaymentAction(input: {
 
 // ─── Marcar Pagamento como Pago ───────────────────────────────────────────────
 
-export async function markPaymentPaidColaboradorAction(id: string) {
+/**
+ * Quita a cobrança. A forma de pagamento é obrigatória: sem ela a taxa da
+ * maquininha não é calculada, `feeAmount` fica em zero e a receita líquida de
+ * todos os relatórios sai maior do que o valor que caiu na conta. A tela
+ * pergunta o método quando a cobrança ainda não tem um.
+ */
+export async function markPaymentPaidColaboradorAction(id: string, method?: string) {
   await requireCollaboratorOrAdmin()
+
+  const existing = await prisma.payment.findUnique({
+    where:  { id },
+    select: { amount: true, method: true, installmentTotal: true },
+  })
+  if (!existing) throw new Error("Cobrança não encontrada")
+
+  const forma = (method ?? existing.method ?? "").trim()
+  if (!forma) throw new Error("Informe a forma de pagamento para registrar o recebimento")
+
+  const rates = await loadFeeRates()
   await prisma.payment.update({
     where: { id },
-    data:  { status: "PAID", paidAt: new Date() },
+    data:  {
+      status:    "PAID",
+      paidAt:    new Date(),
+      method:    forma,
+      feeAmount: calcFee(rates, forma, existing.installmentTotal ?? 1, Number(existing.amount)),
+    },
   })
   revalidatePath("/colaborador/financeiro")
   revalidatePath("/admin/financeiro/pagamentos")
+  revalidatePath("/admin/relatorios", "layout")
 }
 
-// ─── Enviar confirmações em massa ─────────────────────────────────────────────
+// ─── Enviar confirmações em massa (rodada do dia) ─────────────────────────────
 
+/**
+ * Envia as mensagens da rodada do dia e fecha o ciclo: as aulas cujo
+ * responsável/aluno foi avisado passam de "Agendada" para "Confirmada".
+ *
+ * Por que o responsável é quem confirma, e não o professor: no modal os itens de
+ * professor são agrupados por professor (um item cobre várias aulas), então não
+ * há como amarrar a confirmação de professor a uma aula específica. Itens de
+ * `pacote` são cobrança de pacote vencido e nunca confirmam nada.
+ */
 export async function sendConfirmationsBatchAction(items: {
-  key:          string
-  lessonId:     string
-  destinatario: "responsavel" | "professor"
-  mensagem:     string
-}[]) {
+  key:      string
+  lessonId: string
+  tipo:     "responsavel" | "professor" | "pacote"
+  mensagem: string
+}[]): Promise<{ sent: number; delivered: number; confirmed: number; problema: string | null }> {
   await requireCollaboratorOrAdmin()
 
+  const results: DeliveryResult[] = []
+  const avisados = new Set<string>()   // lessonIds cujo responsável foi avisado
+
   for (const item of items) {
+    // "pacote" (cobrança) também vai para o responsável — só não confirma a aula
+    const paraProfessor = item.tipo === "professor"
     const lesson = await prisma.lesson.findUnique({
       where:   { id: item.lessonId },
       include: {
@@ -561,14 +605,14 @@ export async function sendConfirmationsBatchAction(items: {
     })
     if (!lesson) continue
 
-    if (item.destinatario === "responsavel") {
+    if (!paraProfessor) {
       const first    = lesson.participants[0]
       const student  = first?.student
       const guardian = student?.guardian
       const userId   = guardian?.userId ?? student?.userId
       if (!userId) continue
 
-      await notify({
+      const r = await notify({
         userId,
         type:    "LESSON_CONFIRMATION_REQUEST",
         title:   "Confirmação de aula",
@@ -580,8 +624,12 @@ export async function sendConfirmationsBatchAction(items: {
           "Horário":  formatBR(lesson.scheduledAt, "HH:mm"),
         },
       })
+      results.push(r)
+      // Só confirma a aula se a mensagem realmente saiu (itens de cobrança de
+      // pacote não confirmam nada, mesmo indo para o responsável).
+      if (item.tipo === "responsavel" && countsAsSent(r)) avisados.add(item.lessonId)
     } else {
-      await notify({
+      results.push(await notify({
         userId:  lesson.teacher.userId,
         type:    "LESSON_CONFIRMATION_REQUEST",
         title:   "Confirmação de presença",
@@ -592,48 +640,109 @@ export async function sendConfirmationsBatchAction(items: {
           "Matéria":  lesson.subject?.name ?? "–",
           "Horário":  formatBR(lesson.scheduledAt, "HH:mm"),
         },
-      })
+      }))
     }
+  }
+
+  // Fecha o ciclo: só aulas ainda agendadas cujo responsável/aluno foi avisado
+  // de fato. O filtro de status evita ressuscitar aula cancelada/realizada.
+  const toConfirm = [...avisados]
+
+  let confirmed = 0
+  if (toConfirm.length > 0) {
+    const { count } = await prisma.lesson.updateMany({
+      where: { id: { in: toConfirm }, status: "SCHEDULED" },
+      data:  { status: "CONFIRMED" },
+    })
+    confirmed = count
+  }
+
+  const resumo = resumirEnvios(results)
+
+  revalidatePath("/colaborador/agenda")
+  revalidatePath("/colaborador/dashboard")
+  revalidatePath("/admin/agenda")
+  revalidatePath("/professor/agenda")
+
+  return {
+    sent:      items.length,
+    delivered: resumo.entregues,
+    confirmed,
+    problema:  resumo.problema,
   }
 }
 
-// ─── Enviar confirmação para o responsável/aluno ──────────────────────────────
+// ─── Notificações de confirmação de aula ──────────────────────────────────────
+// Helpers privados (não são server actions): recebem a aula já carregada, para
+// que a confirmação manual e os botões de reenvio compartilhem o mesmo texto.
 
-export async function sendConfirmationToGuardianAction(lessonId: string) {
-  await requireCollaboratorOrAdmin()
-
-  const lesson = await prisma.lesson.findUnique({
-    where:   { id: lessonId },
+const CONFIRMATION_INCLUDE = {
+  participants: {
     include: {
-      participants: {
+      student: {
         include: {
-          student: {
-            include: {
-              guardian: { include: { user: true } },
-            },
-          },
+          user:     true,
+          guardian: { include: { user: true } },
         },
       },
-      teacher: { include: { user: true } },
-      subject: true,
     },
-  })
-  if (!lesson) throw new Error("Aula não encontrada")
+  },
+  teacher: { include: { user: true } },
+  subject: true,
+} as const
 
+type LessonForConfirmation = Prisma.LessonGetPayload<{ include: typeof CONFIRMATION_INCLUDE }>
+
+const STATUS_LABEL: Record<string, string> = {
+  SCHEDULED: "Agendada",
+  CONFIRMED: "Confirmada",
+  COMPLETED: "Realizada",
+  CANCELLED: "Cancelada",
+  MISSED:    "Falta",
+}
+
+/**
+ * Resultado de um envio, do ponto de vista de quem clicou no botão.
+ * `problema` vem preenchido quando nada saiu — para a interface dizer o motivo
+ * em vez de um "enviado!" que não aconteceu.
+ */
+export interface EnvioResultado {
+  destinatarios: number
+  entregues:     number
+  canais:        string[]
+  problema:      string | null
+}
+
+function resumirEnvios(results: DeliveryResult[]): EnvioResultado {
+  const entregues = results.filter((r) => !nothingDelivered(r))
+  const canais    = [...new Set(entregues.flatMap(deliveredChannels))]
+  const problema  = entregues.length > 0
+    ? null
+    : (results.length === 0
+        ? "Ninguém para notificar: o aluno não tem login nem responsável com contato cadastrado."
+        : describeDeliveryFailure(results[0]))
+
+  return { destinatarios: results.length, entregues: entregues.length, canais, problema }
+}
+
+/** Notifica o responsável de cada participante — ou o próprio aluno, se ele tiver login. */
+async function notifyConfirmationToStudents(lesson: LessonForConfirmation): Promise<EnvioResultado> {
   const scheduledAt = formatBR(lesson.scheduledAt, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
+  const results: DeliveryResult[] = []
 
-  for (const p of lesson.participants) {
-    const { student } = p
-    const guardian    = student.guardian
-    if (!guardian) continue
+  for (const { student } of lesson.participants) {
+    // Aluno com login próprio recebe direto; senão vai para o responsável
+    const recipientId = student.userId ?? student.guardian?.userId
+    if (!recipientId) continue
+    const contact = student.userId ? student.user : student.guardian?.user
 
-    await notify({
-      userId:  guardian.userId,
+    results.push(await notify({
+      userId:  recipientId,
       type:    "LESSON_CONFIRMED",
       title:   "Confirmação de aula",
       message: `A aula de ${lesson.subject?.name ?? "–"} de ${student.name} com ${lesson.teacher.user.name} está confirmada para ${scheduledAt}.`,
-      email:   guardian.user?.email ?? undefined,
-      phone:   guardian.user?.phone ?? undefined,
+      email:   contact?.email ?? undefined,
+      phone:   contact?.phone ?? undefined,
       data: {
         "Aluno":      student.name,
         "Matéria":    lesson.subject?.name ?? "–",
@@ -641,39 +750,96 @@ export async function sendConfirmationToGuardianAction(lessonId: string) {
         "Data/Hora":  scheduledAt,
         "Modalidade": lesson.modality === "ONLINE" ? "Online" : "Presencial",
       },
-    })
+    }))
   }
+
+  return resumirEnvios(results)
 }
 
-// ─── Enviar confirmação para o professor ───────────────────────────────────────
+async function notifyConfirmationToTeacher(lesson: LessonForConfirmation): Promise<EnvioResultado> {
+  const result = await notifyLessonConfirmedToTeacher({
+    teacherUserId: lesson.teacher.userId,
+    teacherEmail:  lesson.teacher.user.email,
+    teacherPhone:  lesson.teacher.user.phone,
+    subject:       lesson.subject?.name ?? "–",
+    scheduledAt:   formatBR(lesson.scheduledAt, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR }),
+    modality:      lesson.modality === "ONLINE" ? "Online" : "Presencial",
+  })
+  return resumirEnvios([result])
+}
 
-export async function sendConfirmationToTeacherAction(lessonId: string) {
+// ─── Confirmar aula (única transição para CONFIRMED) ──────────────────────────
+
+/**
+ * Passa a aula de "Agendada" para "Confirmada" e avisa professor e
+ * responsável/aluno. É a ÚNICA porta para o status CONFIRMED: a criação de aulas
+ * nasce em SCHEDULED e `updateLessonDirectAction` recusa a transição.
+ */
+export async function confirmLessonAction(
+  lessonId: string,
+): Promise<ActionResult<{ professor: EnvioResultado; responsaveis: EnvioResultado }>> {
+  return comResultado(() => confirmarAula(lessonId))
+}
+
+async function confirmarAula(lessonId: string) {
   await requireCollaboratorOrAdmin()
 
   const lesson = await prisma.lesson.findUnique({
     where:   { id: lessonId },
-    include: {
-      teacher: { include: { user: true } },
-      subject: true,
-    },
+    include: CONFIRMATION_INCLUDE,
   })
   if (!lesson) throw new Error("Aula não encontrada")
 
-  const scheduledAt = formatBR(lesson.scheduledAt, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
+  if (lesson.status === "CONFIRMED") throw new Error("Esta aula já está confirmada")
+  if (lesson.status !== "SCHEDULED") {
+    throw new Error(`Só é possível confirmar aulas agendadas — esta está como ${STATUS_LABEL[lesson.status] ?? lesson.status}`)
+  }
 
-  await notify({
-    userId:  lesson.teacher.userId,
-    type:    "LESSON_CONFIRMED",
-    title:   "Confirmação de aula",
-    message: `Sua aula de ${lesson.subject?.name ?? "–"} está confirmada para ${scheduledAt}.`,
-    email:   lesson.teacher.user.email ?? undefined,
-    phone:   lesson.teacher.user.phone ?? undefined,
-    data: {
-      "Matéria":    lesson.subject?.name ?? "–",
-      "Data/Hora":  scheduledAt,
-      "Modalidade": lesson.modality === "ONLINE" ? "Online" : "Presencial",
-    },
+  await prisma.lesson.update({
+    where: { id: lessonId },
+    data:  { status: "CONFIRMED" },
   })
+
+  // Notificações depois da gravação: uma falha de e-mail/WhatsApp não desfaz a
+  // confirmação, mas o resultado volta para a interface avisar o atendente.
+  const professor    = await notifyConfirmationToTeacher(lesson)
+  const responsaveis = await notifyConfirmationToStudents(lesson)
+
+  revalidatePath("/colaborador/agenda")
+  revalidatePath("/colaborador/dashboard")
+  revalidatePath("/admin/agenda")
+  revalidatePath("/professor/agenda")
+  for (const { studentId } of lesson.participants) {
+    revalidatePath(`/colaborador/alunos/${studentId}`)
+  }
+
+  return { professor, responsaveis }
+}
+
+// ─── Reenviar confirmação (sem mexer no status) ───────────────────────────────
+
+export async function sendConfirmationToGuardianAction(lessonId: string): Promise<EnvioResultado> {
+  await requireCollaboratorOrAdmin()
+
+  const lesson = await prisma.lesson.findUnique({
+    where:   { id: lessonId },
+    include: CONFIRMATION_INCLUDE,
+  })
+  if (!lesson) throw new Error("Aula não encontrada")
+
+  return notifyConfirmationToStudents(lesson)
+}
+
+export async function sendConfirmationToTeacherAction(lessonId: string): Promise<EnvioResultado> {
+  await requireCollaboratorOrAdmin()
+
+  const lesson = await prisma.lesson.findUnique({
+    where:   { id: lessonId },
+    include: CONFIRMATION_INCLUDE,
+  })
+  if (!lesson) throw new Error("Aula não encontrada")
+
+  return notifyConfirmationToTeacher(lesson)
 }
 
 // ─── Excluir Aula ──────────────────────────────────────────────────────────────
@@ -682,11 +848,14 @@ export async function deleteLessonAction(lessonId: string) {
   const session = await auth()
   if (session?.user?.role !== "ADMIN") throw new Error("Sem permissão")
 
-  const participants = await prisma.lessonParticipant.findMany({
-    where: { lessonId },
-    select: { studentId: true },
+  // A aula é o que precisa existir — uma aula sem inscritos (aulão vazio,
+  // compromisso) também pode ser excluída.
+  const lesson = await prisma.lesson.findUnique({
+    where:  { id: lessonId },
+    select: { id: true, participants: { select: { studentId: true } } },
   })
-  if (participants.length === 0) throw new Error("Aula não encontrada")
+  if (!lesson) throw new Error("Aula não encontrada")
+  const participants = lesson.participants
 
   await prisma.lesson.delete({ where: { id: lessonId } })
 
@@ -700,9 +869,14 @@ export async function updatePaymentStatusAction(id: string, status: "PENDING" | 
 
   const payment = await prisma.payment.findUnique({
     where: { id },
-    select: { studentId: true },
+    select: { studentId: true, method: true },
   })
   if (!payment) throw new Error("Pagamento não encontrado")
+
+  // Sem forma de pagamento a taxa não é calculada e a receita líquida infla.
+  if (status === "PAID" && !temMetodo(payment.method)) {
+    throw new Error("Informe a forma de pagamento antes de marcar como paga — use o botão de editar a cobrança")
+  }
 
   await prisma.payment.update({
     where: { id },

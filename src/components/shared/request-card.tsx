@@ -14,6 +14,8 @@ import {
 import { format, isToday, isTomorrow } from "date-fns"
 import { ptBR }                      from "date-fns/locale"
 import { toast }                     from "sonner"
+import { mensagemDeErro } from "@/lib/error-message"
+import { ouFalhe } from "@/lib/action-result"
 
 type TeacherMode = "ONLINE_ONLY" | "PRESENCIAL" | "HYBRID"
 
@@ -68,10 +70,10 @@ export function RequestCard({
     startTransition(async () => {
       try {
         const onsiteOverride = showLocationToggle ? teacherOnsite : undefined
-        await approveRequestAction(id, modality, onsiteOverride)
+        ouFalhe(await approveRequestAction(id, modality, onsiteOverride))
         toast.success(`Aula ${modality === "ONLINE" ? "online" : "presencial"} confirmada`)
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Erro ao aprovar")
+        toast.error(mensagemDeErro(e, "Erro ao aprovar"))
       }
     })
   }
@@ -82,7 +84,7 @@ export function RequestCard({
         await rejectRequestAction(id)
         toast.success("Solicitação recusada")
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Erro ao recusar")
+        toast.error(mensagemDeErro(e, "Erro ao recusar"))
       }
     })
   }

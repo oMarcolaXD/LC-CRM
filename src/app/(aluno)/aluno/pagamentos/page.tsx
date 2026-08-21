@@ -1,5 +1,7 @@
 import { auth }             from "@/lib/auth"
 import { prisma }           from "@/lib/prisma"
+import { situacao, SITUACAO_LABEL, SITUACAO_VARIANT, type SituacaoCobranca } from "@/lib/payments"
+import { nowBrazil }        from "@/lib/datetime"
 import { redirect }         from "next/navigation"
 import { getActiveStudent } from "@/lib/get-active-student"
 import { PageHeader }  from "@/components/shared/page-header"
@@ -11,11 +13,8 @@ import { ptBR }        from "date-fns/locale"
 
 function brl(v: number) { return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) }
 
-const STATUS_CFG = {
-  PENDING: { label: "Pendente", variant: "secondary"   as const },
-  PAID:    { label: "Pago",     variant: "default"     as const },
-  OVERDUE: { label: "Vencido",  variant: "destructive" as const },
-}
+// Rótulo e cor vêm da situação real (derivada da data), não do status gravado —
+// o aluno via "pendente" numa cobrança vencida há meses. Ver src/lib/payments.ts.
 
 export default async function AlunoPagamentosPage() {
   const session = await auth()
@@ -34,9 +33,12 @@ export default async function AlunoPagamentosPage() {
     orderBy: { dueDate:  "asc" },
   })
 
-  const totalPago    = payments.filter((p) => p.status === "PAID").reduce((s, p) => s + Number(p.amount), 0)
-  const pendente     = payments.filter((p) => p.status === "PENDING").reduce((s, p) => s + Number(p.amount), 0)
-  const vencido      = payments.filter((p) => p.status === "OVERDUE").reduce((s, p) => s + Number(p.amount), 0)
+  const now  = nowBrazil()
+  const soma = (sit: SituacaoCobranca) =>
+    payments.filter((p) => situacao(p, now) === sit).reduce((s, p) => s + Number(p.amount), 0)
+  const totalPago = soma("PAID")
+  const pendente  = soma("PENDING")
+  const vencido   = soma("OVERDUE")
   const saldoAulas   = student?.packages.filter((p) => p.status === "ACTIVE").reduce((s, p) => s + Number(p.remainingLessons), 0) ?? 0
 
   return (
@@ -82,7 +84,7 @@ export default async function AlunoPagamentosPage() {
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <p className="text-sm font-bold">{brl(Number(p.amount))}</p>
-                    <Badge variant={STATUS_CFG[p.status].variant}>{STATUS_CFG[p.status].label}</Badge>
+                    <Badge variant={SITUACAO_VARIANT[situacao(p, now)]}>{SITUACAO_LABEL[situacao(p, now)]}</Badge>
                   </div>
                 </div>
               ))}

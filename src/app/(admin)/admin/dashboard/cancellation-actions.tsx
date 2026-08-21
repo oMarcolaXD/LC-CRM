@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { approveLessonCancellationAction, rejectLessonCancellationAction } from "@/lib/actions/lesson-cancellation"
 import { Loader2, Check, X } from "lucide-react"
+import { mensagemDeErro } from "@/lib/error-message"
 
 interface Props {
   requestId: string
@@ -23,7 +24,7 @@ export function CancellationActions({ requestId }: Props) {
         toast.success("Aula cancelada e saldo devolvido")
         router.refresh()
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Erro ao aprovar")
+        toast.error(mensagemDeErro(e, "Erro ao aprovar"))
       }
     })
   }
@@ -37,7 +38,7 @@ export function CancellationActions({ requestId }: Props) {
         setNote("")
         router.refresh()
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Erro ao recusar")
+        toast.error(mensagemDeErro(e, "Erro ao recusar"))
       }
     })
   }

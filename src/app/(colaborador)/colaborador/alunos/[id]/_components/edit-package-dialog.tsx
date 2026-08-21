@@ -14,6 +14,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select"
 import { Settings2, Loader2, Trash2, AlertTriangle } from "lucide-react"
+import { mensagemDeErro } from "@/lib/error-message"
 
 interface Props {
   pkg: {
@@ -80,7 +81,7 @@ export function EditPackageDialog({ pkg, studentId }: Props) {
         setOpen(false)
         router.refresh()
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Erro ao atualizar pacote")
+        toast.error(mensagemDeErro(e, "Erro ao atualizar pacote"))
       }
     })
   }
@@ -93,7 +94,7 @@ export function EditPackageDialog({ pkg, studentId }: Props) {
         setOpen(false)
         router.refresh()
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Erro ao excluir pacote")
+        toast.error(mensagemDeErro(e, "Erro ao excluir pacote"))
       }
     })
   }

@@ -16,6 +16,7 @@ import {
 import { toast }    from "sonner"
 import { createStudentPackageAction } from "@/lib/actions/financeiro"
 import { FeeEstimate } from "@/components/shared/fee-estimate"
+import { mensagemDeErro } from "@/lib/error-message"
 
 interface Props {
   studentId:   string
@@ -187,7 +188,7 @@ export function PackageDialog({ studentId, studentName, mode }: Props) {
         setOpen(false)
         router.push(`/colaborador/alunos/${studentId}`)
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Erro ao criar pacote")
+        toast.error(mensagemDeErro(e, "Erro ao criar pacote"))
       }
     })
   }

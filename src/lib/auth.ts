@@ -14,6 +14,26 @@ export { ROLE_HOME }
 const REMEMBER_MAX_AGE = 30 * 24 * 60 * 60  // 30 dias
 const SESSION_MAX_AGE  = 8 * 60 * 60         // 8 horas
 
+/**
+ * Acha o usuário pelo e-mail digitado.
+ *
+ * Há cadastros gravados com maiúscula ("G4briela@…") e o Postgres compara
+ * diferenciando caixa: quem digita tudo minúsculo simplesmente não entra. A
+ * busca sem diferenciar caixa é a rede de segurança, mas só vale quando há um
+ * único candidato — existem e-mails repetidos em grafias diferentes no banco, e
+ * adivinhar em qual cadastro logar seria pior do que recusar.
+ */
+async function findActiveUserByEmail(email: string) {
+  const exact = await prisma.user.findUnique({ where: { email, active: true } })
+  if (exact) return exact
+
+  const matches = await prisma.user.findMany({
+    where: { email: { equals: email, mode: "insensitive" }, active: true },
+    take:  2,
+  })
+  return matches.length === 1 ? matches[0] : null
+}
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
   // A validade real do token (exp) é decidida aqui, com base em token.remember.
@@ -50,9 +70,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         let user = null
         try {
           if (isEmail) {
-            user = await prisma.user.findUnique({
-              where: { email: input, active: true },
-            })
+            user = await findActiveUserByEmail(input)
           } else {
             const normalized = input.replace(/\D/g, "")
             if (normalized.length < 8) return null
@@ -84,9 +102,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async signIn({ user, account }) {
       if (account?.provider === "google") {
         if (!user.email) return false
-        const existingUser = await prisma.user.findUnique({
-          where: { email: user.email, active: true },
-        })
+        const existingUser = await findActiveUserByEmail(user.email)
         if (!existingUser) return "/login?error=not_registered"
       }
       return true
@@ -99,7 +115,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         return token
       }
       if (account?.provider === "google" && user?.email) {
-        const dbUser = await prisma.user.findUnique({ where: { email: user.email } })
+        const dbUser = await findActiveUserByEmail(user.email)
         if (dbUser) {
           token.id    = dbUser.id
           token.role  = dbUser.role

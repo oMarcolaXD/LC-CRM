@@ -13,6 +13,7 @@ import {
 } from "@/lib/actions/guardian-lesson"
 import { format } from "date-fns"
 import { ptBR }   from "date-fns/locale"
+import { mensagemDeErro } from "@/lib/error-message"
 
 interface Policy {
   cancelMinHours:     number
@@ -57,7 +58,7 @@ export function LessonSelfActions({
         setReason("")
         router.refresh()
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Erro ao cancelar aula")
+        toast.error(mensagemDeErro(e, "Erro ao cancelar aula"))
       }
     })
   }
@@ -184,7 +185,7 @@ function RescheduleDialog({
         toast.success("Aula remarcada")
         onClose(true)
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Erro ao remarcar aula")
+        toast.error(mensagemDeErro(e, "Erro ao remarcar aula"))
       }
     })
   }

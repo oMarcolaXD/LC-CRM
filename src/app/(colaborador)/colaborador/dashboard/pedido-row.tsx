@@ -7,6 +7,8 @@ import { format }                   from "date-fns"
 import { ptBR }                     from "date-fns/locale"
 import Link                         from "next/link"
 import { Loader2 }                  from "lucide-react"
+import { mensagemDeErro } from "@/lib/error-message"
+import { ouFalhe } from "@/lib/action-result"
 
 interface PedidoRowProps {
   id:          string
@@ -51,10 +53,10 @@ export function PedidoRow({
   function handleApprove() {
     startApprove(async () => {
       try {
-        await approveRequestAction(id, mod)
+        ouFalhe(await approveRequestAction(id, mod))
         toast.success("Aula confirmada")
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Erro ao confirmar")
+        toast.error(mensagemDeErro(e, "Erro ao confirmar"))
       }
     })
   }
@@ -65,7 +67,7 @@ export function PedidoRow({
         await rejectRequestAction(id)
         toast.success("Pedido recusado")
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Erro ao recusar")
+        toast.error(mensagemDeErro(e, "Erro ao recusar"))
       }
     })
   }

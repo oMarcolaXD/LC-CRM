@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { deletePaymentAction } from "@/lib/actions/financeiro"
 import { Trash2, Loader2 } from "lucide-react"
+import { mensagemDeErro } from "@/lib/error-message"
 
 export function DeletePaymentButton({ paymentId }: { paymentId: string }) {
   const router = useRouter()
@@ -31,7 +32,7 @@ export function DeletePaymentButton({ paymentId }: { paymentId: string }) {
                 await deletePaymentAction(paymentId)
                 router.refresh()
               } catch (e) {
-                toast.error(e instanceof Error ? e.message : "Erro ao excluir pagamento")
+                toast.error(mensagemDeErro(e, "Erro ao excluir pagamento"))
               }
             })
           }}

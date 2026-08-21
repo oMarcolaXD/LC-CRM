@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { deleteLessonAction } from "@/lib/actions/colaborador"
 import { Trash2, Loader2 } from "lucide-react"
+import { mensagemDeErro } from "@/lib/error-message"
 
 export function DeleteLessonButton({ lessonId }: { lessonId: string }) {
   const router = useRouter()
@@ -31,7 +32,7 @@ export function DeleteLessonButton({ lessonId }: { lessonId: string }) {
                 await deleteLessonAction(lessonId)
                 router.refresh()
               } catch (e) {
-                toast.error(e instanceof Error ? e.message : "Erro ao excluir aula")
+                toast.error(mensagemDeErro(e, "Erro ao excluir aula"))
                 setConfirm(false)
               }
             })

@@ -2,6 +2,7 @@ import { auth }              from "@/lib/auth"
 import { prisma }            from "@/lib/prisma"
 import { redirect }          from "next/navigation"
 import { getActiveStudent }  from "@/lib/get-active-student"
+import { wherePacoteUtilizavel } from "@/lib/packages"
 import { PageHeader }        from "@/components/shared/page-header"
 import { Card, CardContent } from "@/components/ui/card"
 import { BookOpen }          from "lucide-react"
@@ -22,7 +23,8 @@ export default async function AgendarPage({ searchParams }: AgendarPageProps) {
 
   const student = await prisma.student.findUnique({
     where:   { id: activeStudent.id },
-    include: { packages: { where: { status: "ACTIVE", remainingLessons: { gt: 0 } } } },
+    // Só pacote com saldo E dentro do prazo vale como crédito (src/lib/packages.ts).
+    include: { packages: { where: wherePacoteUtilizavel() } },
   })
 
   const saldo = student?.packages.reduce((s, p) => s + Number(p.remainingLessons), 0) ?? 0

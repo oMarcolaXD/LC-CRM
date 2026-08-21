@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/select"
 import { FeeEstimate } from "@/components/shared/fee-estimate"
 import { Pencil, Loader2, Trash2, AlertTriangle } from "lucide-react"
+import { mensagemDeErro } from "@/lib/error-message"
 
 interface Props {
   payment: {
@@ -83,7 +84,7 @@ export function EditPaymentDialog({ payment, studentName }: Props) {
         setOpen(false)
         router.refresh()
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Erro ao atualizar cobrança")
+        toast.error(mensagemDeErro(e, "Erro ao atualizar cobrança"))
       }
     })
   }
@@ -96,7 +97,7 @@ export function EditPaymentDialog({ payment, studentName }: Props) {
         setOpen(false)
         router.refresh()
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Erro ao excluir cobrança")
+        toast.error(mensagemDeErro(e, "Erro ao excluir cobrança"))
       }
     })
   }
@@ -110,7 +111,7 @@ export function EditPaymentDialog({ payment, studentName }: Props) {
         setOpen(false)
         router.refresh()
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Erro ao excluir parcelas")
+        toast.error(mensagemDeErro(e, "Erro ao excluir parcelas"))
       }
     })
   }

@@ -6,8 +6,9 @@ import { lessonRequestSchema } from "@/lib/validations/lesson"
 import { revalidatePath }      from "next/cache"
 import { redirect }            from "next/navigation"
 import { notifyLessonRequest } from "@/lib/notifications"
-import { isWithinAvailability, hasConflict } from "@/lib/availability"
+import { isWithinAvailability } from "@/lib/availability"
 import type { Availability }   from "@/lib/availability"
+import { findTeacherConflicts, DEFAULT_DURATION } from "@/lib/scheduling"
 import { getBookingPolicy }    from "@/lib/config"
 import { format, addWeeks }    from "date-fns"
 import { ptBR }                from "date-fns/locale"
@@ -85,20 +86,10 @@ export async function requestLessonAction(formData: FormData) {
     redirect(`/aluno/agendar?error=${encodeURIComponent(`Só é possível agendar até ${policy.maxDaysAhead} dias à frente`)}`)
   }
 
-  // Busca professor com disponibilidade, aulas e solicitações pendentes
+  // Busca professor com disponibilidade
   const teacher = await prisma.teacher.findUnique({
     where:   { id: teacherId },
-    include: {
-      user:    true,
-      lessons: {
-        where: { status: { in: ["SCHEDULED", "CONFIRMED"] } },
-        select: { scheduledAt: true, duration: true },
-      },
-      requests: {
-        where: { status: "PENDING" },
-        select: { preferredAt: true },
-      },
-    },
+    include: { user: true },
   })
 
   if (!teacher) redirect("/aluno/agendar?error=Professor+não+encontrado")
@@ -106,19 +97,19 @@ export async function requestLessonAction(formData: FormData) {
     redirect("/aluno/agendar?error=Professor+não+disponível+para+agendamento")
   }
 
-  // Valida disponibilidade e conflito de horário no backend (aulas confirmadas + solicitações pendentes)
+  // Valida disponibilidade e conflito de horário no backend — mesmas regras
+  // aplicadas na aprovação pelo colaborador (ver src/lib/scheduling.ts).
   const availability = (teacher.availability ?? {}) as unknown as Availability
   if (!isWithinAvailability(requestDate, availability)) {
     redirect("/aluno/agendar?error=Horário+fora+da+disponibilidade+do+professor")
   }
-
-  const bookedSlots = [
-    ...teacher.lessons,
-    ...teacher.requests.map((r) => ({ scheduledAt: r.preferredAt, duration: 60 })),
-  ]
-
-  if (hasConflict(requestDate, bookedSlots)) {
-    redirect(`/aluno/agendar?error=${encodeURIComponent("Horário já está ocupado por outro agendamento ou solicitação")}`)
+  const conflicts = await findTeacherConflicts({
+    teacherId,
+    scheduledAt: requestDate,
+    duration:    DEFAULT_DURATION,
+  })
+  if (conflicts.length > 0) {
+    redirect("/aluno/agendar?error=Horário+já+está+ocupado")
   }
 
   const subject = await prisma.subject.findUnique({ where: { id: subjectId } })
@@ -133,11 +124,16 @@ export async function requestLessonAction(formData: FormData) {
     const maxByBalance   = Math.max(1, Math.floor(totalRemaining))
     const target         = Math.min(occurrences, maxByBalance)
 
-    // Gera ocorrências semanais e pula as que conflitam com aulas/pedidos já marcados
+    // Gera ocorrências semanais e pula as que conflitam com aulas já marcadas
     const toCreate: Date[] = []
     for (let i = 0; i < target; i++) {
       const d = addWeeks(requestDate, i)
-      if (!hasConflict(d, bookedSlots)) toCreate.push(d)
+      const clashes = await findTeacherConflicts({
+        teacherId,
+        scheduledAt: d,
+        duration:    DEFAULT_DURATION,
+      })
+      if (clashes.length === 0) toCreate.push(d)
     }
 
     if (toCreate.length === 0) {

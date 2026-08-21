@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useTransition, useEffect, useRef } from "react"
-import { usePathname, useRouter } from "next/navigation"
+import { usePathname } from "next/navigation"
 import Link from "next/link"
 import {
   addDays, addMonths, format, isToday, parseISO, getDay,
@@ -11,9 +11,9 @@ import {
 import { ptBR }                    from "date-fns/locale"
 import {
   ChevronLeft, ChevronRight, CalendarDays, CalendarRange, LayoutGrid,
-  CheckCircle2, XCircle, UserX, MessageCircle,
+  CheckCircle2, XCircle, UserX, MessageCircle, BellRing,
   Loader2, Wifi, MapPin, Clock, Plus, Building2, Home, AlertCircle, Users,
-  CreditCard, User, GraduationCap, type LucideIcon,
+  CreditCard, User, GraduationCap, StickyNote, type LucideIcon,
 } from "lucide-react"
 import { Button }                  from "@/components/ui/button"
 import {
@@ -23,6 +23,7 @@ import {
   rejectRequestAction,
 } from "@/lib/actions/lesson-request"
 import {
+  confirmLessonAction,
   sendConfirmationToGuardianAction,
   sendConfirmationToTeacherAction,
 } from "@/lib/actions/colaborador"
@@ -36,7 +37,11 @@ import { CreateAulaoDialog }        from "@/components/shared/create-aulao-dialo
 import type { AulaoCreatedPayload } from "@/components/shared/create-aulao-dialog"
 import { CreateCommitmentDialog }   from "@/components/shared/create-commitment-dialog"
 import { AuloesSection }            from "./auloes-section"
+import { NotificationConfigWarning } from "@/components/shared/notification-config-warning"
+import type { NotificationStatus }  from "@/lib/notifications/status"
 import { parseBrazilDateTime }      from "@/lib/datetime"
+import { mensagemDeErro } from "@/lib/error-message"
+import { ouFalhe } from "@/lib/action-result"
 
 // ─── Constantes de layout ────────────────────────────────────────────────────
 
@@ -103,6 +108,8 @@ export interface LessonSlot {
   groupMates:    string[]
   packageStatus: "pago" | "pendente" | "atrasado"
   lessonType:    "INDIVIDUAL" | "GROUP" | "AULAO" | "COMPROMISSO"
+  /** false = anotação: aparece na agenda, mas o horário segue livre. */
+  blocksAgenda:  boolean
   title:         string | null
   capacity:      number | null
 }
@@ -140,22 +147,38 @@ export interface PendingRequestSlot {
   notes:       string | null
 }
 
+/** Minutos em "N aula(s)" — 1 aula = 60 min, como no perfil do aluno. */
+function fmtAulas(minutes: number): string {
+  const n = minutes / 60
+  const label = n % 1 === 0 ? String(n) : n.toFixed(1).replace(".", ",")
+  return `${label} aula${n === 1 ? "" : "s"}`
+}
+
+/** "14:00" + 90 min → "15:30" (aritmética de relógio, sem fuso envolvido). */
+function somaHora(time: string, minutes: number): string {
+  const [h, m] = time.split(":").map(Number)
+  const total  = h * 60 + m + minutes
+  return `${String(Math.floor(total / 60) % 24).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`
+}
+
 // ─── Modal: detalhes de aula (visão 360) ─────────────────────────────────────
 
 function LessonDetailModal({
   lesson,
   teacherName,
   onClose,
+  notificationStatus,
 }: {
   lesson:      LessonSlot
   teacherName: string
   onClose:     () => void
+  notificationStatus: NotificationStatus
 }) {
-  const router  = useRouter()
   const [completing,      setCompleting]      = useState(false)
   const [teacherNotes,    setTeacherNotes]    = useState("")
   const [sendingGuardian, setSendingGuardian] = useState(false)
   const [sendingTeacher,  setSendingTeacher]  = useState(false)
+  const [confirming,      setConfirming]      = useState(false)
   const [pending, start] = useTransition()
   const pathname = usePathname()
   const isAdmin  = pathname.startsWith("/admin")
@@ -179,20 +202,40 @@ function LessonDetailModal({
           next === "COMPLETED" ? "Aula concluída" :
           next === "CANCELLED" ? "Aula cancelada" : "Falta registrada"
         )
-        router.refresh()
         onClose()
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Erro")
+        toast.error(mensagemDeErro(e, "Erro"))
       }
     })
+
+  const confirmLesson = async () => {
+    setConfirming(true)
+    try {
+      const { professor, responsaveis } = ouFalhe(await confirmLessonAction(lesson.id))
+      // A aula é confirmada de todo jeito; o aviso é sobre quem não recebeu.
+      const falhas = [
+        responsaveis.problema ? `responsável: ${responsaveis.problema}` : null,
+        professor.problema    ? `professor: ${professor.problema}`      : null,
+      ].filter(Boolean)
+
+      if (falhas.length > 0) toast.warning(`Aula confirmada, mas ${falhas.join(" · ")}`)
+      else toast.success("Aula confirmada — professor e responsável notificados")
+      onClose()
+    } catch (e) {
+      toast.error(mensagemDeErro(e, "Erro ao confirmar a aula"))
+    } finally {
+      setConfirming(false)
+    }
+  }
 
   const sendToGuardian = async () => {
     setSendingGuardian(true)
     try {
-      await sendConfirmationToGuardianAction(lesson.id)
-      toast.success("WhatsApp enviado ao responsável")
+      const r = await sendConfirmationToGuardianAction(lesson.id)
+      if (r.problema) toast.warning(r.problema)
+      else toast.success(`Enviado ao responsável por ${r.canais.join(" e ")}`)
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Erro")
+      toast.error(mensagemDeErro(e, "Erro"))
     } finally {
       setSendingGuardian(false)
     }
@@ -201,10 +244,11 @@ function LessonDetailModal({
   const sendToTeacher = async () => {
     setSendingTeacher(true)
     try {
-      await sendConfirmationToTeacherAction(lesson.id)
-      toast.success("WhatsApp enviado ao professor")
+      const r = await sendConfirmationToTeacherAction(lesson.id)
+      if (r.problema) toast.warning(r.problema)
+      else toast.success(`Enviado ao professor por ${r.canais.join(" e ")}`)
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Erro")
+      toast.error(mensagemDeErro(e, "Erro"))
     } finally {
       setSendingTeacher(false)
     }
@@ -244,8 +288,15 @@ function LessonDetailModal({
                 </>
               ) : lesson.lessonType === "COMPROMISSO" ? (
                 <>
-                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-1">Compromisso</p>
+                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-1">
+                    {lesson.blocksAgenda ? "Compromisso" : "Anotação"}
+                  </p>
                   <p className="font-semibold text-[13px] leading-snug">{lesson.title ?? "Compromisso"}</p>
+                  {!lesson.blocksAgenda && (
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                      Não bloqueia o horário — dá para agendar aula neste intervalo.
+                    </p>
+                  )}
                 </>
               ) : (
                 <>
@@ -333,6 +384,11 @@ function LessonDetailModal({
             <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-2">
               Confirmações via WhatsApp
             </p>
+            {notificationStatus.aviso && (
+              <div className="mb-2">
+                <NotificationConfigWarning status={notificationStatus} variant="inline" />
+              </div>
+            )}
             <div className="rounded-lg border border-border overflow-hidden divide-y divide-border">
               <div className="flex items-center justify-between px-3 py-2.5 gap-3">
                 <div className="min-w-0">
@@ -413,6 +469,21 @@ function LessonDetailModal({
                 </div>
               ) : (
                 <div className="flex flex-wrap gap-2">
+                  {/* Única porta para CONFIRMED — avisa professor e responsável */}
+                  {lesson.status === "SCHEDULED" && (
+                    <Button
+                      size="sm"
+                      className="bg-[#219EBC] hover:bg-[#1a7e96] text-white"
+                      onClick={confirmLesson}
+                      disabled={pending || confirming}
+                    >
+                      {confirming
+                        ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />
+                        : <BellRing className="w-3.5 h-3.5 mr-1" />
+                      }
+                      Confirmar e avisar
+                    </Button>
+                  )}
                   <Button
                     size="sm"
                     className="bg-emerald-600 hover:bg-emerald-700 text-white"
@@ -461,7 +532,6 @@ function QuickScheduleModal({
   teachers: TeacherCol[]
   onClose:  () => void
 }) {
-  const router       = useRouter()
   const teacher      = teachers.find(t => t.id === schedule.teacherId)
   const scheduledAt  = parseBrazilDateTime(date, schedule.time)
   const isHistorical = scheduledAt < new Date()
@@ -471,7 +541,9 @@ function QuickScheduleModal({
   const [studentId,    setStudentId]    = useState("")
   const [subjectId,    setSubjectId]    = useState("")
   const [modality,     setModality]     = useState<"PRESENCIAL" | "ONLINE">(isOnlineOnly ? "ONLINE" : "PRESENCIAL")
+  const [duration,     setDuration]     = useState(60)
   const [teacherOnsite, setTeacherOnsite] = useState(false)
+  const [alreadyAgreed, setAlreadyAgreed] = useState(false)
   const [pending, start] = useTransition()
 
   const showLocationToggle = modality === "ONLINE" && !isOnlineOnly
@@ -483,20 +555,25 @@ function QuickScheduleModal({
         return
       }
       try {
-        await createLessonDirectAction({
+        ouFalhe(await createLessonDirectAction({
           teacherId: schedule.teacherId,
           studentId,
           subjectId,
           date,
           time: schedule.time,
           modality,
+          duration,
           teacherOnsite: modality === "ONLINE" ? teacherOnsite : undefined,
-        })
-        toast.success(isHistorical ? "Histórico importado" : "Aula agendada com sucesso")
-        router.refresh()
+          alreadyAgreed: isHistorical ? undefined : alreadyAgreed,
+        }))
+        toast.success(
+          isHistorical    ? "Histórico importado" :
+          alreadyAgreed   ? "Aula confirmada — professor avisado" :
+                            "Aula agendada com sucesso"
+        )
         onClose()
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Erro ao agendar")
+        toast.error(mensagemDeErro(e, "Erro ao agendar"))
       }
     })
 
@@ -563,6 +640,34 @@ function QuickScheduleModal({
                 <option key={s.id} value={s.id}>{s.name}</option>
               ))}
             </select>
+          </div>
+
+          {/* Quantas aulas do pacote esta sessão consome — dava para escolher só
+              pelo perfil do aluno, e a agenda criava sempre 1 aula de 60 min. */}
+          <div>
+            <label className="text-xs font-medium">Duração</label>
+            <select
+              value={duration}
+              onChange={e => setDuration(parseInt(e.target.value, 10))}
+              className={`mt-1 w-full rounded-lg border px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors ${
+                duration === 30
+                  ? "bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-900"
+                  : duration > 60
+                  ? "bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-900"
+                  : "bg-background text-foreground border-input"
+              }`}
+            >
+              {[30, 60, 90, 120, 150, 180, 210, 240].map(min => (
+                <option key={min} value={min} className="bg-background text-foreground">
+                  {fmtAulas(min)} ({min} min)
+                </option>
+              ))}
+            </select>
+            {duration !== 60 && (
+              <p className="text-[10px] text-muted-foreground mt-1">
+                Desconta {fmtAulas(duration)} do pacote e ocupa a agenda até {somaHora(schedule.time, duration)}.
+              </p>
+            )}
           </div>
 
           <div>
@@ -636,13 +741,31 @@ function QuickScheduleModal({
               )}
             </div>
           )}
+
+          {/* Já acertado com o responsável — típico de quem pediu pelo WhatsApp */}
+          {!isHistorical && (
+            <label className="flex items-start gap-2.5 rounded-lg border border-border bg-muted/30 px-3 py-2.5 cursor-pointer hover:bg-muted/50 transition-colors">
+              <input
+                type="checkbox"
+                checked={alreadyAgreed}
+                onChange={e => setAlreadyAgreed(e.target.checked)}
+                className="mt-0.5 h-4 w-4 shrink-0 accent-[#219EBC]"
+              />
+              <span className="text-xs leading-snug">
+                <span className="font-medium">Já combinei com o responsável</span>
+                <span className="block text-[11px] text-muted-foreground mt-0.5">
+                  Entra como <strong>Confirmada</strong>; avisa só o professor.
+                </span>
+              </span>
+            </label>
+          )}
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={pending}>Cancelar</Button>
           <Button onClick={submit} disabled={pending || !studentId || !subjectId}>
             {pending && <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />}
-            Agendar
+            {isHistorical ? "Importar" : alreadyAgreed ? "Agendar e confirmar" : "Agendar"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -776,6 +899,24 @@ function LessonBlock({
 }) {
   const height = Math.max(px(lesson.duration), 32)
 
+  // ── ANOTAÇÃO: faixa fina no topo do horário ───────────────────────────────
+  // Ela não segura o horário, então também não pode tapar o slot: ocupa só uma
+  // tira, e o resto do intervalo continua clicável para agendar uma aula.
+  if (lesson.lessonType === "COMPROMISSO" && !lesson.blocksAgenda) {
+    return (
+      <div
+        data-lesson="true"
+        onClick={() => onSelect(lesson)}
+        style={{ top: px(lesson.startMin - START * 60), height: 18, left: 3, right: 3 }}
+        title={`Anotação: ${lesson.title ?? ""} — não bloqueia o horário`}
+        className="absolute z-10 flex items-center gap-1 rounded border border-dashed border-sky-400 bg-sky-50/90 px-1 text-sky-700 overflow-hidden select-none cursor-pointer transition-opacity hover:opacity-85 dark:bg-sky-950/60 dark:text-sky-300 dark:border-sky-800"
+      >
+        <StickyNote className="w-2.5 h-2.5 shrink-0" />
+        <p className="text-[10px] font-medium leading-none truncate">{lesson.title ?? "Anotação"}</p>
+      </div>
+    )
+  }
+
   // ── COMPROMISSO: bloco cinza simplificado ─────────────────────────────────
   if (lesson.lessonType === "COMPROMISSO") {
     return (
@@ -881,7 +1022,6 @@ function PendingApprovalModal({
   lessons:     LessonSlot[]
   onClose:     () => void
 }) {
-  const router  = useRouter()
   const [modality,      setModality]      = useState<"PRESENCIAL" | "ONLINE">(
     req.teacherMode === "ONLINE_ONLY" ? "ONLINE" : req.modality
   )
@@ -901,12 +1041,11 @@ function PendingApprovalModal({
 
   const approve = () => start(async () => {
     try {
-      await approveRequestAction(req.id, modality, showLocationToggle ? teacherOnsite : undefined)
+      ouFalhe(await approveRequestAction(req.id, modality, showLocationToggle ? teacherOnsite : undefined))
       toast.success(`Aula ${modality === "ONLINE" ? "online" : "presencial"} confirmada`)
-      router.refresh()
       onClose()
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Erro ao aprovar")
+      toast.error(mensagemDeErro(e, "Erro ao aprovar"))
     }
   })
 
@@ -914,10 +1053,9 @@ function PendingApprovalModal({
     try {
       await rejectRequestAction(req.id)
       toast.success("Solicitação recusada")
-      router.refresh()
       onClose()
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Erro ao recusar")
+      toast.error(mensagemDeErro(e, "Erro ao recusar"))
     }
   })
 
@@ -1147,6 +1285,7 @@ interface AgendaGridProps {
   pendingRequests?:      PendingRequestSlot[]
   weekPendingRequests?:  PendingRequestSlot[]
   scheduledCount?:       number
+  notificationStatus:    NotificationStatus
 }
 
 export function AgendaGrid({
@@ -1154,6 +1293,7 @@ export function AgendaGrid({
   students, allStudents,
   weekLessons: initialWeekLessons, monthLessons: initialMonthLessons, initialView = "day",
   pendingRequests: initialPending, weekPendingRequests: initialWeekPending,
+  notificationStatus,
 }: AgendaGridProps) {
   // ── Data state (managed client-side after initial SSR) ────────────────────
 
@@ -1169,6 +1309,19 @@ export function AgendaGrid({
   const scrollRef    = useRef<HTMLDivElement | null>(null)
   const [canScrollRight, setCanScrollRight] = useState(false)
 
+  // ── Canceladas ────────────────────────────────────────────────────────────
+  // Aula cancelada não ocupa a agenda de verdade (BLOCKING_STATUSES em
+  // lib/scheduling.ts), mas enquanto o bloco continuava desenhado o horário
+  // parecia ocupado e o clique de "agendar aqui" morria no card. Fora da grade
+  // por padrão, então — o histórico fica a um clique no botão do rodapé.
+  const [showCancelled, setShowCancelled] = useState(false)
+  const semCanceladas = <T extends { status: string }>(arr: T[]): T[] =>
+    showCancelled ? arr : arr.filter(l => l.status !== "CANCELLED")
+
+  const visibleLessons = semCanceladas(lessons)
+  const visibleWeek    = semCanceladas(weekLessons ?? [])
+  const visibleMonth   = semCanceladas(monthLessons ?? [])
+
   const parsed = parseISO(curDate)
   const today  = isToday(parsed)
 
@@ -1179,26 +1332,61 @@ export function AgendaGrid({
   startOfToday.setHours(0, 0, 0, 0)
   const isPastDay = parsed.getTime() < startOfToday.getTime()
 
-  // Recalcula disponibilidade dos professores conforme o dia navegado.
-  // No futuro/hoje, ordena por maior disponibilidade; no passado (sem
-  // disponibilidade projetada), ordena por quem teve mais aulas no dia.
+  // ── Ordem das colunas ───────────────────────────────────────────────────────
+  // O que acontece no dia manda; a disponibilidade só organiza quem está livre.
+  //
+  // Antes a ordem era só por disponibilidade semanal, e o efeito era o oposto do
+  // desejado: o professor com o dia cheio caía na décima coluna enquanto quem
+  // não tinha nada marcado abria a agenda. O movimento do dia — justamente o que
+  // a secretaria acompanha — ficava escondido atrás da rolagem horizontal.
+  const cargaDoDia = new Map(
+    teachers.map(t => {
+      const itens = visibleLessons.filter(l => l.teacherId === t.id)
+      return [t.id, {
+        // Compromisso e anotação contam para trazer a coluna à esquerda, mas
+        // quem tem aula de verdade vem antes de quem só tem um recado no dia.
+        aulas:    itens.filter(l => l.lessonType !== "COMPROMISSO").length,
+        itens:    itens.length,
+        primeiro: itens.length > 0 ? Math.min(...itens.map(l => l.startMin)) : Infinity,
+      }]
+    }),
+  )
+
   const effectiveTeachers = teachers
     .map(t => ({
       ...t,
       slots: isPastDay ? [] : computeSlots(t.rawAvailability, getDay(parsed)),
     }))
     .sort((a, b) => {
-      if (isPastDay) {
-        const cntA = lessons.filter(l => l.teacherId === a.id).length
-        const cntB = lessons.filter(l => l.teacherId === b.id).length
-        return cntB - cntA
+      const ca = cargaDoDia.get(a.id)!
+      const cb = cargaDoDia.get(b.id)!
+
+      // 1. Quem tem algo marcado hoje vem primeiro
+      if ((ca.itens > 0) !== (cb.itens > 0)) return ca.itens > 0 ? -1 : 1
+
+      if (ca.itens > 0) {
+        // 2. Entre os ocupados: mais aulas primeiro, depois quem começa mais cedo
+        if (ca.aulas !== cb.aulas)       return cb.aulas - ca.aulas
+        if (ca.primeiro !== cb.primeiro) return ca.primeiro - cb.primeiro
       }
+
+      // 3. Entre os livres: maior janela de disponibilidade primeiro
+      //    (no passado não há disponibilidade projetada, então cai no nome)
       const minA = a.slots.reduce((sum, s) => sum + (s.end - s.start), 0)
       const minB = b.slots.reduce((sum, s) => sum + (s.end - s.start), 0)
-      return minB - minA
+      if (minA !== minB) return minB - minA
+
+      return a.name.localeCompare(b.name)
     })
 
   const [view, setView]                     = useState<ViewMode>(initialView)
+
+  /** Quantas canceladas a visão atual está escondendo. */
+  const cancelledCount = (
+    view === "month" ? (monthLessons ?? []) :
+    view === "week"  ? (weekLessons ?? [])  :
+    lessons
+  ).filter(l => l.status === "CANCELLED").length
 
   useEffect(() => {
     const el = scrollRef.current
@@ -1329,7 +1517,7 @@ export function AgendaGrid({
       studentId:     "",
       startMin,
       duration:      a.duration,
-      status:        "CONFIRMED",
+      status:        "SCHEDULED",
       modality:      a.modality,
       teacherOnsite: a.modality === "PRESENCIAL",
       time:          a.time,
@@ -1341,6 +1529,7 @@ export function AgendaGrid({
       groupMates:    [],
       packageStatus: "pago",
       lessonType:    "AULAO",
+      blocksAgenda:  true,
       title:         a.title,
       capacity:      a.capacity,
     }
@@ -1357,7 +1546,7 @@ export function AgendaGrid({
       endTime,
       enrolled:          groupSize,
       capacity:          a.capacity,
-      status:            "CONFIRMED",
+      status:            "SCHEDULED",
       modality:          a.modality,
       recurrenceGroupId: null,
     }
@@ -1378,13 +1567,15 @@ export function AgendaGrid({
   const nowLabel  = format(nowTime, "HH:mm")
 
   const hours     = Array.from({ length: TOTAL }, (_, i) => START + i)
-  const byTeacher = (id: string) => lessons.filter(l => l.teacherId === id)
+  const byTeacher = (id: string) => visibleLessons.filter(l => l.teacherId === id)
 
   const roomUsage = (hour: number): number => {
     const slotStart = hour * 60
     const slotEnd   = slotStart + 60
     return lessons.filter(l => {
       if (l.modality !== "PRESENCIAL") return false
+      // Anotação não ocupa sala — nem na conta que aparece na régua de horários
+      if (!l.blocksAgenda) return false
       if (l.status === "CANCELLED" || l.status === "MISSED") return false
       const lEnd = l.startMin + l.duration
       return l.startMin < slotEnd && lEnd > slotStart
@@ -1464,7 +1655,7 @@ export function AgendaGrid({
     { length: Math.ceil(calDays.length / 7) },
     (_, i) => calDays.slice(i * 7, i * 7 + 7)
   )
-  const lessonsByDay = (monthLessons ?? []).reduce<Record<string, WeekLessonSlot[]>>((acc, l) => {
+  const lessonsByDay = visibleMonth.reduce<Record<string, WeekLessonSlot[]>>((acc, l) => {
     ;(acc[l.date] ??= []).push(l)
     return acc
   }, {})
@@ -1582,12 +1773,26 @@ export function AgendaGrid({
             )}
             <span>
               {view === "month"
-                ? `${(monthLessons ?? []).length} aula${(monthLessons ?? []).length !== 1 ? "s" : ""} no mês`
+                ? `${visibleMonth.length} aula${visibleMonth.length !== 1 ? "s" : ""} no mês`
                 : view === "week"
-                ? `${(weekLessons ?? []).length} aula${(weekLessons ?? []).length !== 1 ? "s" : ""} na semana`
-                : `${lessons.length} aula${lessons.length !== 1 ? "s" : ""}`
+                ? `${visibleWeek.length} aula${visibleWeek.length !== 1 ? "s" : ""} na semana`
+                : `${visibleLessons.length} aula${visibleLessons.length !== 1 ? "s" : ""}`
               }
             </span>
+
+            {cancelledCount > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowCancelled(v => !v)}
+                className="flex items-center gap-1 rounded-full border border-rose-200 px-2 py-0.5 text-[11px] text-rose-600 hover:bg-rose-50 dark:border-rose-900 dark:text-rose-400 dark:hover:bg-rose-950/40"
+                title={showCancelled
+                  ? "Esconder as aulas canceladas — o horário delas está livre"
+                  : "Mostrar as aulas canceladas (elas não ocupam o horário)"}
+              >
+                <XCircle className="w-3 h-3" />
+                {showCancelled ? "esconder" : "ver"} {cancelledCount} cancelada{cancelledCount !== 1 ? "s" : ""}
+              </button>
+            )}
             <div className="hidden sm:flex items-center gap-2">
               {(["CONFIRMED", "SCHEDULED", "COMPLETED"] as LessonStatus[]).map(s => (
                 <span key={s} className="flex items-center gap-1">
@@ -1719,7 +1924,7 @@ export function AgendaGrid({
                 const dayStr    = format(day, "yyyy-MM-dd")
                 const isCurrentDay = isToday(day)
                 const isActiveDay  = dayStr === date
-                const dayLessons   = (weekLessons ?? [])
+                const dayLessons   = visibleWeek
                   .filter(l => l.date === dayStr)
                   .sort((a, b) => a.startMin - b.startMin)
 
@@ -1849,7 +2054,9 @@ export function AgendaGrid({
                   <span className="text-[9px] text-muted-foreground leading-tight">sala{roomCount !== 1 ? "s" : ""}</span>
                 </div>
                 {effectiveTeachers.map(t => {
-                  const count        = byTeacher(t.id).length
+                  const carga        = cargaDoDia.get(t.id)!
+                  const count        = carga.aulas
+                  const compromissos = carga.itens - carga.aulas
                   // Só exibe pendências se o professor tem disponibilidade hoje
                   const pendingCount = t.slots.length > 0
                     ? pendingRequests.filter(r => r.teacherId === t.id).length
@@ -1896,6 +2103,11 @@ export function AgendaGrid({
                         {count > 0 ? (
                           <span className="text-[10px] text-muted-foreground tabular-nums">
                             {count} aula{count !== 1 ? "s" : ""}
+                          </span>
+                        ) : compromissos > 0 ? (
+                          // "1 aula" para quem só tem um recado no dia enganava
+                          <span className="text-[10px] text-muted-foreground tabular-nums">
+                            {compromissos} compromisso{compromissos !== 1 ? "s" : ""}
                           </span>
                         ) : (
                           <span className="text-[10px] text-muted-foreground/40">livre</span>
@@ -2058,6 +2270,7 @@ export function AgendaGrid({
           lesson={selectedLesson}
           teacherName={effectiveTeachers.find(t => t.id === selectedLesson.teacherId)?.name ?? ""}
           onClose={() => { setSelectedLesson(null); fetchData(curDate, view) }}
+          notificationStatus={notificationStatus}
         />
       )}
       {selectedPending && (

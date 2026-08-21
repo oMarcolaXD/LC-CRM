@@ -12,6 +12,7 @@ import { Input }    from "@/components/ui/input"
 import { Label }    from "@/components/ui/label"
 import { FeeEstimate } from "@/components/shared/fee-estimate"
 import { Plus, Loader2, RotateCcw } from "lucide-react"
+import { mensagemDeErro } from "@/lib/error-message"
 
 type PaymentStatus = "PAID" | "PENDING" | "OVERDUE"
 
@@ -144,7 +145,7 @@ export function AddPaymentDialog({ studentId }: AddPaymentDialogProps) {
           setOpen(false)
           router.refresh()
         } catch (e) {
-          toast.error(e instanceof Error ? e.message : "Erro ao registrar parcelas")
+          toast.error(mensagemDeErro(e, "Erro ao registrar parcelas"))
         }
       })
       return
@@ -166,7 +167,7 @@ export function AddPaymentDialog({ studentId }: AddPaymentDialogProps) {
         setOpen(false)
         router.refresh()
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Erro ao registrar pagamento")
+        toast.error(mensagemDeErro(e, "Erro ao registrar pagamento"))
       }
     })
   }

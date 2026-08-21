@@ -12,14 +12,9 @@ import { PastPaymentsInput } from "@/components/shared/past-payments-input"
 import { PhoneInput }        from "@/components/ui/phone-input"
 import {
   GraduationCap, UserRound, KeyRound, History, CreditCard,
-  Package, UserX, ClipboardList, CheckCircle2, Loader2, Mail,
+  Package, UserX, ClipboardList, CheckCircle2, Loader2, Mail, Hash,
 } from "lucide-react"
-
-const GRADES = [
-  "6º Ano EF", "7º Ano EF", "8º Ano EF", "9º Ano EF",
-  "1º Ano EM", "2º Ano EM", "3º Ano EM",
-  "Cursinho", "Graduação", "Pós-graduação", "Outro",
-]
+import { GRADES } from "@/lib/constants/grades"
 
 interface Teacher { id: string; name: string }
 interface Subject { id: string; name: string }
@@ -97,16 +92,12 @@ export function NovoAlunoForm({
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="phone">Telefone / WhatsApp</Label>
-                <PhoneInput id="phone" name="phone" />
+                <Label htmlFor="email">E-mail</Label>
+                <Input id="email" name="email" type="email" placeholder="aluno@email.com" autoComplete="off" />
               </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="email">E-mail</Label>
-                <Input id="email" name="email" type="email" placeholder="aluno@email.com" autoComplete="off" />
-              </div>
               <div className="space-y-2">
                 <Label htmlFor="birthDate">Data de nascimento</Label>
                 <Input id="birthDate" name="birthDate" type="date" />
@@ -129,6 +120,17 @@ export function NovoAlunoForm({
               <div className="space-y-2">
                 <Label htmlFor="school">Escola / Instituição</Label>
                 <Input id="school" name="school" placeholder="Ex: Colégio São Paulo" />
+              </div>
+            </div>
+
+            <div className="flex items-start gap-3 rounded-lg border border-border bg-muted/40 px-4 py-3">
+              <Hash className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium">R.A. gerado automaticamente</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  O aluno recebe um Registro do Aluno de 6 dígitos ao ser cadastrado — é por ele que
+                  você identifica e busca o aluno. Telefone é só do responsável.
+                </p>
               </div>
             </div>
           </CardContent>
