@@ -30,22 +30,40 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   if (dateStr) {
     const date = new Date(dateStr + "T00:00:00")
 
-    const bookedLessons = await prisma.lesson.findMany({
-      where: {
-        teacherId:   id,
-        status:      { in: ["SCHEDULED", "CONFIRMED"] },
-        scheduledAt: {
-          gte: new Date(dateStr + "T00:00:00"),
-          lte: new Date(dateStr + "T23:59:59"),
+    const [bookedLessons, pendingRequests] = await Promise.all([
+      prisma.lesson.findMany({
+        where: {
+          teacherId:   id,
+          status:      { in: ["SCHEDULED", "CONFIRMED"] },
+          scheduledAt: {
+            gte: new Date(dateStr + "T00:00:00"),
+            lte: new Date(dateStr + "T23:59:59"),
+          },
         },
-      },
-      select: { scheduledAt: true },
-    })
+        select: { scheduledAt: true, duration: true },
+      }),
+      prisma.lessonRequest.findMany({
+        where: {
+          teacherId:   id,
+          status:      "PENDING",
+          preferredAt: {
+            gte: new Date(dateStr + "T00:00:00"),
+            lte: new Date(dateStr + "T23:59:59"),
+          },
+        },
+        select: { preferredAt: true },
+      }),
+    ])
+
+    const bookedSlots = [
+      ...bookedLessons,
+      ...pendingRequests.map((r) => ({ scheduledAt: r.preferredAt, duration: 60 })),
+    ]
 
     let slots = getAvailableSlotsForDate(
       date,
       availability,
-      bookedLessons.map((l) => l.scheduledAt),
+      bookedSlots,
     )
 
     // Remove horários que violam a antecedência mínima definida pelo admin

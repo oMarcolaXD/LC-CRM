@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useTransition, useEffect, useRef } from "react"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import Link from "next/link"
 import {
   addDays, addMonths, format, isToday, parseISO, getDay,
@@ -151,6 +151,7 @@ function LessonDetailModal({
   teacherName: string
   onClose:     () => void
 }) {
+  const router  = useRouter()
   const [completing,      setCompleting]      = useState(false)
   const [teacherNotes,    setTeacherNotes]    = useState("")
   const [sendingGuardian, setSendingGuardian] = useState(false)
@@ -178,6 +179,7 @@ function LessonDetailModal({
           next === "COMPLETED" ? "Aula concluída" :
           next === "CANCELLED" ? "Aula cancelada" : "Falta registrada"
         )
+        router.refresh()
         onClose()
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Erro")
@@ -459,6 +461,7 @@ function QuickScheduleModal({
   teachers: TeacherCol[]
   onClose:  () => void
 }) {
+  const router       = useRouter()
   const teacher      = teachers.find(t => t.id === schedule.teacherId)
   const scheduledAt  = parseBrazilDateTime(date, schedule.time)
   const isHistorical = scheduledAt < new Date()
@@ -490,6 +493,7 @@ function QuickScheduleModal({
           teacherOnsite: modality === "ONLINE" ? teacherOnsite : undefined,
         })
         toast.success(isHistorical ? "Histórico importado" : "Aula agendada com sucesso")
+        router.refresh()
         onClose()
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Erro ao agendar")
@@ -877,6 +881,7 @@ function PendingApprovalModal({
   lessons:     LessonSlot[]
   onClose:     () => void
 }) {
+  const router  = useRouter()
   const [modality,      setModality]      = useState<"PRESENCIAL" | "ONLINE">(
     req.teacherMode === "ONLINE_ONLY" ? "ONLINE" : req.modality
   )
@@ -898,6 +903,7 @@ function PendingApprovalModal({
     try {
       await approveRequestAction(req.id, modality, showLocationToggle ? teacherOnsite : undefined)
       toast.success(`Aula ${modality === "ONLINE" ? "online" : "presencial"} confirmada`)
+      router.refresh()
       onClose()
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao aprovar")
@@ -908,6 +914,7 @@ function PendingApprovalModal({
     try {
       await rejectRequestAction(req.id)
       toast.success("Solicitação recusada")
+      router.refresh()
       onClose()
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao recusar")

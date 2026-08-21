@@ -8,7 +8,13 @@ export type Availability    = Record<string, TimeSlot[]>  // dia -> intervalos
 export const DAY_NAMES = ["Domingo","Segunda","Terça","Quarta","Quinta","Sexta","Sábado"]
 export const DAY_SHORT = ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"]
 
-/** Gera slots de 1h dentro dos intervalos disponíveis de um dia */
+export interface BookedLessonSlot {
+  scheduledAt?: Date | string
+  preferredAt?: Date | string
+  duration?:    number
+}
+
+/** Gera slots de N min dentro dos intervalos disponíveis de um dia */
 function slotsForInterval(slot: TimeSlot, durationMin = 60): string[] {
   const result: string[] = []
   const [sh, sm] = slot.start.split(":").map(Number)
@@ -26,28 +32,24 @@ function slotsForInterval(slot: TimeSlot, durationMin = 60): string[] {
 
 /** Lista todos os slots disponíveis para uma data específica */
 export function getAvailableSlotsForDate(
-  date:         Date,
-  availability: Availability,
-  bookedTimes:  Date[],       // aulas já marcadas
-  durationMin = 60,
+  date:          Date | string,
+  availability:  Availability,
+  bookedLessons: (Date | string | BookedLessonSlot)[],
+  durationMin =  60,
 ): string[] {
-  const dow   = date.getDay().toString()
-  const slots = availability[dow] ?? []
+  const targetDate = date instanceof Date ? new Date(date.getTime()) : new Date(date)
+  if (isNaN(targetDate.getTime())) return []
+
+  const dow      = targetDate.getDay().toString()
+  const slots    = availability[dow] ?? []
   const allSlots = slots.flatMap((s) => slotsForInterval(s, durationMin))
 
-  const bookedHHMM = bookedTimes
-    .filter((b) => {
-      const bd = new Date(b)
-      return bd.getFullYear() === date.getFullYear() &&
-             bd.getMonth()    === date.getMonth()    &&
-             bd.getDate()     === date.getDate()
-    })
-    .map((b) => {
-      const bd = new Date(b)
-      return `${String(bd.getHours()).padStart(2,"0")}:${String(bd.getMinutes()).padStart(2,"0")}`
-    })
-
-  return allSlots.filter((s) => !bookedHHMM.includes(s))
+  return allSlots.filter((hhmm) => {
+    const [h, m] = hhmm.split(":").map(Number)
+    const slotAt = new Date(targetDate)
+    slotAt.setHours(h, m, 0, 0)
+    return !hasConflict(slotAt, bookedLessons, durationMin)
+  })
 }
 
 /** Retorna os dias disponíveis nos próximos N dias (incluindo hoje) */
@@ -87,31 +89,54 @@ export function getAvailableDates(
   return result
 }
 
-/** Verifica se uma data/hora conflita com aulas existentes */
+/** Verifica se uma data/hora conflita com aulas existentes usando sobreposição de intervalos [start, end) */
 export function hasConflict(
-  requestedAt:  Date,
-  bookedLessons: Date[],
-  durationMin = 60,
+  requestedAt:   Date | string,
+  bookedLessons: (Date | string | BookedLessonSlot)[],
+  durationMin =  60,
 ): boolean {
-  const req = new Date(requestedAt).getTime()
+  const reqDate  = requestedAt instanceof Date ? requestedAt : new Date(requestedAt)
+  const reqStart = reqDate.getTime()
+  if (isNaN(reqStart)) return false
+  const reqEnd   = reqStart + durationMin * 60 * 1000
+
   return bookedLessons.some((b) => {
-    const booked = new Date(b).getTime()
-    return Math.abs(req - booked) < durationMin * 60 * 1000
+    if (!b) return false
+    let bRaw: Date | string | undefined
+    let bDur = 60
+
+    if (b instanceof Date || typeof b === "string") {
+      bRaw = b
+    } else if (typeof b === "object") {
+      bRaw = b.scheduledAt ?? b.preferredAt
+      if (typeof b.duration === "number") bDur = b.duration
+    }
+
+    if (!bRaw) return false
+    const bDate  = bRaw instanceof Date ? bRaw : new Date(bRaw)
+    const bStart = bDate.getTime()
+    if (isNaN(bStart)) return false
+    const bEnd   = bStart + bDur * 60 * 1000
+
+    return bStart < reqEnd && bEnd > reqStart
   })
 }
 
 /** Verifica se uma data/hora está dentro da disponibilidade */
 export function isWithinAvailability(
-  requestedAt:  Date,
+  requestedAt:  Date | string,
   availability: Availability,
   durationMin = 60,
 ): boolean {
-  const dow   = requestedAt.getDay().toString()
+  const reqDate = requestedAt instanceof Date ? requestedAt : new Date(requestedAt)
+  if (isNaN(reqDate.getTime())) return false
+
+  const dow   = reqDate.getDay().toString()
   const slots = availability[dow] ?? []
   if (slots.length === 0) return false
 
-  const h   = requestedAt.getHours()
-  const m   = requestedAt.getMinutes()
+  const h   = reqDate.getHours()
+  const m   = reqDate.getMinutes()
   const cur = h * 60 + m
 
   return slots.some(({ start, end }) => {

@@ -132,6 +132,33 @@ export async function approveRequestAction(
     }
   }
 
+  // ── Verificação de conflito de horário do professor ──────────────────────────
+  if (!isHistorical) {
+    const dayStart = startOfDay(request.preferredAt)
+    const dayEnd   = endOfDay(request.preferredAt)
+    const reqStart = request.preferredAt.getTime()
+    const reqEnd   = reqStart + 60 * 60_000
+
+    const teacherLessons = await prisma.lesson.findMany({
+      where: {
+        teacherId:   request.teacherId,
+        status:      { in: ["CONFIRMED", "SCHEDULED"] },
+        scheduledAt: { gte: dayStart, lte: dayEnd },
+      },
+      select: { scheduledAt: true, duration: true },
+    })
+
+    const hasTeacherConflict = teacherLessons.some((l) => {
+      const lStart = l.scheduledAt.getTime()
+      const lEnd   = lStart + (l.duration ?? 60) * 60_000
+      return lStart < reqEnd && lEnd > reqStart
+    })
+
+    if (hasTeacherConflict) {
+      throw new Error("Impossível aprovar aula: o professor já possui uma aula agendada neste horário.")
+    }
+  }
+
   await prisma.$transaction([
     prisma.lesson.create({
       data: {
@@ -443,7 +470,7 @@ export async function createLessonDirectAction(data: {
       const lEnd   = lStart + (l.duration ?? 60) * 60_000
       return lStart < reqEnd && lEnd > reqStart
     })
-    if (hasConflict) throw new Error("Professor já tem uma aula neste horário")
+    if (hasConflict) throw new Error("Impossível agendar aula: o professor já possui uma aula agendada neste horário.")
   }
 
   const [teacher, subject] = await Promise.all([
@@ -1150,8 +1177,37 @@ export async function updateLessonDirectAction(data: {
   const session = await auth()
   if (!["ADMIN", "COLLABORATOR"].includes(session?.user?.role ?? "")) throw new Error("Sem permissão")
 
-  const scheduledAt  = parseBrazilDateTime(data.date, data.time)
+  const scheduledAt   = parseBrazilDateTime(data.date, data.time)
   const teacherOnsite = data.modality === "PRESENCIAL"
+  const isHistorical  = scheduledAt < new Date()
+
+  // Se a aula for mantida ou movida para status ativo e data futura, verifica conflito de horário do professor
+  if (!isHistorical && ["CONFIRMED", "SCHEDULED"].includes(data.status)) {
+    const dayStart = startOfDay(scheduledAt)
+    const dayEnd   = endOfDay(scheduledAt)
+    const reqStart = scheduledAt.getTime()
+    const reqEnd   = reqStart + (data.duration ?? 60) * 60_000
+
+    const teacherLessons = await prisma.lesson.findMany({
+      where: {
+        teacherId:   data.teacherId,
+        id:          { not: data.lessonId },
+        status:      { in: ["CONFIRMED", "SCHEDULED"] },
+        scheduledAt: { gte: dayStart, lte: dayEnd },
+      },
+      select: { scheduledAt: true, duration: true },
+    })
+
+    const hasConflict = teacherLessons.some((l) => {
+      const lStart = l.scheduledAt.getTime()
+      const lEnd   = lStart + (l.duration ?? 60) * 60_000
+      return lStart < reqEnd && lEnd > reqStart
+    })
+
+    if (hasConflict) {
+      throw new Error("Impossível alterar aula: o professor já possui outra aula agendada neste horário.")
+    }
+  }
 
   await prisma.lesson.update({
     where: { id: data.lessonId },

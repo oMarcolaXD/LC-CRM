@@ -201,18 +201,18 @@ export async function guardianRescheduleLessonAction(
     include: {
       lessons: {
         where:  { status: { in: ["SCHEDULED", "CONFIRMED"] }, id: { not: lessonId } },
-        select: { scheduledAt: true },
+        select: { scheduledAt: true, duration: true },
       },
     },
   })
   if (!teacher) throw new Error("Professor não encontrado")
 
   const availability = (teacher.availability ?? {}) as unknown as Availability
-  if (!isWithinAvailability(newDate, availability)) {
+  if (!isWithinAvailability(newDate, availability, lesson.duration)) {
     throw new Error("O professor não está disponível neste horário")
   }
-  if (hasConflict(newDate, teacher.lessons.map((l) => l.scheduledAt))) {
-    throw new Error("Este horário já está ocupado")
+  if (hasConflict(newDate, teacher.lessons, lesson.duration)) {
+    throw new Error("Impossível remarcar aula: o professor já possui outra aula agendada neste horário.")
   }
 
   await prisma.lesson.update({

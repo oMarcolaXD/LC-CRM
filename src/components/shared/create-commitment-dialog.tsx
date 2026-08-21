@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useTransition } from "react"
+import { useRouter } from "next/navigation"
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog"
@@ -20,6 +21,7 @@ interface Props {
 }
 
 export function CreateCommitmentDialog({ open, onClose, teachers, defaultDate }: Props) {
+  const router = useRouter()
   const today = defaultDate ?? format(new Date(), "yyyy-MM-dd")
 
   const [teacherId, setTeacherId] = useState("")
@@ -46,6 +48,7 @@ export function CreateCommitmentDialog({ open, onClose, teachers, defaultDate }:
       try {
         await createTeacherCommitmentAction({ teacherId, title: title.trim(), date, time, duration })
         toast.success("Compromisso registrado na agenda do professor")
+        router.refresh()
         handleClose()
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Erro ao registrar compromisso")

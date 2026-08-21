@@ -85,14 +85,18 @@ export async function requestLessonAction(formData: FormData) {
     redirect(`/aluno/agendar?error=${encodeURIComponent(`Só é possível agendar até ${policy.maxDaysAhead} dias à frente`)}`)
   }
 
-  // Busca professor com disponibilidade e aulas já marcadas
+  // Busca professor com disponibilidade, aulas e solicitações pendentes
   const teacher = await prisma.teacher.findUnique({
     where:   { id: teacherId },
     include: {
       user:    true,
       lessons: {
         where: { status: { in: ["SCHEDULED", "CONFIRMED"] } },
-        select: { scheduledAt: true },
+        select: { scheduledAt: true, duration: true },
+      },
+      requests: {
+        where: { status: "PENDING" },
+        select: { preferredAt: true },
       },
     },
   })
@@ -102,13 +106,19 @@ export async function requestLessonAction(formData: FormData) {
     redirect("/aluno/agendar?error=Professor+não+disponível+para+agendamento")
   }
 
-  // Valida disponibilidade e conflito de horário no backend
+  // Valida disponibilidade e conflito de horário no backend (aulas confirmadas + solicitações pendentes)
   const availability = (teacher.availability ?? {}) as unknown as Availability
   if (!isWithinAvailability(requestDate, availability)) {
     redirect("/aluno/agendar?error=Horário+fora+da+disponibilidade+do+professor")
   }
-  if (hasConflict(requestDate, teacher.lessons.map((l) => l.scheduledAt))) {
-    redirect("/aluno/agendar?error=Horário+já+está+ocupado")
+
+  const bookedSlots = [
+    ...teacher.lessons,
+    ...teacher.requests.map((r) => ({ scheduledAt: r.preferredAt, duration: 60 })),
+  ]
+
+  if (hasConflict(requestDate, bookedSlots)) {
+    redirect(`/aluno/agendar?error=${encodeURIComponent("Horário já está ocupado por outro agendamento ou solicitação")}`)
   }
 
   const subject = await prisma.subject.findUnique({ where: { id: subjectId } })
@@ -123,12 +133,11 @@ export async function requestLessonAction(formData: FormData) {
     const maxByBalance   = Math.max(1, Math.floor(totalRemaining))
     const target         = Math.min(occurrences, maxByBalance)
 
-    // Gera ocorrências semanais e pula as que conflitam com aulas já marcadas
-    const booked = teacher.lessons.map((l) => l.scheduledAt)
+    // Gera ocorrências semanais e pula as que conflitam com aulas/pedidos já marcados
     const toCreate: Date[] = []
     for (let i = 0; i < target; i++) {
       const d = addWeeks(requestDate, i)
-      if (!hasConflict(d, booked)) toCreate.push(d)
+      if (!hasConflict(d, bookedSlots)) toCreate.push(d)
     }
 
     if (toCreate.length === 0) {
