@@ -13,7 +13,7 @@ import {
   ChevronLeft, ChevronRight, CalendarDays, CalendarRange, LayoutGrid,
   CheckCircle2, XCircle, UserX, MessageCircle, BellRing,
   Loader2, Wifi, MapPin, Clock, Plus, Building2, Home, AlertCircle, Users,
-  CreditCard, User, GraduationCap, StickyNote, type LucideIcon,
+  CreditCard, User, GraduationCap, StickyNote, Printer, type LucideIcon,
 } from "lucide-react"
 import { Button }                  from "@/components/ui/button"
 import {
@@ -36,6 +36,7 @@ import { CreateDuoLessonDialog }     from "@/components/shared/create-duo-lesson
 import { CreateAulaoDialog }        from "@/components/shared/create-aulao-dialog"
 import type { AulaoCreatedPayload } from "@/components/shared/create-aulao-dialog"
 import { CreateCommitmentDialog }   from "@/components/shared/create-commitment-dialog"
+import { ExportAgendaDialog }       from "@/components/shared/export-agenda-dialog"
 import { AuloesSection }            from "./auloes-section"
 import { NotificationConfigWarning } from "@/components/shared/notification-config-warning"
 import type { NotificationStatus }  from "@/lib/notifications/status"
@@ -1411,6 +1412,7 @@ export function AgendaGrid({
   const [showDuoDialog,    setShowDuoDialog]    = useState(false)
   const [showAulaoDialog,  setShowAulaoDialog]  = useState(false)
   const [showCommitmentDialog, setShowCommitmentDialog] = useState(false)
+  const [showExportDialog, setShowExportDialog]     = useState(false)
   // Seletor de tipo ao clicar num horário vazio + pré-preenchimento (professor+horário)
   const [slotChooser, setSlotChooser] = useState<{ teacherId: string; teacherName: string; time: string } | null>(null)
   const [prefill,     setPrefill]     = useState<{ teacherId: string; time: string } | null>(null)
@@ -1771,6 +1773,15 @@ export function AgendaGrid({
                 Grupo (avulso)
               </Button>
             )}
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs gap-1.5 border-slate-300 text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-900"
+              onClick={() => setShowExportDialog(true)}
+            >
+              <Printer className="w-3.5 h-3.5" />
+              Exportar Agenda
+            </Button>
             <span>
               {view === "month"
                 ? `${visibleMonth.length} aula${visibleMonth.length !== 1 ? "s" : ""} no mês`
@@ -2364,6 +2375,15 @@ export function AgendaGrid({
           onClose={() => { setShowCommitmentDialog(false); fetchData(curDate, view) }}
           teachers={effectiveTeachers.map(t => ({ id: t.id, name: t.name }))}
           defaultDate={curDate}
+        />
+      )}
+      {showExportDialog && (
+        <ExportAgendaDialog
+          open={showExportDialog}
+          onClose={() => setShowExportDialog(false)}
+          dateStr={curDate}
+          teachers={effectiveTeachers}
+          lessons={lessons}
         />
       )}
     </>
