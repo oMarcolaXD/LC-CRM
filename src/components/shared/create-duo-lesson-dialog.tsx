@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useTransition } from "react"
+import { useRouter } from "next/navigation"
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog"
@@ -37,6 +38,7 @@ interface Props {
 }
 
 export function CreateDuoLessonDialog({ open, onClose, students, teachers, defaultDate, defaultTeacherId, defaultTime }: Props) {
+  const router = useRouter()
   const today = defaultDate ?? format(new Date(), "yyyy-MM-dd")
 
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([])
@@ -120,6 +122,7 @@ export function CreateDuoLessonDialog({ open, onClose, students, teachers, defau
           teacherOnsite: modality === "ONLINE" ? teacherOnsite : undefined,
         }))
         toast.success(`Aula em grupo (pacote) criada para ${selectedStudentIds.length} alunos`)
+        router.refresh()
         handleClose()
       } catch (e) {
         toast.error(mensagemDeErro(e, "Erro ao criar aula em grupo"))

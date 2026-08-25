@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useTransition } from "react"
+import { useRouter } from "next/navigation"
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog"
@@ -51,6 +52,7 @@ interface Props {
 }
 
 export function CreateAulaoDialog({ open, onClose, students, teachers, defaultDate, defaultTeacherId, defaultTime, onCreated }: Props) {
+  const router = useRouter()
   const today = defaultDate ?? format(new Date(), "yyyy-MM-dd")
 
   const [title,            setTitle]            = useState("")
@@ -137,6 +139,7 @@ export function CreateAulaoDialog({ open, onClose, students, teachers, defaultDa
           recurrence:      recurrence ? { rule: recurrence, endsAt: recurrenceEndsAt } : undefined,
         }))
         toast.success("Aulão criado com sucesso")
+        router.refresh()
         if (result?.id) {
           onCreated?.({
             id:         result.id,
