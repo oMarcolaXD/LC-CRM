@@ -8,16 +8,35 @@
  * src/lib/datetime.ts.
  */
 
-import type { LessonType } from "@prisma/client"
+import type { LessonType, LessonStatus } from "@prisma/client"
 import { prisma }          from "@/lib/prisma"
 import { getRoomCount, getOperationalConfig, isOperational } from "@/lib/config"
-import { formatBR }        from "@/lib/datetime"
+import { formatBR, toBrazilDate } from "@/lib/datetime"
+import { DEFAULT_DURATION } from "@/lib/lessons"
+import { isWithinAvailability, windowsAt, DAY_NAMES } from "@/lib/availability"
+import type { Availability } from "@/lib/availability"
 
 /** Status que ocupam a agenda — CANCELLED/COMPLETED/MISSED liberam o horário. */
 export const BLOCKING_STATUSES = ["SCHEDULED", "CONFIRMED"] as const
 
-/** Duração padrão de uma aula, em minutos. */
-export const DEFAULT_DURATION = 60
+/**
+ * Status que ocupam a hora do professor ao validar um slot.
+ *
+ * Para o futuro é a agenda: SCHEDULED e CONFIRMED. Para o passado é o
+ * histórico, e aí COMPLETED também ocupa — a hora já foi dada. Sem isso,
+ * registrar uma aula retroativa em cima de outra já realizada passava batido, e
+ * `computePayout` somava as duas durações: a mesma hora paga duas vezes.
+ *
+ * MISSED fica de fora nos dois casos: o aluno faltou e a aula não entra no
+ * repasse, então a hora está de fato livre.
+ */
+function occupancyStatuses(at: Date, now = new Date()): LessonStatus[] {
+  return at < now
+    ? [...BLOCKING_STATUSES, "COMPLETED"]
+    : [...BLOCKING_STATUSES]
+}
+
+export { DEFAULT_DURATION }
 
 /** Maior duração plausível — define a folga da janela de busca de candidatos. */
 const MAX_LESSON_MINUTES = 8 * 60
@@ -83,7 +102,7 @@ export async function findTeacherConflicts(q: TeacherSlotQuery): Promise<Conflic
   const candidates = await prisma.lesson.findMany({
     where: {
       teacherId:    q.teacherId,
-      status:       { in: [...BLOCKING_STATUSES] },
+      status:       { in: occupancyStatuses(q.scheduledAt) },
       blocksAgenda: true,
       scheduledAt:  candidateWindow(q),
       ...(q.excludeLessonId ? { id: { not: q.excludeLessonId } } : {}),
@@ -103,16 +122,24 @@ function windowsFor(slots: Slot[]) {
   return slots.map((s) => ({ scheduledAt: candidateWindow(s) }))
 }
 
-/** Aulas ativas do professor que podem alcançar qualquer um dos slots. */
+/**
+ * Aulas do professor que podem alcançar qualquer um dos slots.
+ *
+ * Basta uma ocorrência no passado para que as realizadas entrem na varredura —
+ * separar por slot exigiria uma consulta por ocorrência. O excedente só faz
+ * diferença se uma aula futura já estiver marcada como realizada, o que é
+ * registro errado de qualquer forma.
+ */
 export async function loadTeacherAgendaFor(
   teacherId: string,
   slots:     Slot[],
 ): Promise<ConflictingLesson[]> {
   if (slots.length === 0) return []
+  const maisAntigo = slots.reduce((a, b) => (a.scheduledAt <= b.scheduledAt ? a : b))
   return prisma.lesson.findMany({
     where: {
       teacherId,
-      status:       { in: [...BLOCKING_STATUSES] },
+      status:       { in: occupancyStatuses(maisAntigo.scheduledAt) },
       blocksAgenda: true,
       OR:           windowsFor(slots),
     },
@@ -176,11 +203,81 @@ export async function assertTeacherFree(q: TeacherSlotQuery, teacherName?: strin
   if (!conflict) return
 
   const who  = teacherName?.trim().split(" ")[0] ?? "O professor"
-  const hint = conflict.lessonType === "GROUP" || conflict.lessonType === "AULAO"
-    ? " Para atender outro aluno neste horário, inscreva-o na aula em grupo já existente."
-    : ""
+  const hint =
+    conflict.lessonType === "GROUP" || conflict.lessonType === "AULAO"
+      ? " Para atender outro aluno neste horário, inscreva-o na aula em grupo já existente."
+    : conflict.lessonType === "INDIVIDUAL"
+      // Dois irmãos atendidos juntos viravam duas aulas individuais no mesmo
+      // horário — e o repasse paga a mesma hora duas vezes. O registro certo é
+      // uma aula só, com os dois como participantes.
+      ? " Se os dois alunos foram atendidos juntos, registre como aula em dupla — assim a hora do professor não é paga duas vezes."
+      : ""
 
   throw new Error(`Conflito de agenda: ${who} já tem ${describeLesson(conflict)}.${hint}`)
+}
+
+// ─── Disponibilidade do professor ────────────────────────────────────────────
+// O horário cadastrado no perfil do professor era só um desenho de fundo na
+// agenda: nada impedia marcar às 20:30 para quem atende até as 18:30. Como a
+// disponibilidade é o que o professor combinou com a escola, ela vale como
+// regra — quem precisar sair dela ajusta o cadastro do professor.
+
+export interface TeacherAvailabilityQuery extends Slot {
+  teacherId: string
+}
+
+function describeWindows(slots: { start: string; end: string }[]): string {
+  return slots.map((s) => `${s.start}–${s.end}`).join(" e ")
+}
+
+/**
+ * Descreve por que o slot não cabe na disponibilidade — `null` quando cabe.
+ *
+ * Versão pura, para quem já tem a disponibilidade em mãos (séries validam
+ * dezenas de ocorrências e não podem ir ao banco em cada uma).
+ */
+export function availabilityProblem(
+  slot:         Slot,
+  availability: Availability,
+  teacherName?: string,
+): string | null {
+  // Professor sem nenhuma disponibilidade cadastrada não tem regra a aplicar —
+  // bloquear aqui travaria a agenda inteira dele até alguém preencher o perfil.
+  if (Object.values(availability).every((slots) => !slots?.length)) return null
+
+  const duration = minutesOf(slot)
+  if (isWithinAvailability(slot.scheduledAt, availability, duration)) return null
+
+  const who     = teacherName?.trim().split(" ")[0] ?? "O professor"
+  const dia     = DAY_NAMES[toBrazilDate(slot.scheduledAt).getDay()].toLowerCase()
+  const janelas = windowsAt(slot.scheduledAt, availability)
+  const quando  = janelas.length
+    ? `atende ${dia} das ${describeWindows(janelas)}`
+    : `não atende ${dia}`
+
+  return `${who} ${quando} — e esta aula é ${formatBR(slot.scheduledAt, "HH:mm")} com ${duration} min.`
+}
+
+/** Bloqueia o agendamento fora dos horários que o professor atende. */
+export async function assertTeacherAvailable(
+  q:            TeacherAvailabilityQuery,
+  teacherName?: string,
+): Promise<void> {
+  const teacher = await prisma.teacher.findUnique({
+    where:  { id: q.teacherId },
+    select: { availability: true },
+  })
+  const problema = availabilityProblem(
+    q,
+    (teacher?.availability ?? {}) as unknown as Availability,
+    teacherName,
+  )
+  if (!problema) return
+
+  throw new Error(
+    `Fora da disponibilidade: ${problema} `
+    + `Escolha outro horário ou atualize a disponibilidade no cadastro do professor.`
+  )
 }
 
 // ─── Conflito de salas ────────────────────────────────────────────────────────

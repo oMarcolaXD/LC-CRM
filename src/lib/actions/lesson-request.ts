@@ -8,6 +8,8 @@ import {
 } from "@/lib/notifications"
 import {
   assertTeacherFree,
+  assertTeacherAvailable,
+  availabilityProblem,
   assertRoomFree,
   assertWithinOperationalHours,
   countOverlapsIn,
@@ -32,12 +34,13 @@ import { addWeeks, addMonths, parseISO, isAfter } from "date-fns"
 import { format }              from "date-fns"
 import { ptBR }                from "date-fns/locale"
 import { parseBrazilDateTime, formatBR } from "@/lib/datetime"
+import { aulasDe, fmtAulas }   from "@/lib/lessons"
+import type { Availability }   from "@/lib/availability"
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function lessonCost(durationMinutes: number): number {
-  return durationMinutes / 60
-}
+/** Uma aula de 2h custa 2 aulas do pacote — ver src/lib/lessons.ts. */
+const lessonCost = aulasDe
 
 async function requireCollaboratorOrAdmin() {
   const session = await auth()
@@ -109,8 +112,9 @@ async function aprovarSolicitacao(
   if (!isHistorical) {
     await assertWithinOperationalHours(request.preferredAt)
     if (occupiesRoom(finalModality, teacherOnsite)) await assertRoomFree(slot)
-    await assertTeacherFree({ ...slot, teacherId: request.teacherId }, request.teacher.user.name)
+    await assertTeacherAvailable({ ...slot, teacherId: request.teacherId }, request.teacher.user.name)
   }
+  await assertTeacherFree({ ...slot, teacherId: request.teacherId }, request.teacher.user.name)
 
   await prisma.$transaction([
     prisma.lesson.create({
@@ -419,12 +423,17 @@ async function criarAulaDireta(data: CreateLessonDirectInput) {
     teacherOnsiteDirect = data.teacherOnsite ?? false
   }
 
-  // ── Validação da agenda (aulas passadas são registro histórico) ──────────────
+  // ── Validação da agenda ──────────────────────────────────────────────────────
+  // Sala e disponibilidade só valem para o futuro: registrar o que já aconteceu
+  // não disputa sala nem pede permissão de horário. O conflito do professor, ao
+  // contrário, vale sempre — duas aulas na mesma hora não existiram, e o repasse
+  // pagaria a hora duas vezes.
+  const slot = { scheduledAt, duration }
   if (!isHistorical) {
-    const slot = { scheduledAt, duration }
     if (occupiesRoom(data.modality, teacherOnsiteDirect)) await assertRoomFree(slot)
-    await assertTeacherFree({ ...slot, teacherId: data.teacherId }, teacher?.user.name)
+    await assertTeacherAvailable({ ...slot, teacherId: data.teacherId }, teacher?.user.name)
   }
+  await assertTeacherFree({ ...slot, teacherId: data.teacherId }, teacher?.user.name)
 
   await prisma.$transaction([
     prisma.lesson.create({
@@ -524,6 +533,7 @@ async function evaluateRecurringSlots(opts: {
   slots:            SlotRef[]
   teacherId:        string
   teacherFirstName: string
+  teacherAvailability: Availability
   duration:         number
   needsRoom:        boolean
   balance:          number
@@ -565,8 +575,16 @@ async function evaluateRecurringSlots(opts: {
       continue
     }
 
-    // Conflitos com o banco só valem para aulas futuras (passadas são registro
-    // histórico), mas a colisão interna da série acima vale sempre.
+    // Choque com a agenda do professor vale sempre, inclusive no passado: uma
+    // ocorrência retroativa em cima de outra aula não aconteceu, e o repasse
+    // pagaria a mesma hora duas vezes.
+    const clash = findConflictIn(slot, teacherAgenda)
+    if (clash) {
+      push("TEACHER_CONFLICT", `${opts.teacherFirstName} já tem ${describeLesson(clash)}`)
+      continue
+    }
+
+    // Sala só vale para o futuro — registro histórico não disputa sala.
     if (at < now) {
       push("PAST", "data já passou — será registrada como realizada")
       accepted.push(slot)
@@ -579,9 +597,9 @@ async function evaluateRecurringSlots(opts: {
       continue
     }
 
-    const clash = findConflictIn(slot, teacherAgenda)
-    if (clash) {
-      push("TEACHER_CONFLICT", `${opts.teacherFirstName} já tem ${describeLesson(clash)}`)
+    const foraDaAgenda = availabilityProblem(slot, opts.teacherAvailability, opts.teacherFirstName)
+    if (foraDaAgenda) {
+      push("UNAVAILABLE", foraDaAgenda)
       continue
     }
 
@@ -704,6 +722,7 @@ async function preverSerie(data: RecurringInput): Promise<RecurringPreview> {
     slots:            data.slots,
     teacherId:        data.teacherId,
     teacherFirstName: ctx.teacher.user.name.split(" ")[0],
+    teacherAvailability: (ctx.teacher.availability ?? {}) as unknown as Availability,
     duration,
     needsRoom:        ctx.needsRoom,
     balance,
@@ -760,6 +779,7 @@ async function criarSerie(
     slots:            data.slots,
     teacherId:        data.teacherId,
     teacherFirstName: teacher.user.name.split(" ")[0],
+    teacherAvailability: (teacher.availability ?? {}) as unknown as Availability,
     duration,
     needsRoom:        ctx.needsRoom,
     balance:          ctx.balance,
@@ -908,14 +928,15 @@ async function criarAulaEmGrupo(data: CreateGroupLessonInput) {
     teacherOnsite = data.teacherOnsite ?? false
   }
 
-  // ── Validação da agenda (aulas passadas são registro histórico) ──────────────
+  // ── Validação da agenda (ver criarAulaDireta) ────────────────────────────────
+  const slot = { scheduledAt, duration }
   if (!isHistorical) {
-    const slot = { scheduledAt, duration }
     if (occupiesRoom(data.modality, teacherOnsite)) {
       await assertRoomFree(slot, { suggestOnline: false })
     }
-    await assertTeacherFree({ ...slot, teacherId: data.teacherId }, teacher.user.name)
+    await assertTeacherAvailable({ ...slot, teacherId: data.teacherId }, teacher.user.name)
   }
+  await assertTeacherFree({ ...slot, teacherId: data.teacherId }, teacher.user.name)
 
   // Buscar todos os alunos
   const students = await prisma.student.findMany({
@@ -1034,14 +1055,15 @@ async function criarAulaEmDupla(data: CreateDuoLessonInput) {
     teacherOnsite = data.teacherOnsite ?? false
   }
 
-  // ── Validação da agenda (aulas passadas são registro histórico) ──────────────
+  // ── Validação da agenda (ver criarAulaDireta) ────────────────────────────────
   // Os alunos entram como participantes de UMA aula, então há um único slot a
   // validar — é justamente a sobreposição autorizada para o professor.
+  const slot = { scheduledAt, duration }
   if (!isHistorical) {
-    const slot = { scheduledAt, duration }
     if (occupiesRoom(data.modality, teacherOnsite)) await assertRoomFree(slot)
-    await assertTeacherFree({ ...slot, teacherId: data.teacherId }, teacher.user.name)
+    await assertTeacherAvailable({ ...slot, teacherId: data.teacherId }, teacher.user.name)
   }
+  await assertTeacherFree({ ...slot, teacherId: data.teacherId }, teacher.user.name)
 
   // Buscar alunos com o pacote ativo mais recente que tenha saldo
   const students = await prisma.student.findMany({
@@ -1119,6 +1141,54 @@ async function criarAulaEmDupla(data: CreateDuoLessonInput) {
 
 // ─── Registrar aulas passadas em lote (para pacotes retroativos) ─────────────
 
+/**
+ * Nenhuma aula do lote pode cair sobre outra do mesmo professor — nem contra o
+ * que já está no banco, nem contra as outras linhas do próprio lote (que ainda
+ * não foram gravadas e por isso o banco não acusa).
+ */
+async function assertLoteSemConflito(
+  lessons: { date: string; time: string; teacherId: string; duration: number }[],
+) {
+  const porProfessor = new Map<string, { scheduledAt: Date; duration: number }[]>()
+  for (const l of lessons) {
+    const slot = { scheduledAt: parseBrazilDateTime(l.date, l.time), duration: l.duration }
+    porProfessor.set(l.teacherId, [...(porProfessor.get(l.teacherId) ?? []), slot])
+  }
+
+  for (const [teacherId, slots] of porProfessor) {
+    const [agenda, teacher] = await Promise.all([
+      loadTeacherAgendaFor(teacherId, slots),
+      prisma.teacher.findUnique({
+        where:  { id: teacherId },
+        select: { user: { select: { name: true } } },
+      }),
+    ])
+    const quem = teacher?.user.name.trim().split(" ")[0] ?? "O professor"
+
+    const aceitos: { scheduledAt: Date; duration: number }[] = []
+    for (const slot of slots) {
+      const quando = formatBR(slot.scheduledAt, "dd/MM 'às' HH:mm")
+
+      if (aceitos.some((a) => overlaps(slot, a))) {
+        throw new Error(
+          `Duas aulas de ${quem} em ${quando} no mesmo lançamento. `
+          + `Se foram alunos atendidos juntos, use o campo de parceiro de dupla em vez de duas linhas.`
+        )
+      }
+
+      const clash = findConflictIn(slot, agenda)
+      if (clash) {
+        throw new Error(
+          `Conflito de agenda em ${quando}: ${quem} já tem ${describeLesson(clash)}. `
+          + `Se os dois alunos foram atendidos juntos, registre como aula em dupla.`
+        )
+      }
+
+      aceitos.push(slot)
+    }
+  }
+}
+
 export async function createBatchPastLessonsAction(data: {
   studentId: string
   packageId: string
@@ -1131,6 +1201,12 @@ export async function createBatchPastLessonsAction(data: {
 
   const pkg = await prisma.lessonPackage.findUnique({ where: { id: data.packageId } })
   if (!pkg) throw new Error("Pacote não encontrado")
+
+  // ── Conflito de agenda do professor ──────────────────────────────────────────
+  // Vale também aqui: duas aulas do mesmo professor no mesmo horário não
+  // aconteceram, e o repasse pagaria a hora duas vezes. Quando foram irmãos
+  // atendidos juntos, o registro certo é uma linha só com o parceiro de dupla.
+  await assertLoteSemConflito(data.lessons)
 
   const totalCost    = data.lessons.reduce((sum, l) => sum + lessonCost(l.duration), 0)
   const pkgRemaining = Number(pkg.remainingLessons)
@@ -1239,6 +1315,73 @@ export async function updateLessonDirectAction(
   return comResultado(() => editarAula(data))
 }
 
+/**
+ * Acerta o saldo do pacote quando a duração da aula muda.
+ *
+ * Criar uma aula de 2h debita 2 aulas do pacote; editar de 1h para 2h não
+ * debitava nada — a aula ficava com 2 horas e o pacote com 1 aula gasta. É de
+ * onde vinha o "aulas de mais de 1 hora contam só 1 no pacote".
+ *
+ * Quais aulas consomem pacote: as que os caminhos de criação debitam — aula
+ * individual e aula em dupla. Ficam de fora a aula de turma (`courseId`: o
+ * contrato é por período), o aulão e a aula em grupo avulsa (`priceOverride`:
+ * cobrada por fora, com cobrança própria).
+ *
+ * O pacote a acertar é o mesmo que o cancelamento devolve — o mais recente do
+ * aluno, ativo ou esgotado. A aula não guarda de qual pacote saiu.
+ */
+interface AulaParaAcerto {
+  duration:      number
+  lessonType:    string
+  courseId:      string | null
+  priceOverride: unknown
+  participants:  { studentId: string }[]
+}
+
+async function ajustesDePacotePorDuracao(aulas: AulaParaAcerto[], novaDuracao: number) {
+  // Quanto cada aluno passa a dever (ou a receber de volta), somando todas as
+  // aulas alteradas — a série inteira pode mexer no mesmo pacote várias vezes.
+  const porAluno = new Map<string, number>()
+  for (const aula of aulas) {
+    const delta = aulasDe(novaDuracao) - aulasDe(aula.duration)
+    if (delta === 0) continue
+    if (aula.courseId || aula.priceOverride != null) continue
+    if (aula.lessonType !== "INDIVIDUAL" && aula.lessonType !== "GROUP") continue
+    for (const { studentId } of aula.participants) {
+      porAluno.set(studentId, (porAluno.get(studentId) ?? 0) + delta)
+    }
+  }
+  if (porAluno.size === 0) return []
+
+  const pacotes = await prisma.lessonPackage.findMany({
+    where:   { studentId: { in: [...porAluno.keys()] }, status: { in: ["ACTIVE", "EXHAUSTED"] } },
+    orderBy: { purchaseDate: "desc" },
+    include: { student: { select: { name: true } } },
+  })
+
+  const maisRecente = new Map<string, (typeof pacotes)[number]>()
+  for (const p of pacotes) if (!maisRecente.has(p.studentId)) maisRecente.set(p.studentId, p)
+
+  return [...maisRecente.values()].map((pkg) => {
+    const delta = porAluno.get(pkg.studentId) ?? 0
+    const saldo = Number(pkg.remainingLessons)
+    if (delta > saldo) {
+      throw new Error(
+        `Saldo insuficiente: ${pkg.student.name} tem ${fmtAulas(saldo)} aula(s) no pacote, `
+        + `e esta alteração exigiria mais ${fmtAulas(delta)}.`
+      )
+    }
+    const novoSaldo = Math.round((saldo - delta) * 10) / 10
+    return prisma.lessonPackage.update({
+      where: { id: pkg.id },
+      data:  {
+        remainingLessons: novoSaldo,
+        status:           novoSaldo <= 0 ? "EXHAUSTED" : "ACTIVE",
+      },
+    })
+  })
+}
+
 async function editarAula(data: UpdateLessonDirectInput): Promise<UpdateLessonResult> {
   const session = await auth()
   if (!["ADMIN", "COLLABORATOR"].includes(session?.user?.role ?? "")) throw new Error("Sem permissão")
@@ -1248,7 +1391,11 @@ async function editarAula(data: UpdateLessonDirectInput): Promise<UpdateLessonRe
 
   const atual = await prisma.lesson.findUnique({
     where:  { id: data.lessonId },
-    select: { id: true, status: true, scheduledAt: true, recurrenceGroupId: true },
+    select: {
+      id: true, status: true, scheduledAt: true, recurrenceGroupId: true,
+      duration: true, lessonType: true, courseId: true, priceOverride: true,
+      participants: { select: { studentId: true } },
+    },
   })
   if (!atual) throw new Error("Aula não encontrada")
 
@@ -1285,20 +1432,25 @@ async function editarAula(data: UpdateLessonDirectInput): Promise<UpdateLessonRe
     await assertTeacherFree({ ...slot, teacherId: data.teacherId }, teacher?.user.name)
   }
 
-  await prisma.lesson.update({
-    where: { id: data.lessonId },
-    data: {
-      scheduledAt,
-      teacherId:     data.teacherId,
-      subjectId:     data.subjectId,
-      modality:      data.modality,
-      duration:      data.duration,
-      teacherOnsite,
-      topicsCovered: data.topicsCovered || null,
-      teacherNotes:  data.teacherNotes  || null,
-      status:        data.status,
-    },
-  })
+  const ajustes = await ajustesDePacotePorDuracao([atual], data.duration)
+
+  await prisma.$transaction([
+    prisma.lesson.update({
+      where: { id: data.lessonId },
+      data: {
+        scheduledAt,
+        teacherId:     data.teacherId,
+        subjectId:     data.subjectId,
+        modality:      data.modality,
+        duration:      data.duration,
+        teacherOnsite,
+        topicsCovered: data.topicsCovered || null,
+        teacherNotes:  data.teacherNotes  || null,
+        status:        data.status,
+      },
+    }),
+    ...ajustes,
+  ])
 
   revalidarAula(data.studentId)
   return { updated: 1 }
@@ -1344,7 +1496,11 @@ async function editarSerieDeAulas(opts: {
       // Esta ocorrência sempre entra; as demais, só as que ainda não passaram.
       OR: [{ id: atual.id }, { scheduledAt: { gte: agora } }],
     },
-    select:  { id: true, scheduledAt: true },
+    select: {
+      id: true, scheduledAt: true, duration: true, lessonType: true,
+      courseId: true, priceOverride: true,
+      participants: { select: { studentId: true } },
+    },
     orderBy: { scheduledAt: "asc" },
   })
 
@@ -1361,6 +1517,10 @@ async function editarSerieDeAulas(opts: {
     slots:       alvos.filter((a) => a.scheduledAt >= agora),
   })
   if (conflitos.length > 0) throw new Error(seriesConflictMessage(conflitos))
+
+  // Mudar a duração da série mexe no pacote de cada aluno tantas vezes quantas
+  // forem as ocorrências alteradas.
+  const ajustes = await ajustesDePacotePorDuracao(irmas, data.duration)
 
   await prisma.$transaction([
     // Campos que valem para a série toda
@@ -1387,6 +1547,7 @@ async function editarSerieDeAulas(opts: {
         teacherNotes:  data.teacherNotes  || null,
       },
     }),
+    ...ajustes,
   ])
 
   return alvos.length
@@ -1466,27 +1627,41 @@ async function criarAulao(data: CreateAulaoInput) {
   // ── Validação da agenda: TODAS as datas da série ─────────────────────────────
   // A série é criada em bloco, então validamos tudo antes — nenhum aulão é
   // criado se alguma ocorrência conflitar. A agenda é carregada de uma vez.
+  // O choque com a agenda do professor vale para todas as ocorrências; sala e
+  // disponibilidade, só para as futuras (o passado é registro do que ocorreu).
   const needsRoom  = occupiesRoom(data.modality, teacherOnsite)
   const serieClash: string[] = []
   const now        = new Date()
-  const futuros    = dates.filter((d) => d >= now).map((d) => ({ scheduledAt: d, duration }))
+  const todas      = dates.map((d) => ({ scheduledAt: d, duration }))
+  const futuros    = todas.filter((s) => s.scheduledAt >= now)
 
   const [teacherAgenda, roomAgenda, roomCount] = await Promise.all([
-    loadTeacherAgendaFor(data.teacherId, futuros),
+    loadTeacherAgendaFor(data.teacherId, todas),
     needsRoom ? loadRoomAgendaFor(futuros) : Promise.resolve([]),
     needsRoom ? getRoomCount() : Promise.resolve(0),
   ])
 
-  for (const slot of futuros) {
-    const quando = formatBR(slot.scheduledAt, "dd/MM 'às' HH:mm")
+  const availability = (teacher.availability ?? {}) as unknown as Availability
+
+  for (const slot of todas) {
+    const quando   = formatBR(slot.scheduledAt, "dd/MM 'às' HH:mm")
+    const isFuture = slot.scheduledAt >= now
+
+    const clash = findConflictIn(slot, teacherAgenda)
+    if (clash) {
+      serieClash.push(`${quando} — ${describeLesson(clash)}`)
+      continue
+    }
+
+    if (!isFuture) continue
 
     if (needsRoom && countOverlapsIn(slot, roomAgenda) >= roomCount) {
       serieClash.push(`${quando} — todas as ${roomCount} sala${roomCount !== 1 ? "s" : ""} estão ocupadas`)
       continue
     }
 
-    const clash = findConflictIn(slot, teacherAgenda)
-    if (clash) serieClash.push(`${quando} — ${describeLesson(clash)}`)
+    const foraDaAgenda = availabilityProblem(slot, availability, teacher.user.name)
+    if (foraDaAgenda) serieClash.push(`${quando} — ${foraDaAgenda}`)
   }
 
   if (serieClash.length > 0) {

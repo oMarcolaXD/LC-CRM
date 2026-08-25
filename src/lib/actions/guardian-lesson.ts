@@ -11,10 +11,10 @@ import { assertRoomFree, findTeacherConflicts, occupiesRoom } from "@/lib/schedu
 import { format }         from "date-fns"
 import { ptBR }           from "date-fns/locale"
 import { parseBrazilDateTime } from "@/lib/datetime"
+import { aulasDe }    from "@/lib/lessons"
 
-function lessonCost(durationMinutes: number): number {
-  return durationMinutes / 60
-}
+/** Uma aula de 2h devolve 2 aulas ao pacote — ver src/lib/lessons.ts. */
+const lessonCost = aulasDe
 
 /**
  * Confirma que o usuário logado é o responsável dono do aluno participante

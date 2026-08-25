@@ -1,4 +1,4 @@
-export const CURRENT_VERSION = "0.5.0"
+export const CURRENT_VERSION = "0.5.1"
 
 export interface ChangelogEntry {
   version: string
@@ -11,6 +11,23 @@ export interface ChangelogEntry {
 // As entradas de um mesmo lançamento são separadas por público: o modal filtra
 // por perfil e usa a versão como chave, então cada público tem a sua versão.
 export const changelog: ChangelogEntry[] = [
+  {
+    version: "0.5.1",
+    date: "24/08/2026",
+    roles: ["ADMIN", "COLLABORATOR", "TEACHER"],
+    title: "Aula de 2 Horas Conta como 2, e Agenda sem Sobreposição",
+    items: [
+      "Corrigido: a contagem de aulas passou a ser em aulas, não em linhas na tela. Uma aula de 2 horas conta como 2 e uma de 30 minutos como meia — a mesma medida que o pacote desconta e que o repasse paga. Antes o professor via 4 aulas onde tinha recebido por 5",
+      "Corrigido: mudar a duração de uma aula já criada não acertava o pacote. Passar de 1h para 2h deixava a aula com 2 horas e o pacote com 1 aula descontada. Agora a diferença é lançada na hora — e devolvida quando a aula encolhe",
+      "O mesmo vale ao editar a série inteira: a diferença é aplicada em cada ocorrência alterada, no pacote de cada aluno",
+      "Corrigido: registrar uma aula que já aconteceu não checava a agenda do professor. Dava para lançar duas aulas na mesma hora do mesmo professor, e o repasse pagava a hora duas vezes. Agora o sistema avisa — e sugere registrar como aula em dupla quando foram dois alunos atendidos juntos",
+      "Uma aula já realizada passou a ocupar o horário do professor no passado. Antes só as agendadas e confirmadas ocupavam, então o horário parecia livre depois que a aula era fechada",
+      "Agendar fora do horário que o professor atende agora é bloqueado, com o horário cadastrado dele na mensagem. Vale para aula avulsa, dupla, grupo, aulão e série — e a revisão da série marca as ocorrências com “Fora da agenda”",
+      "Corrigido: a checagem de disponibilidade lia a hora no fuso do servidor. Em produção isso somava 3 horas, então o agendamento pelo aluno e o remarcar do responsável aceitavam horários errados",
+      "Novo: exportar e imprimir a agenda do dia, agrupada por aluno, por professor ou em lista cronológica, com mensagem de confirmação pronta para o WhatsApp",
+      "Criar aula em grupo, em dupla ou aulão passou a atualizar a agenda na hora, sem precisar recarregar",
+    ],
+  },
   {
     version: "0.5.0",
     date: "17/08/2026",

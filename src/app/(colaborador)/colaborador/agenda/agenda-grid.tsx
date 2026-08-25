@@ -43,6 +43,7 @@ import type { NotificationStatus }  from "@/lib/notifications/status"
 import { parseBrazilDateTime }      from "@/lib/datetime"
 import { mensagemDeErro } from "@/lib/error-message"
 import { ouFalhe } from "@/lib/action-result"
+import { somaAulas, aulasDe, fmtAulas, labelAulas } from "@/lib/lessons"
 
 // ─── Constantes de layout ────────────────────────────────────────────────────
 
@@ -149,11 +150,6 @@ export interface PendingRequestSlot {
 }
 
 /** Minutos em "N aula(s)" — 1 aula = 60 min, como no perfil do aluno. */
-function fmtAulas(minutes: number): string {
-  const n = minutes / 60
-  const label = n % 1 === 0 ? String(n) : n.toFixed(1).replace(".", ",")
-  return `${label} aula${n === 1 ? "" : "s"}`
-}
 
 /** "14:00" + 90 min → "15:30" (aritmética de relógio, sem fuso envolvido). */
 function somaHora(time: string, minutes: number): string {
@@ -660,13 +656,13 @@ function QuickScheduleModal({
             >
               {[30, 60, 90, 120, 150, 180, 210, 240].map(min => (
                 <option key={min} value={min} className="bg-background text-foreground">
-                  {fmtAulas(min)} ({min} min)
+                  {labelAulas(aulasDe(min))} ({min} min)
                 </option>
               ))}
             </select>
             {duration !== 60 && (
               <p className="text-[10px] text-muted-foreground mt-1">
-                Desconta {fmtAulas(duration)} do pacote e ocupa a agenda até {somaHora(schedule.time, duration)}.
+                Desconta {labelAulas(aulasDe(duration))} do pacote e ocupa a agenda até {somaHora(schedule.time, duration)}.
               </p>
             )}
           </div>
@@ -1340,13 +1336,23 @@ export function AgendaGrid({
   // desejado: o professor com o dia cheio caía na décima coluna enquanto quem
   // não tinha nada marcado abria a agenda. O movimento do dia — justamente o que
   // a secretaria acompanha — ficava escondido atrás da rolagem horizontal.
+  // Totais do topo, em aulas e sem compromisso/anotação — que não são aula.
+  const soAulas       = <T extends { lessonType: string }>(arr: T[]) =>
+    arr.filter(l => l.lessonType !== "COMPROMISSO")
+  const aulasNoDia    = somaAulas(soAulas(visibleLessons))
+  const aulasNaSemana = somaAulas(soAulas(visibleWeek))
+  const aulasNoMes    = somaAulas(soAulas(visibleMonth))
+
   const cargaDoDia = new Map(
     teachers.map(t => {
       const itens = visibleLessons.filter(l => l.teacherId === t.id)
       return [t.id, {
         // Compromisso e anotação contam para trazer a coluna à esquerda, mas
         // quem tem aula de verdade vem antes de quem só tem um recado no dia.
-        aulas:    itens.filter(l => l.lessonType !== "COMPROMISSO").length,
+        // A contagem é em aulas, não em linhas: 2h são 2 aulas, do mesmo jeito
+        // que o pacote debita e o repasse paga (src/lib/lessons.ts).
+        aulas:    somaAulas(itens.filter(l => l.lessonType !== "COMPROMISSO")),
+        linhasDeAula: itens.filter(l => l.lessonType !== "COMPROMISSO").length,
         itens:    itens.length,
         primeiro: itens.length > 0 ? Math.min(...itens.map(l => l.startMin)) : Infinity,
       }]
@@ -1784,10 +1790,10 @@ export function AgendaGrid({
             </Button>
             <span>
               {view === "month"
-                ? `${visibleMonth.length} aula${visibleMonth.length !== 1 ? "s" : ""} no mês`
+                ? `${fmtAulas(aulasNoMes)} aula${aulasNoMes !== 1 ? "s" : ""} no mês`
                 : view === "week"
-                ? `${visibleWeek.length} aula${visibleWeek.length !== 1 ? "s" : ""} na semana`
-                : `${visibleLessons.length} aula${visibleLessons.length !== 1 ? "s" : ""}`
+                ? `${fmtAulas(aulasNaSemana)} aula${aulasNaSemana !== 1 ? "s" : ""} na semana`
+                : `${fmtAulas(aulasNoDia)} aula${aulasNoDia !== 1 ? "s" : ""}`
               }
             </span>
 
@@ -2067,7 +2073,7 @@ export function AgendaGrid({
                 {effectiveTeachers.map(t => {
                   const carga        = cargaDoDia.get(t.id)!
                   const count        = carga.aulas
-                  const compromissos = carga.itens - carga.aulas
+                  const compromissos = carga.itens - carga.linhasDeAula
                   // Só exibe pendências se o professor tem disponibilidade hoje
                   const pendingCount = t.slots.length > 0
                     ? pendingRequests.filter(r => r.teacherId === t.id).length
@@ -2113,7 +2119,7 @@ export function AgendaGrid({
                       <div className="flex items-center gap-1.5 flex-wrap justify-center">
                         {count > 0 ? (
                           <span className="text-[10px] text-muted-foreground tabular-nums">
-                            {count} aula{count !== 1 ? "s" : ""}
+                            {fmtAulas(count)} aula{count !== 1 ? "s" : ""}
                           </span>
                         ) : compromissos > 0 ? (
                           // "1 aula" para quem só tem um recado no dia enganava

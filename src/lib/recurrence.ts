@@ -56,6 +56,7 @@ export type SlotVerdict =
   | "NO_BALANCE"         // saldo do pacote acabou antes desta ocorrência
   | "TEACHER_CONFLICT"   // professor já ocupado
   | "ROOM_CONFLICT"      // nenhuma sala livre
+  | "UNAVAILABLE"        // fora do horário que o professor atende
 
 /** Ocorrências que efetivamente geram aula. */
 export function isCreatable(verdict: SlotVerdict): boolean {
@@ -64,7 +65,9 @@ export function isCreatable(verdict: SlotVerdict): boolean {
 
 /** Só estas o usuário consegue resolver mudando data/horário. */
 export function isConflict(verdict: SlotVerdict): boolean {
-  return verdict === "TEACHER_CONFLICT" || verdict === "ROOM_CONFLICT"
+  return verdict === "TEACHER_CONFLICT"
+      || verdict === "ROOM_CONFLICT"
+      || verdict === "UNAVAILABLE"
 }
 
 export interface RecurringSlotPreview extends SlotRef {

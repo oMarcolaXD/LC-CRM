@@ -59,6 +59,11 @@ const VERDICT_STYLE: Record<SlotVerdict, { label: string; row: string; chip: str
     row:   "border-amber-300 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/20",
     chip:  "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-400",
   },
+  UNAVAILABLE: {
+    label: "Fora da agenda",
+    row:   "border-amber-300 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/20",
+    chip:  "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-400",
+  },
   NO_BALANCE: {
     label: "Sem saldo",
     row:   "border-destructive/40 bg-destructive/5",

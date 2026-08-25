@@ -2,7 +2,7 @@
 // { "1": [{"start": "09:00", "end": "12:00"}, {"start": "14:00", "end": "18:00"}], "3": [...] }
 // Chave = dia da semana (0=Dom, 1=Seg, ..., 6=Sab)
 
-import { parseBrazilDateTime } from "@/lib/datetime"
+import { parseBrazilDateTime, toBrazilDate } from "@/lib/datetime"
 
 export interface TimeSlot   { start: string; end: string }
 export type Availability    = Record<string, TimeSlot[]>  // dia -> intervalos
@@ -97,19 +97,30 @@ export function getAvailableDates(
   return result
 }
 
-/** Verifica se uma data/hora está dentro da disponibilidade */
+/**
+ * Intervalos que o professor atende no dia da semana de `at`.
+ *
+ * A disponibilidade é um relógio de parede de Brasília ("14:30"–"18:30"), então
+ * o dia da semana e a hora têm de ser lidos nesse fuso. Ler direto do `Date`
+ * daria certo na máquina do escritório (UTC-3) e errado na Vercel (UTC): as
+ * 21:00 de segunda viram terça-feira, e as 15:00 viram 18:00.
+ */
+export function windowsAt(at: Date, availability: Availability): TimeSlot[] {
+  const br = toBrazilDate(at)
+  return availability[br.getDay().toString()] ?? []
+}
+
+/** Verifica se uma data/hora cabe inteira em algum intervalo do professor. */
 export function isWithinAvailability(
   requestedAt:  Date,
   availability: Availability,
   durationMin = 60,
 ): boolean {
-  const dow   = requestedAt.getDay().toString()
-  const slots = availability[dow] ?? []
+  const slots = windowsAt(requestedAt, availability)
   if (slots.length === 0) return false
 
-  const h   = requestedAt.getHours()
-  const m   = requestedAt.getMinutes()
-  const cur = h * 60 + m
+  const br  = toBrazilDate(requestedAt)
+  const cur = br.getHours() * 60 + br.getMinutes()
 
   return slots.some(({ start, end }) => {
     const [sh, sm] = start.split(":").map(Number)

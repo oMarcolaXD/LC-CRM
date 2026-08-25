@@ -13,6 +13,7 @@ import {
 import { ptBR } from "date-fns/locale"
 import { formatBR, toBrazilDate, nowBrazil } from "@/lib/datetime"
 import { teacherWhereForSession } from "@/lib/teacher-session"
+import { somaAulas, aulasDe, fmtAulas } from "@/lib/lessons"
 import type { Prisma } from "@prisma/client"
 
 function brl(v: number) {
@@ -94,9 +95,12 @@ async function getProfData(where: Prisma.TeacherWhereInput) {
   ])
 
   // ── MiniStats ─────────────────────────────────────────────────────────────────
-  const aulasHoje    = todayLessons.filter(l => ["SCHEDULED","CONFIRMED","COMPLETED"].includes(l.status)).length
-  const aulasMes     = allLessons.filter(l => l.status === "COMPLETED" && l.scheduledAt >= thisStart && l.scheduledAt <= thisEnd).length
-  const aulasPrevMes = allLessons.filter(l => l.status === "COMPLETED" && l.scheduledAt >= prevStart && l.scheduledAt <= prevEnd).length
+  // Contagem em aulas, não em linhas: uma aula de 2h são 2 aulas — a mesma
+  // unidade que o pacote debita e que `computePayout` paga. Contar linhas fazia
+  // o professor ver 4 onde recebeu por 5. Ver src/lib/lessons.ts.
+  const aulasHoje    = somaAulas(todayLessons.filter(l => ["SCHEDULED","CONFIRMED","COMPLETED"].includes(l.status)))
+  const aulasMes     = somaAulas(allLessons.filter(l => l.status === "COMPLETED" && l.scheduledAt >= thisStart && l.scheduledAt <= thisEnd))
+  const aulasPrevMes = somaAulas(allLessons.filter(l => l.status === "COMPLETED" && l.scheduledAt >= prevStart && l.scheduledAt <= prevEnd))
   const ganhosMes    = aulasMes * rate
   const deltaAulas   = aulasPrevMes > 0 ? Math.round(((aulasMes - aulasPrevMes) / aulasPrevMes) * 100) : null
 
@@ -191,7 +195,7 @@ async function getProfData(where: Prisma.TeacherWhereInput) {
   // ── Ganhos chart (6 meses) ────────────────────────────────────────────────────
   const ganhosMeses = months.map(m => ({
     m: m.label,
-    v: allLessons.filter(l => l.status === "COMPLETED" && l.scheduledAt >= m.start && l.scheduledAt <= m.end).length * rate,
+    v: somaAulas(allLessons.filter(l => l.status === "COMPLETED" && l.scheduledAt >= m.start && l.scheduledAt <= m.end)) * rate,
   }))
   const ganhosMax = Math.max(...ganhosMeses.map(m => m.v), 1)
 
@@ -199,7 +203,7 @@ async function getProfData(where: Prisma.TeacherWhereInput) {
   for (const l of allLessons.filter(l => l.status === "COMPLETED" && l.scheduledAt >= thisStart)) {
     const sid = l.subjectId ?? "other"
     const cur = subjectBreak.get(sid) ?? { name: l.subject?.name ?? "Outros", aulas: 0 }
-    cur.aulas++
+    cur.aulas += aulasDe(l.duration)
     subjectBreak.set(sid, cur)
   }
   const BREAKDOWN_COLORS = ["var(--primary)", "var(--info)", "var(--success)", "var(--warn)"]
@@ -235,8 +239,11 @@ async function getProfData(where: Prisma.TeacherWhereInput) {
       })
     }
     const s = studentMap.get(sid)!
-    if (["COMPLETED","SCHEDULED","CONFIRMED"].includes(l.status)) s.aulas++
-    if (l.scheduledAt > s._lastDate || s.aulas === 1) {
+    const contava = s.aulas > 0
+    if (["COMPLETED","SCHEDULED","CONFIRMED"].includes(l.status)) s.aulas += aulasDe(l.duration)
+    // Última aula "de verdade": a mais recente, ou a primeira que conta quando
+    // as anteriores eram todas canceladas.
+    if (l.scheduledAt > s._lastDate || (!contava && s.aulas > 0)) {
       s._lastDate = l.scheduledAt
       s.content   = l.topicsCovered ?? l.subject?.name ?? "–"
       s.modo      = l.modality === "PRESENCIAL" ? "sede" : "online"
@@ -277,6 +284,7 @@ async function getProfData(where: Prisma.TeacherWhereInput) {
     teacherName:     teacher.user.name,
     teacherSubjects: teacher.subjects.map(ts => ts.subject.name),
     aulasHoje, aulasMes, deltaAulas, ganhosMes, avgRating,
+    horariosHoje: todayLessons.filter(l => ["SCHEDULED","CONFIRMED","COMPLETED"].includes(l.status)).length,
     timelineItems, nowLeft, nowLabel, nowVisible, minutesUntil,
     hero,
     avaliacoes,
@@ -322,7 +330,7 @@ export default async function ProfessorDashboard() {
         <div>
           <DashboardGreeting
             firstName={d.teacherName.split(" ")[0]}
-            subtitle={`${d.aulasHoje} aula${d.aulasHoje !== 1 ? "s" : ""} hoje${d.minutesUntil != null ? ` · próxima em ${d.minutesUntil < 60 ? `${d.minutesUntil} min` : `${Math.floor(d.minutesUntil / 60)}h`}` : ""}`}
+            subtitle={`${fmtAulas(d.aulasHoje)} aula${d.aulasHoje !== 1 ? "s" : ""} hoje${d.minutesUntil != null ? ` · próxima em ${d.minutesUntil < 60 ? `${d.minutesUntil} min` : `${Math.floor(d.minutesUntil / 60)}h`}` : ""}`}
           />
         </div>
 
@@ -332,9 +340,9 @@ export default async function ProfessorDashboard() {
           style={{ gap: "1px", background: "var(--border)" }}
         >
           {[
-            { label: "Aulas hoje",    value: String(d.aulasHoje),  sub: `${d.aulasHoje} total`,          mono: false },
-            { label: "Aulas no mês",  value: String(d.aulasMes),   sub: d.deltaAulas != null ? `${d.deltaAulas >= 0 ? "+" : ""}${d.deltaAulas}% vs. mês ant.` : "primeiro mês", mono: false, subPos: d.deltaAulas != null ? d.deltaAulas >= 0 : null },
-            { label: "Ganhos do mês", value: brl(d.ganhosMes),     sub: `${d.aulasMes} aulas`,            mono: false },
+            { label: "Aulas hoje",    value: fmtAulas(d.aulasHoje), sub: `${d.horariosHoje} horário${d.horariosHoje !== 1 ? "s" : ""}`, mono: false },
+            { label: "Aulas no mês",  value: fmtAulas(d.aulasMes), sub: d.deltaAulas != null ? `${d.deltaAulas >= 0 ? "+" : ""}${d.deltaAulas}% vs. mês ant.` : "primeiro mês", mono: false, subPos: d.deltaAulas != null ? d.deltaAulas >= 0 : null },
+            { label: "Ganhos do mês", value: brl(d.ganhosMes),     sub: `${fmtAulas(d.aulasMes)} aulas`,  mono: false },
             { label: "Avaliação",     value: d.avgRating,          sub: `${d.totalAvaliacoes} reviews`,   mono: false },
           ].map(({ label, value, sub, mono, subPos }) => (
             <div key={label} className="min-w-[130px] bg-card px-[16px] py-[10px]">
@@ -362,7 +370,7 @@ export default async function ProfessorDashboard() {
           <div>
             <p className="text-[13px] font-semibold tracking-[-0.01em]">Linha do dia</p>
             <p className="mt-0.5 text-[11px] text-muted-foreground">
-              {d.aulasHoje} aula{d.aulasHoje !== 1 ? "s" : ""} hoje
+              {fmtAulas(d.aulasHoje)} aula{d.aulasHoje !== 1 ? "s" : ""} hoje
             </p>
           </div>
           <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
@@ -621,7 +629,7 @@ export default async function ProfessorDashboard() {
             <div className="p-[12px_14px_8px]">
               <p className="text-[13px] font-semibold tracking-[-0.01em]">Meus ganhos · {format(nowBrazil(), "MMMM", { locale: ptBR })}</p>
               <p className="mt-0.5 text-[11px] text-muted-foreground">
-                {d.aulasMes} aulas · próximo pagamento em ~{d.diasAtePagamento} dias
+                {fmtAulas(d.aulasMes)} aulas · próximo pagamento em ~{d.diasAtePagamento} dias
               </p>
             </div>
 

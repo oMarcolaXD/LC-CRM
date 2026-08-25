@@ -6,10 +6,10 @@ import { revalidatePath } from "next/cache"
 import { notify }         from "@/lib/notifications"
 import { format }         from "date-fns"
 import { ptBR }           from "date-fns/locale"
+import { aulasDe }    from "@/lib/lessons"
 
-function lessonCost(durationMinutes: number): number {
-  return durationMinutes / 60
-}
+/** Uma aula de 2h devolve 2 aulas ao pacote — ver src/lib/lessons.ts. */
+const lessonCost = aulasDe
 
 // ─── Cancelar aula diretamente (COLLABORATOR) ────────────────────────────────
 
