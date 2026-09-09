@@ -10,6 +10,7 @@ import { LinkButton }     from "@/components/shared/link-button"
 import { HistoryPagination } from "@/components/shared/history-pagination"
 import { LessonSelfActions } from "./_components/lesson-self-actions"
 import { CalendarDays, Clock, MapPin, Monitor, Star, BookOpen, Users } from "lucide-react"
+import { aulasDeMinutos, fmtAulas, AULA_PACOTE_WHERE, AULAO_WHERE } from "@/lib/lessons"
 import { format }         from "date-fns"
 import { ptBR }           from "date-fns/locale"
 import { formatBR, nowBrazil } from "@/lib/datetime"
@@ -44,7 +45,7 @@ export default async function AulasPage({ searchParams }: AulasPageProps) {
 
   const page = Math.max(1, Number(pageParam) || 1)
 
-  const [lessons, totalLessons, requests, policy] = await Promise.all([
+  const [lessons, totalLessons, aulasAgg, totalAuloes, requests, policy] = await Promise.all([
     prisma.lesson.findMany({
       where:   { participants: { some: { studentId: student.id } } },
       include: {
@@ -56,8 +57,18 @@ export default async function AulasPage({ searchParams }: AulasPageProps) {
       skip:    (page - 1) * PER_PAGE,
       take:    PER_PAGE,
     }),
+    // Duas contagens diferentes de propósito: a paginação precisa do número de
+    // LINHAS (aulões incluídos, pois aparecem na lista), mas o "N aulas" exibido
+    // é em hora-aula e só de aula de pacote. Ver src/lib/lessons.ts.
     prisma.lesson.count({
       where: { participants: { some: { studentId: student.id } } },
+    }),
+    prisma.lesson.aggregate({
+      where: { ...AULA_PACOTE_WHERE, participants: { some: { studentId: student.id } } },
+      _sum:  { duration: true },
+    }),
+    prisma.lesson.count({
+      where: { ...AULAO_WHERE, participants: { some: { studentId: student.id } } },
     }),
     prisma.lessonRequest.findMany({
       where:   { studentId: student.id, status: "PENDING" },
@@ -68,6 +79,7 @@ export default async function AulasPage({ searchParams }: AulasPageProps) {
   ])
 
   const totalPages = Math.ceil(totalLessons / PER_PAGE)
+  const totalAulas = aulasDeMinutos(aulasAgg._sum.duration)
   const now        = nowBrazil()
 
   return (
@@ -120,7 +132,8 @@ export default async function AulasPage({ searchParams }: AulasPageProps) {
             </CardTitle>
             {totalLessons > 0 && (
               <p className="text-xs text-muted-foreground">
-                {totalLessons} aula{totalLessons !== 1 ? "s" : ""}
+                {fmtAulas(totalAulas)} aula{totalAulas !== 1 ? "s" : ""}
+                {totalAuloes > 0 && ` · ${totalAuloes} aul${totalAuloes === 1 ? "ão" : "ões"}`}
                 {totalPages > 1 && ` · página ${page} de ${totalPages}`}
               </p>
             )}

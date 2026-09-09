@@ -17,6 +17,7 @@ import { getPeriodBounds } from "@/lib/reports/period"
 import { whereVencida } from "@/lib/payments"
 import { getQualitySummary } from "@/lib/reports/quality"
 import { wherePacoteUtilizavel } from "@/lib/packages"
+import { somaAulas, fmtAulas, AULA_WHERE } from "@/lib/lessons"
 
 function brl(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })
@@ -63,8 +64,8 @@ async function getOpsData(periodo: Periodo) {
       take:    50,
     }),
     prisma.lesson.findMany({
-      where:  { scheduledAt: { gte: fetchFrom } },
-      select: { status: true, scheduledAt: true },
+      where:  { ...AULA_WHERE, scheduledAt: { gte: fetchFrom } },
+      select: { status: true, scheduledAt: true, duration: true },
     }),
     prisma.student.count({
       where: { packages: { some: wherePacoteUtilizavel(now) } },
@@ -102,8 +103,11 @@ async function getOpsData(periodo: Periodo) {
     : null
 
   // ── Lessons ─────────────────────────────────────────────────────────────────
+  // Em aulas (hora-aula), não em linhas: uma aula de 2h são 2 aulas — mesma
+  // unidade do pacote e do repasse. Ver src/lib/lessons.ts. COMPROMISSO já ficou
+  // de fora na consulta.
   const countLessons = (status: string, s: Date, e: Date) =>
-    allLessons.filter((l) => l.status === status && l.scheduledAt >= s && l.scheduledAt <= e).length
+    somaAulas(allLessons.filter((l) => l.status === status && l.scheduledAt >= s && l.scheduledAt <= e))
 
   const aulasMes     = countLessons("COMPLETED", start, end)
   const aulasPrevMes = countLessons("COMPLETED", prevStart, prevEnd)
@@ -372,7 +376,7 @@ export default async function AdminOpsPage({
         />
         <KpiCell
           label="Aulas realizadas"
-          value={d.aulasMes.toLocaleString("pt-BR")}
+          value={fmtAulas(d.aulasMes)}
           delta={aulasDeltaNum != null ? `${aulasDeltaNum >= 0 ? "+" : ""}${aulasDeltaNum}%` : "novo"}
           deltaPos={aulasDeltaNum != null ? aulasDeltaNum >= 0 : null}
           sub={`Meta ${d.aulasGoal} · ${pct(d.aulasGoal > 0 ? d.aulasMes / d.aulasGoal : 0)}`}

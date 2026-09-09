@@ -1,4 +1,5 @@
 import { auth }             from "@/lib/auth"
+import { fmtAulas }         from "@/lib/lessons"
 import { prisma }           from "@/lib/prisma"
 import { redirect }         from "next/navigation"
 import { getActiveStudent } from "@/lib/get-active-student"
@@ -290,7 +291,7 @@ export default async function AlunoDashboard() {
             <>
               <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 14 }}>
                 <span style={{ fontSize: 36, fontWeight: 600, letterSpacing: "-0.025em", fontFamily: "ui-monospace, monospace", color: "var(--primary)" }}>
-                  {Number(activePackage.remainingLessons)}
+                  {fmtAulas(Number(activePackage.remainingLessons))}
                 </span>
                 <span style={{ fontSize: 14, color: "var(--subtle)" }}>
                   aulas restantes <span style={{ color: "var(--subtle)" }}>· de {Number(activePackage.totalLessons)}</span>
@@ -306,7 +307,7 @@ export default async function AlunoDashboard() {
               <div style={{ fontSize: 12, color: "var(--subtle)", lineHeight: 1.5, marginBottom: 14 }}>
                 {paceStr
                   ? <>Estimativa: pacote acaba em <b style={{ color: "var(--text)", fontFamily: "ui-monospace, monospace" }}>{paceStr}</b>.</>
-                  : <>{Number(activePackage.remainingLessons)} aulas restantes no pacote atual.</>
+                  : <>{fmtAulas(Number(activePackage.remainingLessons))} aulas restantes no pacote atual.</>
                 }
               </div>
 
@@ -352,11 +353,11 @@ export default async function AlunoDashboard() {
                 <div>
                   <div style={{ fontSize: 12, color: "var(--text-2)" }}>Pacote</div>
                   <div style={{ fontSize: 10.5, color: "var(--subtle)" }}>
-                    {otherPackage ? `${Number(otherPackage.remainingLessons)} restantes` : "sem pacote ativo"}
+                    {otherPackage ? `${fmtAulas(Number(otherPackage.remainingLessons))} restantes` : "sem pacote ativo"}
                   </div>
                 </div>
                 <div style={{ fontSize: 14, fontWeight: 600, fontFamily: "ui-monospace, monospace" }}>
-                  {otherPackage ? `${Number(otherPackage.totalLessons) - Number(otherPackage.remainingLessons)} / ${Number(otherPackage.totalLessons)}` : "—"}
+                  {otherPackage ? `${fmtAulas(Number(otherPackage.totalLessons) - Number(otherPackage.remainingLessons))} / ${fmtAulas(Number(otherPackage.totalLessons))}` : "—"}
                 </div>
               </div>
 

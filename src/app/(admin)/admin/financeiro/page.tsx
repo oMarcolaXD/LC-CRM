@@ -2,6 +2,7 @@ import { prisma }      from "@/lib/prisma"
 import { getPayoutAlerts } from "@/lib/actions/financeiro"
 import { whereAVencer, whereVencida } from "@/lib/payments"
 import { wherePacoteUtilizavel } from "@/lib/packages"
+import { aulasDeMinutos, fmtAulas, AULA_WHERE } from "@/lib/lessons"
 import { nowBrazil } from "@/lib/datetime"
 import { PageHeader }  from "@/components/shared/page-header"
 import { LinkButton }  from "@/components/shared/link-button"
@@ -43,7 +44,11 @@ export default async function FinanceiroPage() {
       where:   { month: month + 1, year },
       include: { teacher: { include: { user: true } } },
     }),
-    prisma.lesson.count({ where: { status: "COMPLETED", scheduledAt: { gte: start, lte: end } } }),
+    // Soma de duração, não contagem de linhas: uma aula de 2h são 2 aulas.
+    prisma.lesson.aggregate({
+      where: { ...AULA_WHERE, status: "COMPLETED", scheduledAt: { gte: start, lte: end } },
+      _sum:  { duration: true },
+    }),
     // Ativo de verdade: com saldo e dentro do prazo (src/lib/packages.ts).
     prisma.lessonPackage.count({ where: wherePacoteUtilizavel(now) }),
     prisma.payment.findMany({
@@ -68,7 +73,7 @@ export default async function FinanceiroPage() {
     { title: "A Receber",         value: brl(aReceber),      icon: DollarSign,  color: "text-primary",    bg: "bg-primary/10"  },
     { title: "Inadimplência",     value: brl(inadimplente),  icon: AlertCircle, color: "text-destructive",bg: "bg-destructive/10"},
     { title: "Repasses do Mês",   value: brl(totalRepasses), icon: Wallet,      color: "text-secondary",  bg: "bg-secondary/10"},
-    { title: "Aulas Realizadas",  value: aulasCompletadas,   icon: BookOpen,    color: "text-blue-600",   bg: "bg-blue-50"     },
+    { title: "Aulas Realizadas",  value: fmtAulas(aulasDeMinutos(aulasCompletadas._sum.duration)), icon: BookOpen, color: "text-blue-600", bg: "bg-blue-50" },
     { title: "Pacotes Ativos",    value: pacotesAtivos,      icon: Users,       color: "text-purple-600", bg: "bg-purple-50"   },
   ]
 

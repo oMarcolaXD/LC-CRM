@@ -4,6 +4,7 @@ import { useState, useMemo } from "react"
 import Link from "next/link"
 import { ModoBadge } from "@/components/shared/modo-badge"
 import { Search, BookOpen, GraduationCap } from "lucide-react"
+import { fmtAulas } from "@/lib/lessons"
 
 export type AlunoProf = {
   id:              string
@@ -127,8 +128,8 @@ export function AlunosTable({ alunos }: Props) {
 
                     {/* Aulas */}
                     <td className="px-[14px] py-[10px] text-center">
-                      <span className="font-mono text-[12px] font-semibold">{a.aulasCompletas}</span>
-                      <span className="font-mono text-[10.5px] text-muted-foreground">/{a.totalAulas}</span>
+                      <span className="font-mono text-[12px] font-semibold">{fmtAulas(a.aulasCompletas)}</span>
+                      <span className="font-mono text-[10.5px] text-muted-foreground">/{fmtAulas(a.totalAulas)}</span>
                     </td>
 
                     {/* Pacote */}

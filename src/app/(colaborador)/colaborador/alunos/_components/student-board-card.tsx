@@ -1,6 +1,7 @@
 "use client"
 
 import Link          from "next/link"
+import { fmtAulas } from "@/lib/lessons"
 import { useRouter } from "next/navigation"
 import { format }    from "date-fns"
 import { ptBR }      from "date-fns/locale"
@@ -67,7 +68,7 @@ function getStatusInfo(
     return { label: "Última aula", cls: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400" }
   }
   if (remaining <= 4) {
-    return { label: `${remaining} aulas restantes`, cls: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-400" }
+    return { label: `${fmtAulas(remaining)} aulas restantes`, cls: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-400" }
   }
   return { label: "Pacote ativo", cls: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400" }
 }
@@ -186,7 +187,7 @@ export function StudentBoardCard({ student, column, detailBasePath }: StudentBoa
         <div>
           <div className="flex items-center justify-between text-xs text-muted-foreground mb-1.5">
             <span className="font-medium tabular-nums">
-              {remaining} / {Number(pkg.totalLessons)}
+              {fmtAulas(remaining)} / {fmtAulas(Number(pkg.totalLessons))}
             </span>
           </div>
           <div className="h-1.5 w-full rounded-full bg-muted">

@@ -9,6 +9,7 @@ import {
   GraduationCap, CalendarDays, Wallet, School,
   CheckCircle2,
 } from "lucide-react"
+import { somaAulas, fmtAulas, AULA_PACOTE_WHERE } from "@/lib/lessons"
 
 const EDUCATION_LABEL: Record<string, string> = {
   EF2:        "Fund. 2",
@@ -34,18 +35,20 @@ export default async function MeusAlunosPage() {
 
   const [lessonsCompleted, lessonsUpcoming, pendingPayments, activePackages] =
     await Promise.all([
-      prisma.lessonParticipant.groupBy({
-        by:    ["studentId"],
-        where: { studentId: { in: studentIds }, lesson: { status: "COMPLETED" } },
-        _count: { _all: true },
+      // `groupBy` só conta linhas, e uma aula de 2h são 2 aulas — a mesma unidade
+      // que o pacote debita. Como não dá para somar `lesson.duration` num
+      // groupBy de participante, trazemos a duração e somamos aqui.
+      // Aulão fica fora: é cobrança avulsa, não sai do saldo. Ver lessons.ts.
+      prisma.lessonParticipant.findMany({
+        where:  { studentId: { in: studentIds }, lesson: { ...AULA_PACOTE_WHERE, status: "COMPLETED" } },
+        select: { studentId: true, lesson: { select: { duration: true } } },
       }),
-      prisma.lessonParticipant.groupBy({
-        by:    ["studentId"],
+      prisma.lessonParticipant.findMany({
         where: {
           studentId: { in: studentIds },
-          lesson:    { status: { in: ["SCHEDULED", "CONFIRMED"] }, scheduledAt: { gte: now } },
+          lesson:    { ...AULA_PACOTE_WHERE, status: { in: ["SCHEDULED", "CONFIRMED"] }, scheduledAt: { gte: now } },
         },
-        _count: { _all: true },
+        select: { studentId: true, lesson: { select: { duration: true } } },
       }),
       prisma.payment.groupBy({
         by:    ["studentId"],
@@ -63,8 +66,8 @@ export default async function MeusAlunosPage() {
     studentIds.map((id) => [
       id,
       {
-        completed:       lessonsCompleted.find((r) => r.studentId === id)?._count._all ?? 0,
-        upcoming:        lessonsUpcoming.find((r) => r.studentId === id)?._count._all ?? 0,
+        completed:       somaAulas(lessonsCompleted.filter((r) => r.studentId === id).map((r) => r.lesson)),
+        upcoming:        somaAulas(lessonsUpcoming.filter((r) => r.studentId === id).map((r) => r.lesson)),
         pendingPayments: pendingPayments.find((r) => r.studentId === id)?._count._all ?? 0,
         saldo:           Number(activePackages.find((r) => r.studentId === id)?._sum.remainingLessons ?? 0),
       },
@@ -134,21 +137,21 @@ export default async function MeusAlunosPage() {
                   <div className="flex items-center gap-1.5 bg-muted/50 rounded-md px-2.5 py-1.5">
                     <GraduationCap className="w-3.5 h-3.5 text-primary shrink-0" />
                     <div>
-                      <p className="text-xs font-semibold">{stats.saldo}</p>
+                      <p className="text-xs font-semibold">{fmtAulas(stats.saldo)}</p>
                       <p className="text-[10px] text-muted-foreground leading-none">aulas no saldo</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-1.5 bg-muted/50 rounded-md px-2.5 py-1.5">
                     <CalendarDays className="w-3.5 h-3.5 text-blue-500 shrink-0" />
                     <div>
-                      <p className="text-xs font-semibold">{stats.upcoming}</p>
+                      <p className="text-xs font-semibold">{fmtAulas(stats.upcoming)}</p>
                       <p className="text-[10px] text-muted-foreground leading-none">próximas aulas</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-1.5 bg-muted/50 rounded-md px-2.5 py-1.5">
                     <CheckCircle2 className="w-3.5 h-3.5 text-green-500 shrink-0" />
                     <div>
-                      <p className="text-xs font-semibold">{stats.completed}</p>
+                      <p className="text-xs font-semibold">{fmtAulas(stats.completed)}</p>
                       <p className="text-[10px] text-muted-foreground leading-none">aulas feitas</p>
                     </div>
                   </div>

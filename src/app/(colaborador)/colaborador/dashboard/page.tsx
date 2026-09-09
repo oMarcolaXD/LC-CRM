@@ -11,6 +11,7 @@ import {
 import { ptBR } from "date-fns/locale"
 import { toBrazilDate, nowBrazil } from "@/lib/datetime"
 import { whereVencida } from "@/lib/payments"
+import { somaAulas, fmtAulas, ehAula } from "@/lib/lessons"
 
 function brl(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })
@@ -40,7 +41,7 @@ async function getColabData(userId?: string) {
     }),
     prisma.lesson.findMany({
       where:  { scheduledAt: { gte: startOfDay(now), lte: endOfDay(now) } },
-      select: { teacherId: true, scheduledAt: true, status: true },
+      select: { teacherId: true, scheduledAt: true, status: true, duration: true, lessonType: true },
     }),
     // Vencido = não pago com data no passado. Ver src/lib/payments.ts.
     prisma.payment.findMany({
@@ -60,9 +61,12 @@ async function getColabData(userId?: string) {
   ])
 
   // ── KPI computations ─────────────────────────────────────────────────────────
-  const confirmadasHoje = todayLessons.filter(
-    (l) => ["SCHEDULED", "CONFIRMED"].includes(l.status)
-  ).length
+  // Em hora-aula (uma aula de 2h são 2) e sem COMPROMISSO, que é anotação de
+  // agenda e não aula. COMPROMISSO segue na consulta porque ocupa o professor na
+  // grade de disponibilidade abaixo. Ver src/lib/lessons.ts.
+  const confirmadasHoje = somaAulas(
+    todayLessons.filter((l) => ehAula(l) && ["SCHEDULED", "CONFIRMED"].includes(l.status))
+  )
   const pendingOldCount = pendingRequests.filter(
     (r) => differenceInHours(now, r.requestedAt) > 12
   ).length
@@ -344,7 +348,7 @@ export default async function ColaboradorDashboard() {
         />
         <ColabKpiCell
           label="Aulas confirmadas"
-          value={d.confirmadasHoje}
+          value={fmtAulas(d.confirmadasHoje)}
           sub="agendadas para hoje"
           tag="hoje"
           tagColor="success"

@@ -11,6 +11,8 @@
  * tela, então não pode arrastar o Prisma junto.
  */
 
+import type { LessonType } from "@prisma/client"
+
 /** Duração padrão de uma aula, em minutos (espelha o default do schema). */
 export const DEFAULT_DURATION = 60
 
@@ -32,4 +34,53 @@ export function fmtAulas(n: number): string {
 /** "1 aula" · "2 aulas" · "1,5 aula" */
 export function labelAulas(n: number): string {
   return `${fmtAulas(n)} ${n === 1 ? "aula" : "aulas"}`
+}
+
+/**
+ * Minutos somados no banco → aulas. Par de `somaAulas` para quando a contagem
+ * vem de um `_sum: { duration: true }` em vez de uma lista carregada.
+ */
+export function aulasDeMinutos(totalMinutes: number | null | undefined): number {
+  return (totalMinutes ?? 0) / 60
+}
+
+/**
+ * COMPROMISSO é anotação de agenda (reunião, bloqueio), não aula: não debita
+ * pacote, não fatura e não pode entrar em nenhuma contagem de aulas. O único
+ * lugar que o inclui de propósito é o repasse ao professor — ver
+ * src/lib/reports/costs.ts.
+ *
+ * Espalhe em qualquer `where` de aula: `{ ...AULA_WHERE, status: "COMPLETED" }`.
+ */
+export const AULA_WHERE = { lessonType: { not: "COMPROMISSO" } } as const
+
+/** Versão em memória do filtro acima, para listas já carregadas. */
+export function ehAula(l: { lessonType?: string | null }): boolean {
+  return l.lessonType !== "COMPROMISSO"
+}
+
+/**
+ * Aula que sai do pacote: INDIVIDUAL e GROUP (dupla). Ambas debitam
+ * `remainingLessons` em hora-aula.
+ *
+ * AULÃO fica de fora de propósito: é vendido à parte — cada inscrito ganha uma
+ * cobrança avulsa (`pricePerStudent`) e o pacote nunca é tocado (ver
+ * `criarAulaoAction` em src/lib/actions/lesson-request.ts). Somá-lo ao "aulas
+ * realizadas" do aluno faz o número divergir do saldo, que é exatamente o que
+ * levava as pessoas a conferir na mão.
+ *
+ * ⚠ Do lado do PROFESSOR vale o oposto: `computePayout` paga o aulão como
+ * qualquer outra aula, então repasse, custo e ocupação usam `AULA_WHERE`.
+ * Este filtro é só para números que o aluno/responsável lê ao lado do saldo.
+ */
+export const AULA_PACOTE_WHERE = {
+  lessonType: { in: ["INDIVIDUAL", "GROUP"] as LessonType[] },
+}
+
+/** `where` só dos aulões — contados por encontro, não em hora-aula. */
+export const AULAO_WHERE = { lessonType: "AULAO" as LessonType }
+
+/** Versão em memória de `AULA_PACOTE_WHERE`. */
+export function ehAulaDePacote(l: { lessonType?: string | null }): boolean {
+  return l.lessonType === "INDIVIDUAL" || l.lessonType === "GROUP"
 }

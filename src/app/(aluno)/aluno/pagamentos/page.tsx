@@ -1,4 +1,5 @@
 import { auth }             from "@/lib/auth"
+import { fmtAulas }         from "@/lib/lessons"
 import { prisma }           from "@/lib/prisma"
 import { situacao, SITUACAO_LABEL, SITUACAO_VARIANT, type SituacaoCobranca } from "@/lib/payments"
 import { nowBrazil }        from "@/lib/datetime"
@@ -110,7 +111,7 @@ export default async function AlunoPagamentosPage() {
                       <p className="text-xs text-muted-foreground">{brl(Number(pkg.pricePerLesson))}/aula</p>
                     </div>
                     <div className="text-right">
-                      <p className="text-lg font-bold text-primary">{Number(pkg.remainingLessons)}</p>
+                      <p className="text-lg font-bold text-primary">{fmtAulas(Number(pkg.remainingLessons))}</p>
                       <p className="text-xs text-muted-foreground">restantes</p>
                     </div>
                   </div>

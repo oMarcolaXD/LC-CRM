@@ -13,7 +13,8 @@ import {
 import { ptBR } from "date-fns/locale"
 import { formatBR, toBrazilDate, nowBrazil } from "@/lib/datetime"
 import { teacherWhereForSession } from "@/lib/teacher-session"
-import { somaAulas, aulasDe, fmtAulas } from "@/lib/lessons"
+import { loadRateHistory, rateAt } from "@/lib/teacher-rates"
+import { somaAulas, aulasDe, fmtAulas, ehAula } from "@/lib/lessons"
 import type { Prisma } from "@prisma/client"
 
 function brl(v: number) {
@@ -58,7 +59,7 @@ async function getProfData(where: Prisma.TeacherWhereInput) {
 
   const rate = Number(teacher.hourlyRate)
 
-  const [todayLessons, allLessons] = await Promise.all([
+  const [todayLessons, allLessons, rateHistory] = await Promise.all([
     prisma.lesson.findMany({
       where: {
         teacherId:   teacher.id,
@@ -92,16 +93,32 @@ async function getProfData(where: Prisma.TeacherWhereInput) {
       },
       orderBy: { scheduledAt: "desc" },
     }),
+    loadRateHistory([teacher.id]),
   ])
 
   // ── MiniStats ─────────────────────────────────────────────────────────────────
   // Contagem em aulas, não em linhas: uma aula de 2h são 2 aulas — a mesma
   // unidade que o pacote debita e que `computePayout` paga. Contar linhas fazia
   // o professor ver 4 onde recebeu por 5. Ver src/lib/lessons.ts.
-  const aulasHoje    = somaAulas(todayLessons.filter(l => ["SCHEDULED","CONFIRMED","COMPLETED"].includes(l.status)))
-  const aulasMes     = somaAulas(allLessons.filter(l => l.status === "COMPLETED" && l.scheduledAt >= thisStart && l.scheduledAt <= thisEnd))
-  const aulasPrevMes = somaAulas(allLessons.filter(l => l.status === "COMPLETED" && l.scheduledAt >= prevStart && l.scheduledAt <= prevEnd))
-  const ganhosMes    = aulasMes * rate
+  //
+  // COMPROMISSO (reunião, bloqueio de agenda) não é aula e fica fora das
+  // contagens — mas ENTRA nos ganhos, porque `computePayout` não filtra por tipo
+  // e é ele quem define o que o professor recebe. Ver src/lib/reports/costs.ts.
+  const doMes        = (l: { status: string; scheduledAt: Date }) =>
+    l.status === "COMPLETED" && l.scheduledAt >= thisStart && l.scheduledAt <= thisEnd
+
+  // Ganhos = Σ hora-aula × taxa VIGENTE NA DATA da aula, igual a `computePayout`.
+  // Multiplicar tudo pela taxa de hoje reescrevia meses já trabalhados a cada
+  // reajuste — é o problema que `teacher_rates` existe para evitar — e fazia
+  // este dashboard discordar da tela de Pagamentos do mesmo professor.
+  const faixas       = rateHistory.get(teacher.id)
+  const valorDe      = (ls: { duration: number | null; scheduledAt: Date }[]) =>
+    ls.reduce((s, l) => s + aulasDe(l.duration) * rateAt(faixas, l.scheduledAt, rate), 0)
+
+  const aulasHoje    = somaAulas(todayLessons.filter(l => ehAula(l) && ["SCHEDULED","CONFIRMED","COMPLETED"].includes(l.status)))
+  const aulasMes     = somaAulas(allLessons.filter(l => ehAula(l) && doMes(l)))
+  const aulasPrevMes = somaAulas(allLessons.filter(l => ehAula(l) && l.status === "COMPLETED" && l.scheduledAt >= prevStart && l.scheduledAt <= prevEnd))
+  const ganhosMes    = valorDe(allLessons.filter(doMes))
   const deltaAulas   = aulasPrevMes > 0 ? Math.round(((aulasMes - aulasPrevMes) / aulasPrevMes) * 100) : null
 
   const ratedLessons = allLessons.filter(l => l.studentRating != null)
@@ -195,22 +212,23 @@ async function getProfData(where: Prisma.TeacherWhereInput) {
   // ── Ganhos chart (6 meses) ────────────────────────────────────────────────────
   const ganhosMeses = months.map(m => ({
     m: m.label,
-    v: somaAulas(allLessons.filter(l => l.status === "COMPLETED" && l.scheduledAt >= m.start && l.scheduledAt <= m.end)) * rate,
+    v: valorDe(allLessons.filter(l => l.status === "COMPLETED" && l.scheduledAt >= m.start && l.scheduledAt <= m.end)),
   }))
   const ganhosMax = Math.max(...ganhosMeses.map(m => m.v), 1)
 
-  const subjectBreak = new Map<string, { name: string; aulas: number }>()
-  for (const l of allLessons.filter(l => l.status === "COMPLETED" && l.scheduledAt >= thisStart)) {
+  const subjectBreak = new Map<string, { name: string; aulas: number; valor: number }>()
+  for (const l of allLessons.filter(l => ehAula(l) && l.status === "COMPLETED" && l.scheduledAt >= thisStart)) {
     const sid = l.subjectId ?? "other"
-    const cur = subjectBreak.get(sid) ?? { name: l.subject?.name ?? "Outros", aulas: 0 }
+    const cur = subjectBreak.get(sid) ?? { name: l.subject?.name ?? "Outros", aulas: 0, valor: 0 }
     cur.aulas += aulasDe(l.duration)
+    cur.valor += aulasDe(l.duration) * rateAt(faixas, l.scheduledAt, rate)
     subjectBreak.set(sid, cur)
   }
   const BREAKDOWN_COLORS = ["var(--primary)", "var(--info)", "var(--success)", "var(--warn)"]
   const ganhosBreakdown = Array.from(subjectBreak.values())
     .sort((a, b) => b.aulas - a.aulas)
     .slice(0, 4)
-    .map((s, i) => ({ ...s, valor: s.aulas * rate, color: BREAKDOWN_COLORS[i] ?? "var(--subtle)" }))
+    .map((s, i) => ({ ...s, color: BREAKDOWN_COLORS[i] ?? "var(--subtle)" }))
 
   const diasAtePagamento = Math.max(1, differenceInDays(endOfMonth(now), now))
 

@@ -1,4 +1,5 @@
 import { prisma }        from "@/lib/prisma"
+import { fmtAulas }         from "@/lib/lessons"
 import { situacao, whereSituacao, SITUACAO_LABEL, SITUACAO_VARIANT, type SituacaoCobranca } from "@/lib/payments"
 import { nowBrazil }     from "@/lib/datetime"
 import { wherePacoteUtilizavel } from "@/lib/packages"
@@ -186,9 +187,9 @@ export default async function ColaboradorFinanceiroPage({ searchParams }: Financ
                         Number(pkg.remainingLessons) <= 1 ? "text-destructive" :
                         Number(pkg.remainingLessons) <= 2 ? "text-orange-600" : "text-foreground"
                       }`}>
-                        {Number(pkg.remainingLessons)}
+                        {fmtAulas(Number(pkg.remainingLessons))}
                       </p>
-                      <p className="text-xs text-muted-foreground">de {Number(pkg.totalLessons)}</p>
+                      <p className="text-xs text-muted-foreground">de {fmtAulas(Number(pkg.totalLessons))}</p>
                     </div>
                   </div>
                 )

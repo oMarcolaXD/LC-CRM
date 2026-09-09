@@ -11,6 +11,7 @@ import { ptBR } from "date-fns/locale"
 import { formatBR, nowBrazil, toBrazilDate } from "@/lib/datetime"
 import { teacherWhereForSession } from "@/lib/teacher-session"
 import type { Prisma } from "@prisma/client"
+import { aulasDe, AULA_WHERE } from "@/lib/lessons"
 
 function relDate(date: Date, now: Date): string {
   // `now` já vem no relógio de Brasília (nowBrazil); alinhamos a data da aula
@@ -37,6 +38,7 @@ async function getMeusAlunos(where: Prisma.TeacherWhereInput): Promise<AlunoProf
 
   const lessons = await prisma.lesson.findMany({
     where: {
+      ...AULA_WHERE,
       teacherId:   teacher.id,
       scheduledAt: { gte: sixMonthsAgo },
     },
@@ -110,11 +112,13 @@ async function getMeusAlunos(where: Prisma.TeacherWhereInput): Promise<AlunoProf
 
       const row = map.get(sid)!
 
+      // Em hora-aula, não em linhas: uma aula de 2h são 2 aulas — mesma unidade
+      // do pacote e do repasse. Ver src/lib/lessons.ts.
       if (["SCHEDULED", "CONFIRMED", "COMPLETED"].includes(lesson.status)) {
-        row.totalAulas++
+        row.totalAulas += aulasDe(lesson.duration)
       }
       if (lesson.status === "COMPLETED") {
-        row.aulasCompletas++
+        row.aulasCompletas += aulasDe(lesson.duration)
       }
 
       // Track most recent lesson

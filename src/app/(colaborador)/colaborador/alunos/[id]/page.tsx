@@ -31,6 +31,7 @@ import { AddPaymentDialog }                   from "./_components/add-payment-di
 import { DeletePaymentButton }               from "./_components/delete-payment-button"
 import { ReceiptDialog }                     from "./_components/receipt-dialog"
 import { PaymentStatusSelector }             from "./_components/payment-status-selector"
+import { aulasDeMinutos, fmtAulas, AULA_PACOTE_WHERE, AULAO_WHERE } from "@/lib/lessons"
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -110,8 +111,9 @@ export default async function StudentDetailPage({ params, searchParams }: Props)
   // Step 2 — all queries in a single transaction (1 connection, sequential)
   const [
     student,
-    totalDone,
-    totalMissed,
+    totalDoneAgg,
+    totalMissedAgg,
+    totalAuloes,
     totalInvestedAgg,
     heatmapLessons,
     recentLessons,
@@ -137,11 +139,20 @@ export default async function StudentDetailPage({ params, searchParams }: Props)
         },
       },
     }),
-    prisma.lesson.count({
-      where: { participants: { some: { studentId: id } }, status: "COMPLETED" },
+    // Em hora-aula, não em linhas: é a mesma unidade que o pacote debita, então
+    // "8 realizadas" tem que bater com as 8 aulas descontadas do saldo.
+    // Aulão fica fora — é cobrança avulsa, não sai do pacote. Ver lessons.ts.
+    prisma.lesson.aggregate({
+      where: { ...AULA_PACOTE_WHERE, participants: { some: { studentId: id } }, status: "COMPLETED" },
+      _sum:  { duration: true },
     }),
+    prisma.lesson.aggregate({
+      where: { ...AULA_PACOTE_WHERE, participants: { some: { studentId: id } }, status: "MISSED" },
+      _sum:  { duration: true },
+    }),
+    // Aulões contam por encontro, não em hora-aula: são vendidos por inscrição.
     prisma.lesson.count({
-      where: { participants: { some: { studentId: id } }, status: "MISSED" },
+      where: { ...AULAO_WHERE, participants: { some: { studentId: id } }, status: "COMPLETED" },
     }),
     prisma.payment.aggregate({
       where: { studentId: id, status: "PAID" },
@@ -223,6 +234,8 @@ export default async function StudentDetailPage({ params, searchParams }: Props)
   const pkgIndex    = student.packages.findIndex(p => p.status === "ACTIVE")
   const packageCode = pkgIndex >= 0 ? `PKT-${String(pkgIndex + 1).padStart(3, "0")}` : null
 
+  const totalDone   = aulasDeMinutos(totalDoneAgg._sum.duration)
+  const totalMissed = aulasDeMinutos(totalMissedAgg._sum.duration)
   const frequency   = Math.round(totalDone / Math.max(1, totalDone + totalMissed) * 100)
   const totalInvested = Number(totalInvestedAgg._sum.amount ?? 0)
   const createdAt   = student.createdAt
@@ -506,8 +519,13 @@ export default async function StudentDetailPage({ params, searchParams }: Props)
         {/* Total de aulas */}
         <div className="rounded-xl border border-border bg-card p-3">
           <p className="text-[11px] text-muted-foreground uppercase tracking-wide mb-1">Total de aulas</p>
-          <p className="text-lg font-bold">{totalDone + totalMissed}</p>
-          <p className="text-[11px] text-muted-foreground">{totalDone} realizadas</p>
+          <p className="text-lg font-bold">{fmtAulas(totalDone + totalMissed)}</p>
+          <p className="text-[11px] text-muted-foreground">{fmtAulas(totalDone)} realizadas</p>
+          {totalAuloes > 0 && (
+            <p className="text-[11px] text-muted-foreground">
+              + {totalAuloes} aul{totalAuloes === 1 ? "ão" : "ões"} (avulso)
+            </p>
+          )}
         </div>
 
         {/* Frequência */}
@@ -516,7 +534,7 @@ export default async function StudentDetailPage({ params, searchParams }: Props)
           <p className={`text-lg font-bold ${frequency >= 90 ? "text-green-600" : frequency >= 70 ? "text-yellow-600" : "text-red-600"}`}>
             {frequency}%
           </p>
-          <p className="text-[11px] text-muted-foreground">{totalMissed} falta{totalMissed !== 1 ? "s" : ""}</p>
+          <p className="text-[11px] text-muted-foreground">{fmtAulas(totalMissed)} falta{totalMissed !== 1 ? "s" : ""}</p>
         </div>
 
         {/* Total investido */}
@@ -756,7 +774,7 @@ export default async function StudentDetailPage({ params, searchParams }: Props)
                 </CardTitle>
                 <div className="flex items-center gap-2 flex-wrap">
                   <p className="text-xs text-muted-foreground">
-                    {totalDone + totalMissed} no total · {totalDone} realizadas · {totalMissed} falta{totalMissed !== 1 ? "s" : ""}
+                    {fmtAulas(totalDone + totalMissed)} do pacote · {fmtAulas(totalDone)} realizadas · {fmtAulas(totalMissed)} falta{totalMissed !== 1 ? "s" : ""}{totalAuloes > 0 ? ` · ${totalAuloes} aul${totalAuloes === 1 ? "ão" : "ões"}` : ""}
                   </p>
                   <RegisterPastLessonDialog
                     studentId={id}
