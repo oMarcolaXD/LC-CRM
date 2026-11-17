@@ -4,7 +4,10 @@ import { CreateUserForm } from "@/app/(admin)/admin/usuarios/novo/create-user-fo
 
 export default async function NovoUsuarioColabPage() {
   const guardians = await prisma.guardian.findMany({
-    include: { user: { select: { name: true } } },
+    include: {
+      user:     { select: { name: true, phone: true } },
+      students: { select: { name: true }, orderBy: { name: "asc" } },
+    },
     orderBy: { user: { name: "asc" } },
   })
 
@@ -17,7 +20,7 @@ export default async function NovoUsuarioColabPage() {
       />
       <CreateUserForm
         canCreateAdmin={false}
-        guardians={guardians.map((g) => ({ id: g.id, name: g.user.name }))}
+        guardians={guardians.map((g) => ({ id: g.id, name: g.user.name, phone: g.user.phone, students: g.students.map((s) => s.name) }))}
         students={[]}
       />
     </div>

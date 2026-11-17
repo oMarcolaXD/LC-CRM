@@ -7,6 +7,7 @@ import { Input }          from "@/components/ui/input"
 import { Label }          from "@/components/ui/label"
 import { createPaymentAction } from "@/lib/actions/financeiro"
 import { PaymentActions } from "./payment-actions"
+import { SearchSelect }   from "@/components/shared/search-list"
 import { DollarSign, Plus, AlertCircle } from "lucide-react"
 import { format }         from "date-fns"
 import { ptBR }           from "date-fns/locale"
@@ -41,8 +42,8 @@ export default async function PagamentosPage({ searchParams }: PagamentosPagePro
       take:    100,
     }),
     prisma.student.findMany({
-      include: { user: true },
-      orderBy: { user: { name: "asc" } },
+      select:  { id: true, name: true, guardian: { select: { user: { select: { name: true } } } } },
+      orderBy: { name: "asc" },
     }),
     // Os totais somam a base inteira, não as 100 linhas exibidas — antes o card
     // de resumo mudava conforme a página e a aba selecionada.
@@ -83,11 +84,15 @@ export default async function PagamentosPage({ searchParams }: PagamentosPagePro
             <form action={createPaymentAction} className="space-y-4">
               <div className="space-y-2">
                 <Label>Aluno *</Label>
-                <select name="studentId" required
-                  className="flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring">
-                  <option value="">Selecione o aluno</option>
-                  {students.map((s) => <option key={s.id} value={s.id}>{s.user?.name ?? "Aluno"}</option>)}
-                </select>
+                <SearchSelect
+                  name="studentId"
+                  value=""
+                  items={students.map((s) => ({
+                    id:    s.id,
+                    label: s.name,
+                    hint:  s.guardian ? `Resp: ${s.guardian.user.name}` : null,
+                  }))}
+                />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">

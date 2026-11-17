@@ -14,8 +14,9 @@ import { format }   from "date-fns"
 import { mensagemDeErro } from "@/lib/error-message"
 import { ouFalhe } from "@/lib/action-result"
 import { TeacherSubjectPicker } from "@/components/shared/teacher-subject-picker"
+import { SearchList } from "@/components/shared/search-list"
 
-interface StudentOption { id: string; name: string }
+interface StudentOption { id: string; name: string; guardianName?: string | null }
 interface TeacherOption {
   id:           string
   name:         string
@@ -168,29 +169,17 @@ export function CreateGroupLessonDialog({ open, onClose, students, teachers, def
                 ({selectedStudentIds.length}/4 selecionados — mín. 2)
               </span>
             </label>
-            <div className="mt-1 max-h-36 overflow-y-auto rounded-lg border border-input bg-background divide-y">
-              {students.map(s => {
-                const selected = selectedStudentIds.includes(s.id)
-                const disabled = !selected && selectedStudentIds.length >= 4
-                return (
-                  <button
-                    key={s.id}
-                    type="button"
-                    disabled={disabled}
-                    onClick={() => toggleStudent(s.id)}
-                    className={`w-full text-left px-3 py-2 text-sm transition-colors ${
-                      selected
-                        ? "bg-primary/10 text-primary font-medium"
-                        : disabled
-                        ? "text-muted-foreground/40 cursor-not-allowed"
-                        : "hover:bg-muted/50"
-                    }`}
-                  >
-                    {s.name}
-                  </button>
-                )
-              })}
-            </div>
+            <SearchList
+              className="mt-1"
+              items={students.map(s => ({
+                id:    s.id,
+                label: s.name,
+                hint:  s.guardianName ? `Resp: ${s.guardianName}` : null,
+              }))}
+              selectedIds={selectedStudentIds}
+              onToggle={toggleStudent}
+              isDisabled={() => selectedStudentIds.length >= 4}
+            />
           </div>
 
           {/* Matéria + professor, filtrando um pelo outro */}

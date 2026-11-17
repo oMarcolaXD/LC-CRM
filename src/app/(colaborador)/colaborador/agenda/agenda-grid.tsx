@@ -44,6 +44,7 @@ import { parseBrazilDateTime }      from "@/lib/datetime"
 import { mensagemDeErro } from "@/lib/error-message"
 import { ouFalhe } from "@/lib/action-result"
 import { somaAulas, aulasDe, fmtAulas, labelAulas } from "@/lib/lessons"
+import { SearchSelect } from "@/components/shared/search-list"
 
 // ─── Constantes de layout ────────────────────────────────────────────────────
 
@@ -80,7 +81,7 @@ const STATUS_LABEL: Record<LessonStatus, string> = {
 }
 
 export interface AvailSlot    { start: number; end: number }
-export interface StudentOption { id: string; name: string; remainingLessons: number }
+export interface StudentOption { id: string; name: string; remainingLessons: number; guardianName?: string | null }
 export interface SubjectOption { id: string; name: string }
 
 export interface TeacherCol {
@@ -608,18 +609,20 @@ function QuickScheduleModal({
             <label className="text-xs font-medium">
               Aluno <span className="text-destructive">*</span>
             </label>
-            <select
-              value={studentId}
-              onChange={e => setStudentId(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-            >
-              <option value="">Selecionar aluno...</option>
-              {students.map(s => (
-                <option key={s.id} value={s.id}>
-                  {s.name} — {s.remainingLessons} aula{s.remainingLessons !== 1 ? "s" : ""} restante{s.remainingLessons !== 1 ? "s" : ""}
-                </option>
-              ))}
-            </select>
+            <div className="mt-1">
+              <SearchSelect
+                value={studentId}
+                onChange={setStudentId}
+                items={students.map(s => ({
+                  id:       s.id,
+                  label:    s.name,
+                  hint:     [
+                    s.guardianName ? `Resp: ${s.guardianName}` : null,
+                    `${s.remainingLessons} aula${s.remainingLessons !== 1 ? "s" : ""} restante${s.remainingLessons !== 1 ? "s" : ""}`,
+                  ].filter(Boolean).join(" · "),
+                }))}
+              />
+            </div>
           </div>
 
           <div>
@@ -1275,7 +1278,7 @@ interface AgendaGridProps {
   auloes?:               AulaoCard[]
   roomCount?:            number
   students?:             StudentOption[]
-  allStudents?:          { id: string; name: string }[]
+  allStudents?:          { id: string; name: string; guardianName?: string | null }[]
   weekLessons?:          WeekLessonSlot[]
   monthLessons?:         WeekLessonSlot[]
   initialView?:          ViewMode

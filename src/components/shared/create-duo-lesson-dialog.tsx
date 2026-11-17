@@ -17,8 +17,9 @@ import { ouFalhe } from "@/lib/action-result"
 import { weeklySlots } from "@/lib/recurrence"
 import { RecurringPreviewDialog, type RecurringParams } from "@/components/shared/recurring-preview-dialog"
 import { TeacherSubjectPicker } from "@/components/shared/teacher-subject-picker"
+import { SearchList } from "@/components/shared/search-list"
 
-interface StudentOption { id: string; name: string; remainingLessons?: number }
+interface StudentOption { id: string; name: string; remainingLessons?: number; guardianName?: string | null }
 interface TeacherOption {
   id:           string
   name:         string
@@ -178,37 +179,22 @@ export function CreateDuoLessonDialog({ open, onClose, students, teachers, defau
                 ({selectedStudentIds.length}/4 selecionados — mín. 2)
               </span>
             </label>
-            <div className="mt-1 max-h-36 overflow-y-auto rounded-lg border border-input bg-background divide-y">
-              {students.map(s => {
-                const selected = selectedStudentIds.includes(s.id)
-                const disabled = !selected && selectedStudentIds.length >= 4
-                const noBalance = s.remainingLessons !== undefined && s.remainingLessons <= 0
-                return (
-                  <button
-                    key={s.id}
-                    type="button"
-                    disabled={disabled}
-                    onClick={() => toggleStudent(s.id)}
-                    className={`w-full text-left px-3 py-2 text-sm transition-colors flex items-center justify-between gap-2 ${
-                      selected
-                        ? "bg-primary/10 text-primary font-medium"
-                        : disabled
-                        ? "text-muted-foreground/40 cursor-not-allowed"
-                        : "hover:bg-muted/50"
-                    }`}
-                  >
-                    <span className="truncate">{s.name}</span>
-                    {s.remainingLessons !== undefined && (
-                      <span className={`text-[11px] shrink-0 ${noBalance ? "text-destructive" : "text-muted-foreground"}`}>
-                        {noBalance
-                          ? "sem saldo"
-                          : `${s.remainingLessons} aula${s.remainingLessons !== 1 ? "s" : ""}`}
-                      </span>
-                    )}
-                  </button>
-                )
-              })}
-            </div>
+            <SearchList
+              className="mt-1"
+              items={students.map(s => ({
+                id:    s.id,
+                label: s.name,
+                hint:  [
+                  s.guardianName ? `Resp: ${s.guardianName}` : null,
+                  s.remainingLessons === undefined ? null
+                    : s.remainingLessons <= 0 ? "sem saldo"
+                    : `${s.remainingLessons} aula${s.remainingLessons !== 1 ? "s" : ""}`,
+                ].filter(Boolean).join(" · ") || null,
+              }))}
+              selectedIds={selectedStudentIds}
+              onToggle={toggleStudent}
+              isDisabled={() => selectedStudentIds.length >= 4}
+            />
           </div>
 
           {/* Matéria + professor, filtrando um pelo outro */}

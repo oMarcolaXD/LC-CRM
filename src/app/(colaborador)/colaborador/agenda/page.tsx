@@ -151,6 +151,8 @@ export default async function ColaboradorAgendaPage({ searchParams }: AgendaPage
           orderBy: { purchaseDate: "desc" },
           take:    1,
         },
+        // Nome do responsável: a busca dos seletores acha o aluno por ele também
+        guardian: { select: { user: { select: { name: true } } } },
       },
       orderBy: { name: "asc" },
     }),
@@ -165,7 +167,7 @@ export default async function ColaboradorAgendaPage({ searchParams }: AgendaPage
     }),
     // Todos os alunos (para o diálogo de aula em grupo)
     prisma.student.findMany({
-      select:  { id: true, name: true },
+      select:  { id: true, name: true, guardian: { select: { user: { select: { name: true } } } } },
       orderBy: { name: "asc" },
     }),
   ])
@@ -369,9 +371,10 @@ export default async function ColaboradorAgendaPage({ searchParams }: AgendaPage
     id:               s.id,
     name:             s.name,
     remainingLessons: Number(s.packages[0]?.remainingLessons ?? 0),
+    guardianName:     s.guardian?.user.name ?? null,
   }))
 
-  const allStudents = allStudentsRaw.map(s => ({ id: s.id, name: s.name }))
+  const allStudents = allStudentsRaw.map(s => ({ id: s.id, name: s.name, guardianName: s.guardian?.user.name ?? null }))
 
   const weekday = format(dateObj, "EEEE", { locale: ptBR })
 

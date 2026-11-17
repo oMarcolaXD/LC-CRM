@@ -27,7 +27,10 @@ export default async function EditUserPage({ params, searchParams }: EditUserPag
       },
     }),
     prisma.guardian.findMany({
-      include: { user: { select: { name: true } } },
+      include: {
+        user:     { select: { name: true, phone: true } },
+        students: { select: { name: true }, orderBy: { name: "asc" } },
+      },
       orderBy: { user: { name: "asc" } },
     }),
   ])
@@ -74,7 +77,7 @@ export default async function EditUserPage({ params, searchParams }: EditUserPag
             action={action}
             error={error}
             isEdit
-            guardians={guardians.map((g) => ({ id: g.id, name: g.user.name }))}
+            guardians={guardians.map((g) => ({ id: g.id, name: g.user.name, phone: g.user.phone, students: g.students.map((s) => s.name) }))}
             students={guardianStudents}
             defaultValues={{
               name:          user.name,

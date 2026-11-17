@@ -5,7 +5,7 @@ import { UserForm }        from "../user-form"
 import { createUserAction } from "../actions"
 
 interface CreateUserFormProps {
-  guardians:      { id: string; name: string }[]
+  guardians:      { id: string; name: string; phone?: string | null; students?: string[] }[]
   students:       { id: string; name: string; grade: string }[]
   canCreateAdmin?: boolean
 }

@@ -7,7 +7,7 @@ import { Input }         from "@/components/ui/input"
 import { PhoneInput }    from "@/components/ui/phone-input"
 import { Label }         from "@/components/ui/label"
 import { Textarea }      from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { SearchSelect } from "@/components/shared/search-list"
 import {
   AlertCircle, GraduationCap, BookOpen, Users,
   Briefcase, ShieldCheck, User, School, UserPlus, Link2, UserX, Search,
@@ -95,7 +95,7 @@ interface UserFormProps {
     hourlyRate?: number; bio?: string; teachingMode?: TeacherMode
     guardianId?: string; relationship?: string
   }
-  guardians?: { id: string; name: string }[]
+  guardians?: { id: string; name: string; phone?: string | null; students?: string[] }[]
   students?:  { id: string; name: string; grade: string; linked?: boolean }[]
   isEdit?: boolean
 }
@@ -112,6 +112,16 @@ export function UserForm({
   const [grade,        setGrade]        = useState<string>(defaultValues?.grade ?? DEFAULT_GRADE)
   const [teachingMode, setTeachingMode] = useState<string>(defaultValues?.teachingMode ?? "HYBRID")
   const [guardianId,   setGuardianId]   = useState<string>(defaultValues?.guardianId ?? "")
+  // Busca de responsável pelo nome dele, de um dos filhos ou pelo telefone
+  const guardianItems = guardians.map((g) => ({
+    id:       g.id,
+    label:    g.name,
+    hint:     [
+      g.students?.length ? `Aluno${g.students.length > 1 ? "s" : ""}: ${g.students.join(", ")}` : null,
+      g.phone ?? null,
+    ].filter(Boolean).join(" · ") || null,
+    keywords: g.phone?.replace(/\D/g, "") ?? null,
+  }))
   const [guardianMode, setGuardianMode] = useState<GuardianMode>("new")
   const [studentSearch,       setStudentSearch]       = useState("")
   const [selectedStudentIds,  setSelectedStudentIds]  = useState<Set<string>>(
@@ -376,24 +386,13 @@ export function UserForm({
               {guardianMode === "existing" && (
                 <div>
                   <input type="hidden" name="guardianId" value={guardianId} />
-                  <Select
-                    value={guardianId || "__none__"}
-                    onValueChange={(v) => setGuardianId(v === "__none__" ? "" : (v ?? ""))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue>
-                        {guardianId
-                          ? (guardians.find((g) => g.id === guardianId)?.name ?? "Responsável selecionado")
-                          : "Selecionar…"}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">Selecionar…</SelectItem>
-                      {guardians.map((g) => (
-                        <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <SearchSelect
+                    value={guardianId}
+                    onChange={setGuardianId}
+                    items={guardianItems}
+                    placeholder="Buscar pelo responsável, aluno ou telefone…"
+                    emptyText="Nenhum responsável encontrado"
+                  />
                 </div>
               )}
 
@@ -419,24 +418,14 @@ export function UserForm({
               <Label>Responsável</Label>
               <input type="hidden" name="guardianMode" value="existing" />
               <input type="hidden" name="guardianId" value={guardianId} />
-              <Select
-                value={guardianId || "__none__"}
-                onValueChange={(v) => setGuardianId(v === "__none__" ? "" : (v ?? ""))}
-              >
-                <SelectTrigger>
-                  <SelectValue>
-                    {guardianId
-                      ? (guardians.find((g) => g.id === guardianId)?.name ?? "Responsável selecionado")
-                      : "Nenhum"}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">Nenhum</SelectItem>
-                  {guardians.map((g) => (
-                    <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SearchSelect
+                value={guardianId}
+                onChange={setGuardianId}
+                items={guardianItems}
+                noneLabel="Nenhum responsável vinculado"
+                placeholder="Buscar pelo responsável, aluno ou telefone…"
+                emptyText="Nenhum responsável encontrado"
+              />
             </div>
           )}
         </Section>

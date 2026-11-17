@@ -72,6 +72,7 @@ export default async function AdminAgendaPage({ searchParams }: AgendaPageProps)
           orderBy: { purchaseDate: "desc" },
           take:    1,
         },
+        guardian: { select: { user: { select: { name: true } } } },
       },
       orderBy: { name: "asc" },
     }),
@@ -124,6 +125,7 @@ export default async function AdminAgendaPage({ searchParams }: AgendaPageProps)
     id:               s.id,
     name:             s.name ?? "Aluno",
     remainingLessons: Number(s.packages[0]?.remainingLessons ?? 0),
+    guardianName:     s.guardian?.user.name ?? null,
   }))
 
   const notificationStatus = getNotificationStatus()
@@ -137,7 +139,7 @@ export default async function AdminAgendaPage({ searchParams }: AgendaPageProps)
         lessons={lessonSlots}
         roomCount={roomCount}
         students={students}
-        allStudents={students.map(s => ({ id: s.id, name: s.name }))}
+        allStudents={students.map(s => ({ id: s.id, name: s.name, guardianName: s.guardianName }))}
         notificationStatus={notificationStatus}
       />
     </div>
