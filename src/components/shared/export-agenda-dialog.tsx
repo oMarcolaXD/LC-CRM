@@ -342,16 +342,17 @@ export function ExportAgendaDialog({
       bodyHtml = `
         <div class="section-group">
           <h3 class="section-title">📋 Lista Cronológica de Aulas</h3>
-          <table>
+          <table class="com-assinatura">
             <thead>
               <tr>
-                <th style="width: 80px;">Horário</th>
+                <th style="width: 70px;">Horário</th>
                 <th>Aluno</th>
                 <th>Responsável</th>
                 <th>Professor</th>
                 <th>Matéria</th>
-                <th style="width: 100px;">Modalidade</th>
-                <th style="width: 90px;">Status</th>
+                <th style="width: 90px;">Modalidade</th>
+                <th style="width: 80px;">Status</th>
+                <th class="col-assinatura">Assinatura do aluno</th>
               </tr>
             </thead>
             <tbody>
@@ -366,6 +367,7 @@ export function ExportAgendaDialog({
                   <td>${l.subjectName}</td>
                   <td><span class="badge ${l.modality === "ONLINE" ? "badge-blue" : "badge-orange"}">${l.modality === "ONLINE" ? "Online" : "Presencial"}</span></td>
                   <td><span class="badge badge-gray">${STATUS_LABEL[l.status] ?? l.status}</span></td>
+                  <td class="col-assinatura"><div class="linha-assinatura"></div></td>
                 </tr>
               `}).join("")}
             </tbody>
@@ -373,6 +375,11 @@ export function ExportAgendaDialog({
         </div>
       `
     }
+
+    // A agenda geral é impressa em paisagem e assinada pelo aluno em cada aula.
+    const pageCss = groupBy === "general"
+      ? `@page { size: A4 landscape; margin: 10mm; }`
+      : ""
 
     const htmlContent = `
       <!DOCTYPE html>
@@ -492,9 +499,16 @@ export function ExportAgendaDialog({
             font-size: 10px;
             color: #94a3b8;
           }
+          .col-assinatura { width: 210px; }
+          table.com-assinatura td { height: 40px; vertical-align: bottom; }
+          table.com-assinatura tr { page-break-inside: avoid; }
+          .linha-assinatura { border-bottom: 1px solid #475569; height: 22px; margin-bottom: 2px; }
+          ${pageCss}
           @media print {
             body { padding: 0; }
             .no-print { display: none; }
+            .section-group:has(table.com-assinatura) { page-break-inside: auto; }
+            thead { display: table-header-group; }
           }
         </style>
       </head>
