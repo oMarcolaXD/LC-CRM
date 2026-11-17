@@ -59,6 +59,7 @@ export function ScheduleLessonDialog({ studentId, studentName, teachers, hasBala
   const [conflicts, setConflicts]     = useState<{ date: string; reason: string }[]>([])
   const [recurringParams, setRecurringParams] = useState<RecurringParams | null>(null)
   const [pending, start]        = useTransition()
+  const [agendadasAqui, setAgendadasAqui] = useState(0)
 
   function toggleDuo(id: string) {
     setDuoIds(prev =>
@@ -86,11 +87,16 @@ export function ScheduleLessonDialog({ studentId, studentName, teachers, hasBala
       setIsRecurring(false)
       setOccurrences(4)
       setAlreadyAgreed(false)
+      setAgendadasAqui(0)
     }
     setOpen(v)
   }
 
-  function submit() {
+  /**
+   * `outra`: depois de salvar, a janela continua aberta com matéria, professor,
+   * modalidade e duração preenchidos — só trocar data/horário e agendar a próxima.
+   */
+  function submit(outra = false) {
     if (!teacherId || !subjectId || !date || !time) {
       toast.error("Preencha todos os campos obrigatórios")
       return
@@ -134,6 +140,11 @@ export function ScheduleLessonDialog({ studentId, studentName, teachers, hasBala
           toast.success(alreadyAgreed
             ? "Aula confirmada — professor avisado"
             : "Aula agendada com sucesso")
+        }
+        if (outra) {
+          setAgendadasAqui(n => n + 1)
+          router.refresh()
+          return
         }
         setOpen(false)
         router.push(`/colaborador/alunos/${studentId}`)
@@ -380,11 +391,24 @@ export function ScheduleLessonDialog({ studentId, studentName, teachers, hasBala
             </div>
           </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)} disabled={pending}>
-              Cancelar
+          {agendadasAqui > 0 && (
+            <p className="rounded-lg border border-emerald-300/60 bg-emerald-50 px-3 py-2 text-xs text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300">
+              ✓ {agendadasAqui} aula{agendadasAqui !== 1 ? "s" : ""} agendada{agendadasAqui !== 1 ? "s" : ""} nesta janela.
+              Troque a data/horário e agende a próxima, ou feche quando terminar.
+            </p>
+          )}
+
+          <DialogFooter className="flex-wrap gap-2">
+            <Button variant="outline" onClick={() => handleOpen(false)} disabled={pending}>
+              {agendadasAqui > 0 ? "Fechar" : "Cancelar"}
             </Button>
-            <Button onClick={submit} disabled={pending || !teacherId || !subjectId}>
+            {!isRecurring && (
+              <Button variant="outline" onClick={() => submit(true)} disabled={pending || !teacherId || !subjectId}>
+                {pending && <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />}
+                Agendar e marcar outra
+              </Button>
+            )}
+            <Button onClick={() => submit()} disabled={pending || !teacherId || !subjectId}>
               {pending && <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />}
               {isRecurring ? "Revisar série" : "Agendar"}
             </Button>

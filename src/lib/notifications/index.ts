@@ -19,6 +19,15 @@ export { getNotificationStatus, type NotificationStatus } from "./status"
  * erro da API). Use `describeDeliveryFailure` para explicar ao usuário.
  */
 export async function notify(payload: NotificationPayload): Promise<DeliveryResult> {
+  // 0. Sem destinatário (ex.: aluno sem login próprio, que entra pelo
+  //    responsável): não há a quem avisar. Antes isto gravava uma notificação
+  //    para o usuário "" — erro de chave estrangeira — e a ação inteira falhava
+  //    DEPOIS de já ter salvo a aula, mostrando erro para algo que deu certo.
+  if (!payload.userId) {
+    const semDestino: ChannelOutcome = { ok: false, reason: "no_destination" }
+    return { inApp: false, email: semDestino, whatsapp: semDestino }
+  }
+
   // 1. In-app (sempre) — é o registro que garante que nada se perde
   await prisma.notification.create({
     data: {
