@@ -91,7 +91,11 @@ export default async function AdminAgendaPage({ searchParams }: AgendaPageProps)
     const br      = toBrazilDate(d)
     const min     = br.getHours() * 60 + br.getMinutes()
     const first   = l.participants[0]
-    const isGroup = l.participants.length > 1
+    // Mesmo mapeamento da agenda do colaborador: aulão e compromisso não têm
+    // aluno "padrão" e precisam do tipo certo (a impressão separa os aulões).
+    const lessonType = l.lessonType as LessonSlot["lessonType"]
+    const isSpecial  = lessonType === "AULAO" || lessonType === "COMPROMISSO"
+    const isGroup = l.participants.length > 1 || lessonType === "GROUP"
     return {
       id:            l.id,
       teacherId:     l.teacherId,
@@ -102,17 +106,17 @@ export default async function AdminAgendaPage({ searchParams }: AgendaPageProps)
       modality:      l.modality as LessonSlot["modality"],
       teacherOnsite: l.teacherOnsite,
       time:          formatBR(d, "HH:mm"),
-      studentName:   first?.student.name ?? "Aluno",
+      studentName:   first?.student.name ?? (isSpecial ? "" : "Aluno"),
       subjectName:   l.subject?.name ?? "–",
       guardianName:  first?.student.guardian?.user.name ?? null,
       isGroupLesson: isGroup,
       groupSize:     isGroup ? l.participants.length : null,
       groupMates:    l.participants.slice(1).map(p => p.student.name ?? "Aluno"),
       packageStatus: "pago" as const,
-      lessonType:    "INDIVIDUAL" as const,
+      lessonType,
       blocksAgenda:  l.blocksAgenda,
-      title:         null,
-      capacity:      null,
+      title:         l.title ?? null,
+      capacity:      l.capacity ?? null,
     }
   })
 

@@ -21,6 +21,11 @@ interface ExportAgendaDialogProps {
 
 type GroupBy = "teacher" | "student" | "general"
 
+/** Escapa texto livre (título de aulão etc.) antes de ir para o HTML da impressão. */
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!))
+}
+
 const STATUS_LABEL: Record<string, string> = {
   SCHEDULED: "Agendada",
   CONFIRMED: "Confirmada",
@@ -202,6 +207,8 @@ export function ExportAgendaDialog({
 }: ExportAgendaDialogProps) {
   const [groupBy, setGroupBy] = useState<GroupBy>("student")
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
+  // Aulões não têm aluno vinculado: cada um sai numa página com linhas em branco.
+  const [linhasAulao, setLinhasAulao] = useState(10)
 
   const parsedDate = parseISO(dateStr)
   const formattedDate = format(parsedDate, "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })
@@ -338,8 +345,51 @@ export function ExportAgendaDialog({
         </div>
       `).join("")
     } else {
-      const sortedAll = [...activeLessons].sort((a, b) => a.startMin - b.startMin)
-      bodyHtml = `
+      // Aulões não descontam pacote nem têm aluno vinculado: saem da lista
+      // principal e cada um ganha uma página própria com linhas para assinar.
+      const sortedAll = activeLessons
+        .filter(l => l.lessonType !== "AULAO")
+        .sort((a, b) => a.startMin - b.startMin)
+      const auloes = activeLessons
+        .filter(l => l.lessonType === "AULAO")
+        .sort((a, b) => a.startMin - b.startMin)
+      const linhas = Math.max(1, Math.min(60, Math.floor(linhasAulao) || 10))
+
+      const paginasAulao = auloes.map((l, idx) => {
+        const tName  = teachers.find(t => t.id === l.teacherId)?.name ?? "Prof."
+        const nomes  = [l.studentName, ...(l.groupMates ?? [])].filter(Boolean)
+        const total  = Math.max(linhas, nomes.length)
+        const rows   = Array.from({ length: total }, (_, i) => `
+          <tr>
+            <td class="font-bold" style="width: 40px;">${i + 1}</td>
+            <td>${nomes[i] ? escapeHtml(nomes[i]) : `<div class="linha-assinatura"></div>`}</td>
+            <td class="col-assinatura"><div class="linha-assinatura"></div></td>
+          </tr>`).join("")
+        // Sem aulas particulares no dia, o primeiro aulão fica na 1ª página, junto do cabeçalho.
+        const quebra = idx === 0 && sortedAll.length === 0 ? " sem-quebra" : ""
+        return `
+        <div class="pagina-aulao${quebra}">
+          <h3 class="section-title">🎤 ${/^\s*aul[aã]o/i.test(l.title ?? "") ? "" : "Aulão — "}${escapeHtml(l.title ?? l.subjectName)}</h3>
+          <div class="aulao-info">
+            <span><strong>Horário:</strong> ${l.time}</span>
+            <span><strong>Professor:</strong> ${escapeHtml(tName)}</span>
+            <span><strong>Matéria:</strong> ${escapeHtml(l.subjectName)}</span>
+            <span><strong>Modalidade:</strong> ${l.modality === "ONLINE" ? "Online" : "Presencial"}</span>
+          </div>
+          <table class="com-assinatura">
+            <thead>
+              <tr>
+                <th style="width: 40px;">Nº</th>
+                <th>Nome do aluno</th>
+                <th class="col-assinatura">Assinatura</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>`
+      }).join("")
+
+      bodyHtml = (sortedAll.length > 0 || auloes.length === 0 ? `
         <div class="section-group">
           <h3 class="section-title">📋 Lista Cronológica de Aulas</h3>
           <table class="com-assinatura">
@@ -373,7 +423,7 @@ export function ExportAgendaDialog({
             </tbody>
           </table>
         </div>
-      `
+      ` : "") + paginasAulao
     }
 
     // A agenda geral é impressa em paisagem e assinada pelo aluno em cada aula.
@@ -503,6 +553,9 @@ export function ExportAgendaDialog({
           table.com-assinatura td { height: 40px; vertical-align: bottom; }
           table.com-assinatura tr { page-break-inside: avoid; }
           .linha-assinatura { border-bottom: 1px solid #475569; height: 22px; margin-bottom: 2px; }
+          .pagina-aulao { page-break-before: always; break-before: page; padding-top: 4px; }
+          .pagina-aulao.sem-quebra { page-break-before: auto; break-before: auto; }
+          .aulao-info { display: flex; flex-wrap: wrap; gap: 6px 22px; font-size: 12px; color: #334155; margin: 0 0 12px 4px; }
           ${pageCss}
           @media print {
             body { padding: 0; }
@@ -745,6 +798,23 @@ export function ExportAgendaDialog({
             </div>
           </div>
         </div>
+
+        {groupBy === "general" && activeLessons.some(l => l.lessonType === "AULAO") && (
+          <label className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs shrink-0">
+            <span>
+              <span className="font-medium text-foreground">Espaços de assinatura por aulão</span>
+              <span className="block text-muted-foreground">Cada aulão sai numa página separada da lista de aulas.</span>
+            </span>
+            <input
+              type="number"
+              min={1}
+              max={60}
+              value={linhasAulao}
+              onChange={e => setLinhasAulao(Number(e.target.value))}
+              className="h-8 w-16 rounded-md border border-input bg-background px-2 text-right text-sm"
+            />
+          </label>
+        )}
 
         <DialogFooter className="flex-col sm:flex-row gap-2 mt-4 shrink-0">
           <Button
