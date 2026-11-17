@@ -61,17 +61,19 @@ export default async function AdminAgendaPage({ searchParams }: AgendaPageProps)
       orderBy: { scheduledAt: "asc" },
     }),
     getRoomCount(),
+    // Mesma regra de "aluno ativo" das listas de alunos: quem não tem login
+    // próprio (entra pelo responsável) também é ativo. Antes só entravam alunos
+    // com login, e a lista dos diálogos de aula/grupo ficava incompleta.
     prisma.student.findMany({
-      where: { user: { active: true } },
+      where: { OR: [{ userId: null }, { user: { active: true } }] },
       include: {
-        user:     true,
         packages: {
           where:   { status: "ACTIVE" },
           orderBy: { purchaseDate: "desc" },
           take:    1,
         },
       },
-      orderBy: { user: { name: "asc" } },
+      orderBy: { name: "asc" },
     }),
   ])
 
@@ -116,7 +118,7 @@ export default async function AdminAgendaPage({ searchParams }: AgendaPageProps)
 
   const students: StudentOption[] = studentsRaw.map(s => ({
     id:               s.id,
-    name:             s.user?.name ?? "Aluno",
+    name:             s.name ?? "Aluno",
     remainingLessons: Number(s.packages[0]?.remainingLessons ?? 0),
   }))
 
