@@ -17,6 +17,7 @@ import { createLessonDirectAction, createDuoLessonAction } from "@/lib/actions/l
 import { weeklySlots } from "@/lib/recurrence"
 import { RecurringPreviewDialog, type RecurringParams } from "@/components/shared/recurring-preview-dialog"
 import { TeacherSubjectPicker } from "@/components/shared/teacher-subject-picker"
+import { SearchList } from "@/components/shared/search-list"
 import { mensagemDeErro } from "@/lib/error-message"
 import { ouFalhe } from "@/lib/action-result"
 
@@ -220,29 +221,14 @@ export function ScheduleLessonDialog({ studentId, studentName, teachers, hasBala
                         })}
                       </div>
                     )}
-                    <div className="max-h-32 overflow-y-auto rounded-lg border border-input bg-background divide-y">
-                      {otherStudents.map(s => {
-                        const selected = duoIds.includes(s.id)
-                        const disabled = !selected && duoIds.length >= 3
-                        return (
-                          <button
-                            key={s.id}
-                            type="button"
-                            disabled={disabled}
-                            onClick={() => toggleDuo(s.id)}
-                            className={`w-full text-left px-3 py-1.5 text-sm transition-colors ${
-                              selected
-                                ? "bg-primary/10 text-primary font-medium"
-                                : disabled
-                                ? "text-muted-foreground/40 cursor-not-allowed"
-                                : "hover:bg-muted/50"
-                            }`}
-                          >
-                            {s.name}
-                          </button>
-                        )
-                      })}
-                    </div>
+                    <SearchList
+                      items={otherStudents.map(s => ({ id: s.id, label: s.name }))}
+                      selectedIds={duoIds}
+                      onToggle={toggleDuo}
+                      isDisabled={() => duoIds.length >= 3}
+                      placeholder="Buscar aluno…"
+                      listClassName="max-h-36"
+                    />
                   </div>
                 )}
               </div>

@@ -28,7 +28,9 @@ function filtrar(items: SearchItem[], termo: string): SearchItem[] {
   if (!t) return items
   const partes = t.split(/\s+/)
   return items.filter((i) => {
-    const alvo = normalizar(`${i.label} ${i.hint ?? ""} ${i.keywords ?? ""}`)
+    // Só o nome (e palavras-chave explícitas, ex.: telefone): o texto cinza de
+    // apoio não entra, senão "fernanda" traria alunos cuja mãe é Fernanda.
+    const alvo = normalizar(`${i.label} ${i.keywords ?? ""}`)
     return partes.every((p) => alvo.includes(p))
   })
 }
@@ -54,7 +56,7 @@ function CampoBusca({ value, onChange, placeholder, autoFocus }: {
 
 /** Lista com busca e seleção múltipla (ou única, conforme o pai trata o clique). */
 export function SearchList({
-  items, selectedIds, onToggle, isDisabled, placeholder = "Buscar por aluno ou responsável…",
+  items, selectedIds, onToggle, isDisabled, placeholder = "Buscar pelo nome…",
   emptyText = "Nenhum resultado", className, listClassName = "max-h-44",
 }: {
   items:        SearchItem[]
@@ -107,7 +109,7 @@ export function SearchList({
  * hidden, para funcionar dentro de <form> de server action.
  */
 export function SearchSelect({
-  items, value, onChange, name, placeholder = "Buscar por aluno ou responsável…",
+  items, value, onChange, name, placeholder = "Buscar pelo nome…",
   emptyText = "Nenhum resultado", noneLabel, listClassName = "max-h-52",
 }: {
   items:        SearchItem[]

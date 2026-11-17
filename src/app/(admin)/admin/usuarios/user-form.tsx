@@ -390,7 +390,7 @@ export function UserForm({
                     value={guardianId}
                     onChange={setGuardianId}
                     items={guardianItems}
-                    placeholder="Buscar pelo responsável, aluno ou telefone…"
+                    placeholder="Buscar pelo nome do responsável…"
                     emptyText="Nenhum responsável encontrado"
                   />
                 </div>
@@ -423,7 +423,7 @@ export function UserForm({
                 onChange={setGuardianId}
                 items={guardianItems}
                 noneLabel="Nenhum responsável vinculado"
-                placeholder="Buscar pelo responsável, aluno ou telefone…"
+                placeholder="Buscar pelo nome do responsável…"
                 emptyText="Nenhum responsável encontrado"
               />
             </div>
