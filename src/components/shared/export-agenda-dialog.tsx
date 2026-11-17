@@ -21,6 +21,27 @@ interface ExportAgendaDialogProps {
 
 type GroupBy = "teacher" | "student" | "general"
 
+/**
+ * Uma aula na pré-visualização: horário à esquerda, texto em duas linhas que
+ * quebra em vez de cortar com "…", e a modalidade à direita.
+ */
+function LinhaAula({ time, titulo, detalhe, modality }: {
+  time: string; titulo: string; detalhe: string; modality: string
+}) {
+  return (
+    <div className="flex items-start gap-2.5 py-1.5 text-[11px]">
+      <span className="shrink-0 w-11 font-bold tabular-nums text-foreground">{time}</span>
+      <div className="min-w-0 flex-1 leading-snug">
+        <p className="font-medium text-foreground break-words">{titulo}</p>
+        <p className="text-muted-foreground break-words">{detalhe}</p>
+      </div>
+      <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 ${modality === "ONLINE" ? "bg-blue-50 text-blue-700 border border-blue-200" : "bg-orange-50 text-orange-700 border border-orange-200"}`}>
+        {modality === "ONLINE" ? "Online" : "Presencial"}
+      </span>
+    </div>
+  )
+}
+
 /** Escapa texto livre (título de aulão etc.) antes de ir para o HTML da impressão. */
 function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!))
@@ -714,16 +735,15 @@ export function ExportAgendaDialog({
                           </Button>
                         </div>
 
-                        <div className="space-y-1 pl-2 border-l-2 border-primary/30">
+                        <div className="pl-2 border-l-2 border-primary/30 divide-y divide-border/50">
                           {g.lessons.map(l => (
-                            <div key={l.id} className="text-muted-foreground text-[11px] flex items-center justify-between gap-2">
-                              <span className="truncate">
-                                • <strong className="text-foreground">{l.time}</strong> - {l.subjectName} com {teachers.find(t => t.id === l.teacherId)?.name ?? "Prof."}
-                              </span>
-                              <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 ${l.modality === "ONLINE" ? "bg-blue-50 text-blue-700 border border-blue-200" : "bg-orange-50 text-orange-700 border border-orange-200"}`}>
-                                {l.modality === "ONLINE" ? "Online" : "Presencial"}
-                              </span>
-                            </div>
+                            <LinhaAula
+                              key={l.id}
+                              time={l.time}
+                              titulo={l.subjectName}
+                              detalhe={`com ${teachers.find(t => t.id === l.teacherId)?.name ?? "Prof."}`}
+                              modality={l.modality}
+                            />
                           ))}
                         </div>
                       </div>
@@ -763,16 +783,15 @@ export function ExportAgendaDialog({
                           </Button>
                         </div>
 
-                        <div className="space-y-1 pl-2 border-l-2 border-primary/30">
+                        <div className="pl-2 border-l-2 border-primary/30 divide-y divide-border/50">
                           {g.lessons.map(l => (
-                            <div key={l.id} className="text-muted-foreground text-[11px] flex items-center justify-between gap-2">
-                              <span className="truncate">
-                                • <strong className="text-foreground">{l.time}</strong> - {l.studentName} ({l.subjectName})
-                              </span>
-                              <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 ${l.modality === "ONLINE" ? "bg-blue-50 text-blue-700 border border-blue-200" : "bg-orange-50 text-orange-700 border border-orange-200"}`}>
-                                {l.modality === "ONLINE" ? "Online" : "Presencial"}
-                              </span>
-                            </div>
+                            <LinhaAula
+                              key={l.id}
+                              time={l.time}
+                              titulo={l.studentName || (l.lessonType === "AULAO" ? (l.title ?? "Aulão") : l.lessonType === "COMPROMISSO" ? (l.title ?? "Compromisso") : "Aluno")}
+                              detalhe={l.subjectName}
+                              modality={l.modality}
+                            />
                           ))}
                         </div>
                       </div>
@@ -783,16 +802,17 @@ export function ExportAgendaDialog({
                 activeLessons.length === 0 ? (
                   <p className="text-muted-foreground text-center py-4">Nenhuma aula para exibir.</p>
                 ) : (
-                  [...activeLessons].sort((a,b) => a.startMin - b.startMin).map(l => (
-                    <div key={l.id} className="text-muted-foreground text-[11px] flex items-center justify-between gap-2 py-1 border-b border-border/50 last:border-b-0">
-                      <span className="truncate">
-                        • <strong className="text-foreground">{l.time}</strong> - {l.studentName} ({l.subjectName} com {teachers.find(t => t.id === l.teacherId)?.name ?? "Prof."})
-                      </span>
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 ${l.modality === "ONLINE" ? "bg-blue-50 text-blue-700 border border-blue-200" : "bg-orange-50 text-orange-700 border border-orange-200"}`}>
-                        {l.modality === "ONLINE" ? "Online" : "Presencial"}
-                      </span>
-                    </div>
-                  ))
+                  <div className="divide-y divide-border/50">
+                    {[...activeLessons].sort((a,b) => a.startMin - b.startMin).map(l => (
+                      <LinhaAula
+                        key={l.id}
+                        time={l.time}
+                        titulo={l.studentName || (l.lessonType === "AULAO" ? (l.title ?? "Aulão") : l.lessonType === "COMPROMISSO" ? (l.title ?? "Compromisso") : "Aluno")}
+                        detalhe={`${l.subjectName} · com ${teachers.find(t => t.id === l.teacherId)?.name ?? "Prof."}`}
+                        modality={l.modality}
+                      />
+                    ))}
+                  </div>
                 )
               )}
             </div>
