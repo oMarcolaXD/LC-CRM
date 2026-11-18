@@ -10,6 +10,7 @@ import { calcFee, type FeeRate } from "@/lib/fees"
 import { comResultado, type ActionResult } from "@/lib/action-result"
 import { temMetodo } from "@/lib/payments"
 import { loadRateHistory, rateAt } from "@/lib/teacher-rates"
+import { planejarAcertoPacotes } from "@/lib/package-refund"
 
 async function requireAdmin() {
   const session = await auth()
@@ -444,6 +445,41 @@ export async function updateTeacherPayWindowAction(
  * isto não muda nenhum número — serve para o banco parar de contar histórias
  * diferentes das telas e para a aba Qualidade parar de acusar o resíduo.
  */
+/**
+ * Acerta os pacotes com saldo acima do total (resíduo do bug antigo do
+ * cancelamento). Recalcula o plano na hora — o mesmo que a tela mostrou — e
+ * grava tudo numa transação. Cada pacote só é alterado se o saldo ainda for o
+ * que a tela viu; se alguém mexeu no meio do caminho, nada é gravado.
+ */
+export async function acertarPacotesAction(): Promise<ActionResult<{ alunos: number; pacotes: number; descartadas: number }>> {
+  return comResultado(async () => {
+    await requireAdmin()
+    const plano = await planejarAcertoPacotes()
+    if (plano.length === 0) throw new Error("Não há pacotes para corrigir")
+
+    const ajustes = plano.flatMap((a) => a.ajustes)
+    await prisma.$transaction(async (tx) => {
+      for (const aj of ajustes) {
+        const status = aj.status === "EXPIRED" ? "EXPIRED" : aj.depois > 0 ? "ACTIVE" : "EXHAUSTED"
+        const { count } = await tx.lessonPackage.updateMany({
+          where: { id: aj.pacoteId, remainingLessons: aj.antes },
+          data:  { remainingLessons: aj.depois, status },
+        })
+        if (count !== 1) throw new Error("Um dos pacotes mudou enquanto a correção era feita. Recarregue a página e confira de novo.")
+      }
+    })
+
+    for (const a of plano) revalidatePath(`/colaborador/alunos/${a.studentId}`)
+    revalidatePath("/admin/financeiro/pacotes")
+    revalidatePath("/admin/financeiro/pacotes/acertar")
+    return {
+      alunos:      plano.length,
+      pacotes:     ajustes.length,
+      descartadas: plano.reduce((s, a) => s + a.descartadas, 0),
+    }
+  })
+}
+
 export async function normalizePackagesAction(): Promise<ActionResult<{ esgotados: number; expirados: number }>> {
   return comResultado(async () => {
     await requireAdmin()

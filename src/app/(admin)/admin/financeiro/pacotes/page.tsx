@@ -52,8 +52,11 @@ export default async function PacotesPage({ searchParams }: PacotesPageProps) {
     <div className="space-y-6">
       <PageHeader title="PACOTES DE AULAS" backHref="/admin/financeiro"
         description="Crie e gerencie os pacotes de aulas dos alunos">
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <NormalizeButton />
+          <LinkButton href="/admin/financeiro/pacotes/acertar" variant="outline" size="sm">
+            Corrigir saldos negativos
+          </LinkButton>
           <LinkButton href="/admin/financeiro/pacotes/analise" variant="outline" size="sm">
             <BarChart3 className="w-4 h-4 mr-1" /> Análise de vendas
           </LinkButton>
