@@ -69,7 +69,15 @@ export function SearchList({
   listClassName?: string
 }) {
   const [termo, setTermo] = useState("")
-  const visiveis = useMemo(() => filtrar(items, termo), [items, termo])
+  // Ordem alfabética "de gente": ignora espaço sobrando no começo, acento e
+  // maiúscula — " Maria" não fica antes de "Alan", "Ágata" não vai para o fim.
+  const ordenados = useMemo(
+    () => items
+      .map((i) => ({ ...i, label: i.label.trim() }))
+      .sort((a, b) => a.label.localeCompare(b.label, "pt-BR", { sensitivity: "base" })),
+    [items],
+  )
+  const visiveis = useMemo(() => filtrar(ordenados, termo), [ordenados, termo])
 
   return (
     <div className={cn("space-y-1.5", className)}>

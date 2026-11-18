@@ -204,10 +204,11 @@ export default async function StudentDetailPage({ params, searchParams }: Props)
       orderBy: { user: { name: "asc" } },
     }),
     prisma.student.findMany({
+      // Sem limite: com mais de 200 alunos, os do fim do alfabeto sumiam das
+      // listas de aula em grupo do perfil (nem a busca os encontrava).
       where:   { id: { not: id } },
       select:  { id: true, name: true },
       orderBy: { name: "asc" },
-      take:    200,
     }),
     // Histórico paginado (aba + página)
     prisma.lesson.findMany({

@@ -12,6 +12,7 @@ import { Input }    from "@/components/ui/input"
 import { Label }    from "@/components/ui/label"
 import { mensagemDeErro } from "@/lib/error-message"
 import { ouFalhe } from "@/lib/action-result"
+import { SearchSelect } from "@/components/shared/search-list"
 import {
   History, Loader2, CheckCircle2, XCircle, MonitorPlay, School,
   Users, Plus, Trash2, DollarSign, CreditCard, AlertCircle,
@@ -294,16 +295,13 @@ export function RegisterPastLessonDialog({
                         </button>
                       )}
                     </div>
-                    <select
+                    <SearchSelect
                       value={entry.studentId}
-                      onChange={e => updateGroupEntry(i, "studentId", e.target.value)}
-                      className="w-full h-9 rounded-lg border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                    >
-                      <option value="">Selecione</option>
-                      {otherStudents.map(s => (
-                        <option key={s.id} value={s.id}>{s.name}</option>
-                      ))}
-                    </select>
+                      onChange={id => updateGroupEntry(i, "studentId", id)}
+                      items={otherStudents.map(s => ({ id: s.id, label: s.name }))}
+                      placeholder="Buscar aluno…"
+                      listClassName="max-h-40"
+                    />
                     <div className="flex gap-2">
                       <Input
                         type="number" min={0} step="0.01"
