@@ -82,6 +82,7 @@ export default async function FinanceiroPage() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <PageHeader title="FINANCEIRO" description={`Resumo de ${format(now, "MMMM yyyy", { locale: ptBR })}`} />
         <div className="flex gap-2 flex-wrap">
+          <LinkButton href="/admin/financeiro/lancar" size="sm">Lançar recebimentos</LinkButton>
           <LinkButton href="/admin/financeiro/alunos"      variant="outline" size="sm">Por Aluno</LinkButton>
           <LinkButton href="/admin/financeiro/pacotes"     variant="outline" size="sm">Pacotes</LinkButton>
           <LinkButton href="/admin/financeiro/pacotes/analise" variant="outline" size="sm">Análise</LinkButton>

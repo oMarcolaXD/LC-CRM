@@ -527,6 +527,109 @@ export async function addStudentPaymentAction(input: {
   revalidatePath("/admin/financeiro/pagamentos")
 }
 
+// ─── Lançar recebimentos em lote ──────────────────────────────────────────────
+
+const recebimentoSchema = z.object({
+  studentId: z.string().min(1, "Escolha o aluno"),
+  amount:    z.number().positive("Valor deve ser maior que zero"),
+  /** "YYYY-MM-DD" — dia em que o dinheiro entrou (horário de Brasília). */
+  paidAt:    z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data inválida"),
+  method:    z.string().trim().min(1, "Informe a forma de pagamento"),
+  /** Cobrança em aberto a quitar; vazio = lança como pagamento avulso. */
+  paymentId: z.string().nullable().optional(),
+  description: z.string().optional(),
+})
+
+export type Recebimento = z.infer<typeof recebimentoSchema>
+
+/**
+ * Lança vários "fulano pagou tanto" de uma vez. Cada linha ou quita uma
+ * cobrança em aberto do próprio aluno (mesmo valor) ou vira um pagamento
+ * avulso já pago. Tudo numa transação: se uma linha estiver errada, nada é
+ * gravado e a mensagem diz qual linha corrigir.
+ */
+export async function lancarRecebimentosAction(
+  rows: Recebimento[],
+): Promise<ActionResult<{ quitadas: number; avulsos: number; total: number }>> {
+  return comResultado(async () => {
+    await requireCollaboratorOrAdmin()
+    if (rows.length === 0) throw new Error("Adicione pelo menos um recebimento")
+
+    const linhas = rows.map((r, i) => {
+      const p = recebimentoSchema.safeParse(r)
+      if (!p.success) throw new Error(`Linha ${i + 1}: ${p.error.issues[0]?.message ?? "dados inválidos"}`)
+      return p.data
+    })
+
+    // Uma mesma cobrança não pode ser quitada por duas linhas
+    const ids = linhas.map((l) => l.paymentId).filter((x): x is string => !!x)
+    if (new Set(ids).size !== ids.length) throw new Error("A mesma cobrança foi escolhida em duas linhas")
+
+    const cobrancas = ids.length
+      ? await prisma.payment.findMany({
+          where:  { id: { in: ids } },
+          select: { id: true, studentId: true, status: true, amount: true, installmentTotal: true },
+        })
+      : []
+    const porId = new Map(cobrancas.map((c) => [c.id, c]))
+    linhas.forEach((l, i) => {
+      if (!l.paymentId) return
+      const c = porId.get(l.paymentId)
+      if (!c || c.studentId !== l.studentId) throw new Error(`Linha ${i + 1}: a cobrança escolhida não é deste aluno`)
+      if (c.status === "PAID") throw new Error(`Linha ${i + 1}: esta cobrança já está paga`)
+      if (Math.abs(Number(c.amount) - l.amount) > 0.009) {
+        throw new Error(`Linha ${i + 1}: o valor é diferente da cobrança escolhida — lance como avulso ou corrija o valor`)
+      }
+    })
+
+    const rates = await loadFeeRates()
+    let quitadas = 0, avulsos = 0
+    await prisma.$transaction(async (tx) => {
+      for (const l of linhas) {
+        // Meio-dia de Brasília: a data nunca "pula" de dia por causa de fuso.
+        const paidAt = parseBrazilDateTime(l.paidAt, "12:00")
+        if (l.paymentId) {
+          const c = porId.get(l.paymentId)!
+          // updateMany com status ≠ PAID: se alguém quitou no meio do caminho, não paga duas vezes
+          const { count } = await tx.payment.updateMany({
+            where: { id: l.paymentId, status: { not: "PAID" } },
+            data:  {
+              status:    "PAID",
+              paidAt,
+              method:    l.method,
+              feeAmount: calcFee(rates, l.method, c.installmentTotal ?? 1, l.amount),
+            },
+          })
+          if (count !== 1) throw new Error("Uma das cobranças acabou de ser quitada por outra pessoa. Recarregue a página.")
+          quitadas++
+        } else {
+          await tx.payment.create({
+            data: {
+              studentId:   l.studentId,
+              amount:      l.amount,
+              dueDate:     paidAt,
+              paidAt,
+              status:      "PAID",
+              method:      l.method,
+              feeAmount:   calcFee(rates, l.method, 1, l.amount),
+              description: l.description?.trim() || "Recebimento lançado em lote",
+            },
+          })
+          avulsos++
+        }
+      }
+    })
+
+    for (const sid of new Set(linhas.map((l) => l.studentId))) revalidatePath(`/colaborador/alunos/${sid}`)
+    revalidatePath("/colaborador/financeiro")
+    revalidatePath("/admin/financeiro/pagamentos")
+    revalidatePath("/admin/financeiro")
+    revalidatePath("/admin/relatorios", "layout")
+
+    return { quitadas, avulsos, total: linhas.reduce((s, l) => s + l.amount, 0) }
+  })
+}
+
 // ─── Marcar Pagamento como Pago ───────────────────────────────────────────────
 
 /**

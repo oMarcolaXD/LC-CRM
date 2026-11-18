@@ -8,6 +8,7 @@ import { Label }          from "@/components/ui/label"
 import { createPaymentAction } from "@/lib/actions/financeiro"
 import { PaymentActions } from "./payment-actions"
 import { SearchSelect }   from "@/components/shared/search-list"
+import { LinkButton }     from "@/components/shared/link-button"
 import { DollarSign, Plus, AlertCircle } from "lucide-react"
 import { format }         from "date-fns"
 import { ptBR }           from "date-fns/locale"
@@ -55,7 +56,9 @@ export default async function PagamentosPage({ searchParams }: PagamentosPagePro
 
   return (
     <div className="space-y-6">
-      <PageHeader title="COBRANÇAS" backHref="/admin/financeiro" />
+      <PageHeader title="COBRANÇAS" backHref="/admin/financeiro">
+        <LinkButton href="/admin/financeiro/lancar" size="sm">Lançar recebimentos</LinkButton>
+      </PageHeader>
 
       {success && <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm">{decodeURIComponent(success)}</div>}
       {error   && <div className="bg-destructive/10 border border-destructive/20 text-destructive px-4 py-3 rounded-lg text-sm flex gap-2"><AlertCircle className="w-4 h-4 shrink-0" />{decodeURIComponent(error)}</div>}

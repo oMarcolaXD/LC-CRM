@@ -9,6 +9,7 @@ import { Badge }         from "@/components/ui/badge"
 import { PaymentActions }    from "./payment-actions"
 import { EditPaymentDialog } from "./edit-payment-dialog"
 import { DollarSign, BookOpen, AlertCircle } from "lucide-react"
+import { LinkButton }    from "@/components/shared/link-button"
 import { format }        from "date-fns"
 import { ptBR }          from "date-fns/locale"
 
@@ -59,7 +60,9 @@ export default async function ColaboradorFinanceiroPage({ searchParams }: Financ
       <PageHeader
         title="FINANCEIRO"
         description="Verificação de pagamentos e emissão de recibos"
-      />
+      >
+        <LinkButton href="/colaborador/financeiro/lancar" size="sm">Lançar recebimentos</LinkButton>
+      </PageHeader>
 
       {/* Cards de resumo */}
       <div className="grid grid-cols-3 gap-3">
