@@ -31,6 +31,8 @@ import { AddPaymentDialog }                   from "./_components/add-payment-di
 import { DeletePaymentButton }               from "./_components/delete-payment-button"
 import { ReceiptDialog }                     from "./_components/receipt-dialog"
 import { PaymentStatusSelector }             from "./_components/payment-status-selector"
+import { CantinaCard }                       from "./_components/cantina-card"
+import { PAYMENT_METHODS }                   from "@/lib/payments"
 import { aulasDeMinutos, fmtAulas, AULA_PACOTE_WHERE, AULAO_WHERE } from "@/lib/lessons"
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -132,6 +134,8 @@ export default async function StudentDetailPage({ params, searchParams }: Props)
         guardian: { include: { user: true } },
         packages:     { orderBy: { purchaseDate: "asc" } },
         payments:     { orderBy: { dueDate: "desc" }, take: 10 },
+        // Cantina: separada dos pagamentos de aula (não entra na receita de aulas)
+        canteenSales: { orderBy: [{ soldAt: "desc" }, { createdAt: "desc" }] },
         studentNotes: { include: { author: true }, orderBy: { createdAt: "desc" }, take: 5 },
         enrollments:  {
           where:   { course: { status: "ACTIVE" } },
@@ -894,6 +898,21 @@ export default async function StudentDetailPage({ params, searchParams }: Props)
 
         {/* ── Coluna lateral (col-span-1) ──────────────────────────────── */}
         <div className="space-y-4">
+
+          {/* Cantina — fica separada dos pagamentos de aula */}
+          <CantinaCard
+            hoje={formatBR(new Date(), "yyyy-MM-dd")}
+            metodos={[...PAYMENT_METHODS]}
+            vendas={student.canteenSales.map((v) => ({
+              id:          v.id,
+              description: v.description,
+              amount:      Number(v.amount),
+              soldAt:      formatBR(v.soldAt, "dd/MM/yyyy"),
+              fiado:       v.status === "PENDING",
+              paidAt:      v.paidAt ? formatBR(v.paidAt, "dd/MM/yyyy") : null,
+              method:      v.method,
+            }))}
+          />
 
           {/* Financeiro */}
           <Card>

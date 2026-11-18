@@ -177,8 +177,37 @@ model Student {
   studentNotes   StudentNote[]
   materials      MaterialStudent[]
   enrollments    CourseEnrollment[]
+  canteenSales   CanteenSale[]
 
   @@map("students")
+}
+
+// ─── Cantina ──────────────────────────────────────────────────────────────────
+// Separada de Payment de propósito: tudo que é Payment conta como receita de
+// AULAS (painel, financeiro, relatórios, metas). A cantina tem seu próprio total.
+
+enum CanteenStatus {
+  PAID    // pago na hora
+  PENDING // fiado — o aluno pegou e paga depois
+}
+
+model CanteenSale {
+  id          String        @id @default(cuid())
+  studentId   String
+  student     Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  description String        // ex.: "lanche + suco"
+  amount      Decimal       @db.Decimal(10, 2)
+  soldAt      DateTime      // dia em que o aluno pegou o item
+  status      CanteenStatus @default(PAID)
+  paidAt      DateTime?
+  method      String?
+  createdAt   DateTime      @default(now())
+
+  @@index([studentId])
+  @@index([soldAt])
+  @@index([paidAt])
+  @@index([status])
+  @@map("canteen_sales")
 }
 
 model Guardian {

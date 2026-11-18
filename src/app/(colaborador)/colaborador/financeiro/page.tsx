@@ -61,7 +61,10 @@ export default async function ColaboradorFinanceiroPage({ searchParams }: Financ
         title="FINANCEIRO"
         description="Verificação de pagamentos e emissão de recibos"
       >
-        <LinkButton href="/colaborador/financeiro/lancar" size="sm">Lançar recebimentos</LinkButton>
+        <div className="flex flex-wrap gap-2">
+          <LinkButton href="/colaborador/financeiro/cantina" variant="outline" size="sm">🍪 Cantina</LinkButton>
+          <LinkButton href="/colaborador/financeiro/lancar" size="sm">Lançar recebimentos</LinkButton>
+        </div>
       </PageHeader>
 
       {/* Cards de resumo */}

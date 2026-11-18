@@ -530,14 +530,26 @@ export async function addStudentPaymentAction(input: {
 // ─── Lançar recebimentos em lote ──────────────────────────────────────────────
 
 const recebimentoSchema = z.object({
+  /** "aulas" vira Payment (receita de aulas); "cantina" vira CanteenSale (separado). */
+  tipo:      z.enum(["aulas", "cantina"]).default("aulas"),
   studentId: z.string().min(1, "Escolha o aluno"),
   amount:    z.number().positive("Valor deve ser maior que zero"),
-  /** "YYYY-MM-DD" — dia em que o dinheiro entrou (horário de Brasília). */
+  /** "YYYY-MM-DD" — dia em que o dinheiro entrou / o aluno pegou o item (Brasília). */
   paidAt:    z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data inválida"),
-  method:    z.string().trim().min(1, "Informe a forma de pagamento"),
+  method:    z.string().trim().optional(),
   /** Cobrança em aberto a quitar; vazio = lança como pagamento avulso. */
   paymentId: z.string().nullable().optional(),
   description: z.string().optional(),
+  /** Só cantina: o aluno pegou e paga depois. */
+  fiado:     z.boolean().optional(),
+}).superRefine((r, ctx) => {
+  if (r.tipo === "cantina" && !r.description?.trim()) {
+    ctx.addIssue({ code: "custom", message: "Informe o item da cantina" })
+  }
+  const precisaForma = !(r.tipo === "cantina" && r.fiado)
+  if (precisaForma && !r.method?.trim()) {
+    ctx.addIssue({ code: "custom", message: "Informe a forma de pagamento" })
+  }
 })
 
 export type Recebimento = z.infer<typeof recebimentoSchema>
@@ -550,7 +562,7 @@ export type Recebimento = z.infer<typeof recebimentoSchema>
  */
 export async function lancarRecebimentosAction(
   rows: Recebimento[],
-): Promise<ActionResult<{ quitadas: number; avulsos: number; total: number }>> {
+): Promise<ActionResult<{ quitadas: number; avulsos: number; cantina: number; total: number }>> {
   return comResultado(async () => {
     await requireCollaboratorOrAdmin()
     if (rows.length === 0) throw new Error("Adicione pelo menos um recebimento")
@@ -562,7 +574,7 @@ export async function lancarRecebimentosAction(
     })
 
     // Uma mesma cobrança não pode ser quitada por duas linhas
-    const ids = linhas.map((l) => l.paymentId).filter((x): x is string => !!x)
+    const ids = linhas.filter((l) => l.tipo === "aulas").map((l) => l.paymentId).filter((x): x is string => !!x)
     if (new Set(ids).size !== ids.length) throw new Error("A mesma cobrança foi escolhida em duas linhas")
 
     const cobrancas = ids.length
@@ -573,7 +585,7 @@ export async function lancarRecebimentosAction(
       : []
     const porId = new Map(cobrancas.map((c) => [c.id, c]))
     linhas.forEach((l, i) => {
-      if (!l.paymentId) return
+      if (l.tipo !== "aulas" || !l.paymentId) return
       const c = porId.get(l.paymentId)
       if (!c || c.studentId !== l.studentId) throw new Error(`Linha ${i + 1}: a cobrança escolhida não é deste aluno`)
       if (c.status === "PAID") throw new Error(`Linha ${i + 1}: esta cobrança já está paga`)
@@ -583,12 +595,26 @@ export async function lancarRecebimentosAction(
     })
 
     const rates = await loadFeeRates()
-    let quitadas = 0, avulsos = 0
+    let quitadas = 0, avulsos = 0, cantina = 0
     await prisma.$transaction(async (tx) => {
       for (const l of linhas) {
         // Meio-dia de Brasília: a data nunca "pula" de dia por causa de fuso.
         const paidAt = parseBrazilDateTime(l.paidAt, "12:00")
-        if (l.paymentId) {
+        if (l.tipo === "cantina") {
+          // Fora de Payment: não entra na receita de aulas.
+          await tx.canteenSale.create({
+            data: {
+              studentId:   l.studentId,
+              description: l.description!.trim(),
+              amount:      l.amount,
+              soldAt:      paidAt,
+              status:      l.fiado ? "PENDING" : "PAID",
+              paidAt:      l.fiado ? null : paidAt,
+              method:      l.fiado ? null : l.method!.trim(),
+            },
+          })
+          cantina++
+        } else if (l.paymentId) {
           const c = porId.get(l.paymentId)!
           // updateMany com status ≠ PAID: se alguém quitou no meio do caminho, não paga duas vezes
           const { count } = await tx.payment.updateMany({
@@ -596,8 +622,8 @@ export async function lancarRecebimentosAction(
             data:  {
               status:    "PAID",
               paidAt,
-              method:    l.method,
-              feeAmount: calcFee(rates, l.method, c.installmentTotal ?? 1, l.amount),
+              method:    l.method!.trim(),
+              feeAmount: calcFee(rates, l.method!.trim(), c.installmentTotal ?? 1, l.amount),
             },
           })
           if (count !== 1) throw new Error("Uma das cobranças acabou de ser quitada por outra pessoa. Recarregue a página.")
@@ -610,8 +636,8 @@ export async function lancarRecebimentosAction(
               dueDate:     paidAt,
               paidAt,
               status:      "PAID",
-              method:      l.method,
-              feeAmount:   calcFee(rates, l.method, 1, l.amount),
+              method:      l.method!.trim(),
+              feeAmount:   calcFee(rates, l.method!.trim(), 1, l.amount),
               description: l.description?.trim() || "Recebimento lançado em lote",
             },
           })
@@ -625,8 +651,54 @@ export async function lancarRecebimentosAction(
     revalidatePath("/admin/financeiro/pagamentos")
     revalidatePath("/admin/financeiro")
     revalidatePath("/admin/relatorios", "layout")
+    revalidatePath("/colaborador/financeiro/cantina")
 
-    return { quitadas, avulsos, total: linhas.reduce((s, l) => s + l.amount, 0) }
+    return { quitadas, avulsos, cantina, total: linhas.reduce((s, l) => s + l.amount, 0) }
+  })
+}
+
+// ─── Cantina: receber fiado / excluir lançamento ──────────────────────────────
+
+const recebimentoCantinaSchema = z.object({
+  id:     z.string().min(1),
+  method: z.string().trim().min(1, "Informe a forma de pagamento"),
+  paidAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data inválida"),
+})
+
+/** Quita um item fiado da cantina. */
+export async function receberCantinaAction(
+  input: { id: string; method: string; paidAt: string },
+): Promise<ActionResult<undefined>> {
+  return comResultado(async () => {
+    await requireCollaboratorOrAdmin()
+    const p = recebimentoCantinaSchema.safeParse(input)
+    if (!p.success) throw new Error(p.error.issues[0]?.message ?? "Dados inválidos")
+
+    const venda = await prisma.canteenSale.findUnique({ where: { id: p.data.id }, select: { studentId: true } })
+    if (!venda) throw new Error("Lançamento da cantina não encontrado")
+
+    const { count } = await prisma.canteenSale.updateMany({
+      where: { id: p.data.id, status: "PENDING" },
+      data:  { status: "PAID", method: p.data.method, paidAt: parseBrazilDateTime(p.data.paidAt, "12:00") },
+    })
+    if (count !== 1) throw new Error("Este item já estava pago")
+
+    revalidatePath(`/colaborador/alunos/${venda.studentId}`)
+    revalidatePath("/colaborador/financeiro/cantina")
+    return undefined
+  })
+}
+
+/** Apaga um lançamento da cantina feito por engano. */
+export async function excluirCantinaAction(id: string): Promise<ActionResult<undefined>> {
+  return comResultado(async () => {
+    await requireCollaboratorOrAdmin()
+    const venda = await prisma.canteenSale.findUnique({ where: { id }, select: { studentId: true } })
+    if (!venda) throw new Error("Lançamento da cantina não encontrado")
+    await prisma.canteenSale.delete({ where: { id } })
+    revalidatePath(`/colaborador/alunos/${venda.studentId}`)
+    revalidatePath("/colaborador/financeiro/cantina")
+    return undefined
   })
 }
 

@@ -16,6 +16,9 @@ interface Recente { studentId: string; amount: number; dia: string }
 
 interface Linha {
   key:       number
+  tipo:      "aulas" | "cantina"
+  item:      string          // só cantina: o que o aluno pegou
+  fiado:     boolean         // só cantina: pega agora, paga depois
   studentId: string
   valor:     string          // como digitado ("150", "150,50", "1.500,00")
   paidAt:    string          // YYYY-MM-DD
@@ -48,8 +51,10 @@ export function LancarRecebimentosForm({ hoje, metodos, alunos, abertas, recente
   const [pending, start] = useTransition()
   const [revisando, setRevisando] = useState(false)
   const [seq, setSeq] = useState(1)
-  const nova = (key: number, base?: Partial<Linha>): Linha =>
-    ({ key, studentId: "", valor: "", paidAt: hoje, method: base?.method ?? "", destino: "" })
+  const nova = (key: number, base?: Partial<Linha>): Linha => ({
+    key, tipo: base?.tipo ?? "aulas", item: "", fiado: false,
+    studentId: "", valor: "", paidAt: hoje, method: base?.method ?? "", destino: "",
+  })
   const [linhas, setLinhas] = useState<Linha[]>([nova(0)])
 
   const alunoPorId    = useMemo(() => new Map(alunos.map((a) => [a.id, a])), [alunos])
@@ -70,9 +75,19 @@ export function LancarRecebimentosForm({ hoje, metodos, alunos, abertas, recente
   const resolvidas = useMemo(() => {
     const usadas = new Set<string>()
     // Escolhas manuais reservam primeiro
-    for (const l of linhas) if (l.destino && l.destino !== AVULSO) usadas.add(l.destino)
+    for (const l of linhas) if (l.tipo === "aulas" && l.destino && l.destino !== AVULSO) usadas.add(l.destino)
     return linhas.map((l) => {
       const valor = lerValor(l.valor)
+      if (l.tipo === "cantina") {
+        const problema =
+          !l.studentId                          ? "Escolha o aluno" :
+          !l.item.trim()                        ? "Informe o item da cantina" :
+          !Number.isFinite(valor) || valor <= 0 ? "Informe o valor" :
+          !l.paidAt                             ? "Informe a data" :
+          !l.fiado && !l.method                 ? "Informe a forma de pagamento (ou marque fiado)" :
+          null
+        return { ...l, valorNum: valor, destinoFinal: AVULSO, cobranca: null as Aberta | null, repetido: false, problema }
+      }
       let destino = l.destino
       if (!destino && l.studentId && Number.isFinite(valor)) {
         const sugestao = (abertasPorAluno.get(l.studentId) ?? []).find((a) => igual(a.amount, valor) && !usadas.has(a.id))
@@ -89,17 +104,18 @@ export function LancarRecebimentosForm({ hoje, metodos, alunos, abertas, recente
         !l.method                          ? "Informe a forma de pagamento" :
         cobranca && !igual(cobranca.amount, valor) ? "Valor diferente da cobrança escolhida" :
         null
-      return { ...l, valor: l.valor, valorNum: valor, destinoFinal: destino || AVULSO, cobranca, repetido, problema }
+      return { ...l, valorNum: valor, destinoFinal: destino || AVULSO, cobranca, repetido, problema }
     })
   }, [linhas, abertas, abertasPorAluno, recentes])
 
   const validas = resolvidas.filter((r) => !r.problema)
   const total   = validas.reduce((s, r) => s + r.valorNum, 0)
+  const totalCantina = validas.filter((r) => r.tipo === "cantina").reduce((s, r) => s + r.valorNum, 0)
   const podeRevisar = resolvidas.length > 0 && resolvidas.every((r) => !r.problema)
 
   function adicionar() {
     const ultima = linhas[linhas.length - 1]
-    setLinhas((ls) => [...ls, nova(seq, { method: ultima?.method })])
+    setLinhas((ls) => [...ls, nova(seq, { method: ultima?.method, tipo: ultima?.tipo })])
     setSeq((s) => s + 1)
   }
 
@@ -107,13 +123,16 @@ export function LancarRecebimentosForm({ hoje, metodos, alunos, abertas, recente
     start(async () => {
       try {
         const r = ouFalhe(await lancarRecebimentosAction(resolvidas.map((l) => ({
-          studentId: l.studentId,
-          amount:    l.valorNum,
-          paidAt:    l.paidAt,
-          method:    l.method,
-          paymentId: l.destinoFinal === AVULSO ? null : l.destinoFinal,
+          tipo:        l.tipo,
+          studentId:   l.studentId,
+          amount:      l.valorNum,
+          paidAt:      l.paidAt,
+          method:      l.tipo === "cantina" && l.fiado ? undefined : l.method,
+          paymentId:   l.tipo === "aulas" && l.destinoFinal !== AVULSO ? l.destinoFinal : null,
+          description: l.tipo === "cantina" ? l.item.trim() : undefined,
+          fiado:       l.tipo === "cantina" ? l.fiado : undefined,
         }))))
-        toast.success(`${r.quitadas + r.avulsos} recebimento(s) lançado(s) — ${brl(r.total)}`)
+        toast.success(`${r.quitadas + r.avulsos + r.cantina} lançamento(s) — ${brl(r.total)}`)
         setLinhas([nova(seq)])
         setSeq((s) => s + 1)
         setRevisando(false)
@@ -127,7 +146,7 @@ export function LancarRecebimentosForm({ hoje, metodos, alunos, abertas, recente
   // ── Revisão antes de gravar ────────────────────────────────────────────────
   if (revisando) {
     return (
-      <div className="space-y-4 rounded-xl border border-border bg-card p-4">
+      <div className="mb-24 space-y-4 rounded-xl border border-border bg-card p-4">
         <div>
           <p className="font-semibold">Confira antes de lançar</p>
           <p className="text-xs text-muted-foreground">Nada foi gravado ainda. Os lançamentos vão direto para o perfil de cada aluno.</p>
@@ -138,10 +157,14 @@ export function LancarRecebimentosForm({ hoje, metodos, alunos, abertas, recente
               <div className="min-w-0">
                 <p className="font-medium">{i + 1}. {alunoPorId.get(r.studentId)?.name}</p>
                 <p className="text-xs text-muted-foreground">
-                  {r.cobranca
-                    ? <>Quita a cobrança <strong>{r.cobranca.label}</strong> (venc. {r.cobranca.due})</>
-                    : <>Pagamento avulso (não havia cobrança em aberto com esse valor)</>}
-                  {" · "}{r.method} · pago em {r.paidAt.split("-").reverse().join("/")}
+                  {r.tipo === "cantina"
+                    ? <>🍪 <strong>Cantina</strong>: {r.item}{r.fiado ? " · FIADO (fica em aberto no perfil)" : ` · ${r.method}`} · {r.paidAt.split("-").reverse().join("/")}</>
+                    : <>
+                        {r.cobranca
+                          ? <>Quita a cobrança <strong>{r.cobranca.label}</strong> (venc. {r.cobranca.due})</>
+                          : <>Pagamento avulso (não havia cobrança em aberto com esse valor)</>}
+                        {" · "}{r.method} · pago em {r.paidAt.split("-").reverse().join("/")}
+                      </>}
                 </p>
                 {r.repetido && (
                   <p className="mt-0.5 flex items-center gap-1 text-xs text-amber-600">
@@ -154,7 +177,10 @@ export function LancarRecebimentosForm({ hoje, metodos, alunos, abertas, recente
           ))}
         </ul>
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm">Total: <strong>{brl(total)}</strong> em {resolvidas.length} lançamento{resolvidas.length !== 1 ? "s" : ""}</p>
+          <p className="text-sm">
+            Total: <strong>{brl(total)}</strong> em {resolvidas.length} lançamento{resolvidas.length !== 1 ? "s" : ""}
+            {totalCantina > 0 && <span className="text-muted-foreground"> (aulas {brl(total - totalCantina)} · cantina {brl(totalCantina)})</span>}
+          </p>
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => setRevisando(false)} disabled={pending}>
               <ArrowLeft className="mr-1.5 h-3.5 w-3.5" /> Voltar e editar
@@ -170,14 +196,27 @@ export function LancarRecebimentosForm({ hoje, metodos, alunos, abertas, recente
   }
 
   // ── Preenchimento ──────────────────────────────────────────────────────────
+  // pb-24: o botão flutuante de ajuda (WhatsApp) não pode cobrir "Revisar e lançar"
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 pb-24">
       {resolvidas.map((r, i) => {
         const opcoes = abertasPorAluno.get(r.studentId) ?? []
         return (
           <div key={r.key} className="space-y-3 rounded-xl border border-border bg-card p-4">
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-semibold text-muted-foreground">Recebimento {i + 1}</p>
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-3">
+                <p className="text-xs font-semibold text-muted-foreground">Lançamento {i + 1}</p>
+                {/* Aulas = receita de aulas (cobranças/pacotes) · Cantina = separado */}
+                <div className="flex overflow-hidden rounded-lg border border-input text-xs">
+                  {(["aulas", "cantina"] as const).map((t) => (
+                    <button key={t} type="button"
+                      onClick={() => atualizar(r.key, { tipo: t, destino: "" })}
+                      className={`px-3 py-1 font-medium transition-colors ${r.tipo === t ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}>
+                      {t === "aulas" ? "Aulas" : "🍪 Cantina"}
+                    </button>
+                  ))}
+                </div>
+              </div>
               {linhas.length > 1 && (
                 <button type="button" onClick={() => setLinhas((ls) => ls.filter((l) => l.key !== r.key))}
                   className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-destructive" title="Remover linha">
@@ -206,14 +245,15 @@ export function LancarRecebimentosForm({ hoje, metodos, alunos, abertas, recente
                     className="mt-1 h-9 w-full rounded-lg border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
                 </div>
                 <div>
-                  <label className="text-xs font-medium">Pago em *</label>
+                  <label className="text-xs font-medium">{r.tipo === "cantina" ? "Data *" : "Pago em *"}</label>
                   <input type="date" value={r.paidAt} max={hoje}
                     onChange={(e) => atualizar(r.key, { paidAt: e.target.value })}
                     className="mt-1 h-9 w-full rounded-lg border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
                 </div>
                 <div className="col-span-2 md:col-span-1">
-                  <label className="text-xs font-medium">Forma de pagamento *</label>
-                  <select value={r.method} onChange={(e) => atualizar(r.key, { method: e.target.value })}
+                  <label className="text-xs font-medium">Forma de pagamento {r.tipo === "cantina" && r.fiado ? "(no fiado, só ao receber)" : "*"}</label>
+                  <select value={r.method} disabled={r.tipo === "cantina" && r.fiado}
+                    onChange={(e) => atualizar(r.key, { method: e.target.value })}
                     className="mt-1 h-9 w-full rounded-lg border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
                     <option value="">Selecionar…</option>
                     {metodos.map((m) => <option key={m} value={m}>{m}</option>)}
@@ -222,7 +262,23 @@ export function LancarRecebimentosForm({ hoje, metodos, alunos, abertas, recente
               </div>
             </div>
 
-            {r.studentId && (
+            {r.tipo === "cantina" && (
+              <div className="grid gap-3 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] md:items-end">
+                <div>
+                  <label className="text-xs font-medium">Item da cantina *</label>
+                  <input placeholder="Ex.: lanche + suco" value={r.item}
+                    onChange={(e) => atualizar(r.key, { item: e.target.value })}
+                    className="mt-1 h-9 w-full rounded-lg border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
+                </div>
+                <label className="flex h-9 cursor-pointer items-center gap-2 rounded-lg border border-input px-3 text-sm">
+                  <input type="checkbox" checked={r.fiado}
+                    onChange={(e) => atualizar(r.key, { fiado: e.target.checked })} />
+                  Fiado (paga depois)
+                </label>
+              </div>
+            )}
+
+            {r.tipo === "aulas" && r.studentId && (
               <div>
                 <label className="text-xs font-medium">Lançar como</label>
                 <select
