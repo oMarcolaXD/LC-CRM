@@ -19,6 +19,8 @@ interface Linha {
   tipo:      "aulas" | "cantina"
   item:      string          // só cantina: o que o aluno pegou
   fiado:     boolean         // só cantina: pega agora, paga depois
+  parcelas:  number          // cartão de crédito em N vezes (aulas)
+  obs:       string          // observação livre
   studentId: string
   valor:     string          // como digitado ("150", "150,50", "1.500,00")
   paidAt:    string          // YYYY-MM-DD
@@ -28,6 +30,21 @@ interface Linha {
 }
 
 const AVULSO = "avulso"
+const CARTAO = "Cartão de crédito"
+
+/** "YYYY-MM-DD" + n meses → "dd/MM/yyyy" (prévia das parcelas do cartão). */
+function maisMeses(dia: string, n: number): string {
+  const [a, m, d] = dia.split("-").map(Number)
+  const alvo = new Date(Date.UTC(a, m - 1 + n, 1))
+  const ultimo = new Date(Date.UTC(alvo.getUTCFullYear(), alvo.getUTCMonth() + 1, 0)).getUTCDate()
+  return `${String(Math.min(d, ultimo)).padStart(2, "0")}/${String(alvo.getUTCMonth() + 1).padStart(2, "0")}/${alvo.getUTCFullYear()}`
+}
+
+/** Mesma divisão do servidor (dividirParcelas): a 1ª parcela absorve os centavos. */
+function partes(total: number, n: number): number[] {
+  const c = Math.round(total * 100), base = Math.floor(c / n), resto = c - base * n
+  return Array.from({ length: n }, (_, i) => (base + (i === 0 ? resto : 0)) / 100)
+}
 
 function brl(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
@@ -52,7 +69,7 @@ export function LancarRecebimentosForm({ hoje, metodos, alunos, abertas, recente
   const [revisando, setRevisando] = useState(false)
   const [seq, setSeq] = useState(1)
   const nova = (key: number, base?: Partial<Linha>): Linha => ({
-    key, tipo: base?.tipo ?? "aulas", item: "", fiado: false,
+    key, tipo: base?.tipo ?? "aulas", item: "", fiado: false, parcelas: 1, obs: "",
     studentId: "", valor: "", paidAt: hoje, method: base?.method ?? "", destino: "",
   })
   const [linhas, setLinhas] = useState<Linha[]>([nova(0)])
@@ -86,7 +103,7 @@ export function LancarRecebimentosForm({ hoje, metodos, alunos, abertas, recente
           !l.paidAt                             ? "Informe a data" :
           !l.fiado && !l.method                 ? "Informe a forma de pagamento (ou marque fiado)" :
           null
-        return { ...l, valorNum: valor, destinoFinal: AVULSO, cobranca: null as Aberta | null, repetido: false, problema }
+        return { ...l, valorNum: valor, destinoFinal: AVULSO, cobranca: null as Aberta | null, repetido: false, problema, restante: 0 }
       }
       let destino = l.destino
       if (!destino && l.studentId && Number.isFinite(valor)) {
@@ -102,9 +119,11 @@ export function LancarRecebimentosForm({ hoje, metodos, alunos, abertas, recente
         !Number.isFinite(valor) || valor <= 0 ? "Informe o valor" :
         !l.paidAt                          ? "Informe a data" :
         !l.method                          ? "Informe a forma de pagamento" :
-        cobranca && !igual(cobranca.amount, valor) ? "Valor diferente da cobrança escolhida" :
+        cobranca && valor > cobranca.amount + 0.009
+          ? "Valor maior que a cobrança. Faça o ajuste manualmente no perfil do aluno (anote nas observações)." :
         null
-      return { ...l, valorNum: valor, destinoFinal: destino || AVULSO, cobranca, repetido, problema }
+      const restante = cobranca && Number.isFinite(valor) ? Math.round((cobranca.amount - valor) * 100) / 100 : 0
+      return { ...l, valorNum: valor, destinoFinal: destino || AVULSO, cobranca, repetido, problema, restante: restante > 0.009 ? restante : 0 }
     })
   }, [linhas, abertas, abertasPorAluno, recentes])
 
@@ -131,6 +150,8 @@ export function LancarRecebimentosForm({ hoje, metodos, alunos, abertas, recente
           paymentId:   l.tipo === "aulas" && l.destinoFinal !== AVULSO ? l.destinoFinal : null,
           description: l.tipo === "cantina" ? l.item.trim() : undefined,
           fiado:       l.tipo === "cantina" ? l.fiado : undefined,
+          parcelasCartao: l.tipo === "aulas" && l.method === CARTAO ? l.parcelas : undefined,
+          obs:         l.obs.trim() || undefined,
         }))))
         toast.success(`${r.quitadas + r.avulsos + r.cantina} lançamento(s) — ${brl(r.total)}`)
         setLinhas([nova(seq)])
@@ -162,10 +183,19 @@ export function LancarRecebimentosForm({ hoje, metodos, alunos, abertas, recente
                     : <>
                         {r.cobranca
                           ? <>Quita a cobrança <strong>{r.cobranca.label}</strong> (venc. {r.cobranca.due})</>
-                          : <>Pagamento avulso (não havia cobrança em aberto com esse valor)</>}
-                        {" · "}{r.method} · pago em {r.paidAt.split("-").reverse().join("/")}
+                          : <>Pagamento avulso</>}
+                        {" · "}{r.method}{r.method === CARTAO && r.parcelas > 1 ? ` em ${r.parcelas}x` : ""} · {r.paidAt.split("-").reverse().join("/")}
                       </>}
                 </p>
+                {r.tipo === "aulas" && r.restante > 0 && (
+                  <p className="text-xs text-amber-600">Parcial: {brl(r.restante)} continua em aberto.</p>
+                )}
+                {r.tipo === "aulas" && r.method === CARTAO && r.parcelas > 1 && (
+                  <p className="text-xs text-muted-foreground">
+                    Vira {r.parcelas} parcelas a receber: {partes(r.valorNum, r.parcelas).map((v, k) => `${brl(v)} em ${maisMeses(r.paidAt, k + 1)}`).join(" · ")}
+                  </p>
+                )}
+                {r.obs.trim() && <p className="text-xs text-muted-foreground">Obs.: {r.obs.trim()}</p>}
                 {r.repetido && (
                   <p className="mt-0.5 flex items-center gap-1 text-xs text-amber-600">
                     <AlertTriangle className="h-3 w-3" /> Já existe um pagamento deste aluno com esse valor nesse dia. Confira se não é repetido.
@@ -287,10 +317,13 @@ export function LancarRecebimentosForm({ hoje, metodos, alunos, abertas, recente
                   className="mt-1 h-9 w-full rounded-lg border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
                 >
                   {opcoes.map((o) => {
-                    const diferente = Number.isFinite(r.valorNum) && !igual(o.amount, r.valorNum)
+                    const temValor = Number.isFinite(r.valorNum)
+                    const maior    = temValor && r.valorNum > o.amount + 0.009
+                    const parcial  = temValor && !maior && !igual(o.amount, r.valorNum)
                     return (
-                      <option key={o.id} value={o.id} disabled={diferente}>
-                        Quitar: {o.label} — {brl(o.amount)} · venc. {o.due}{o.vencida ? " (vencida)" : ""}{diferente ? " — valor diferente" : ""}
+                      <option key={o.id} value={o.id} disabled={maior}>
+                        Quitar: {o.label} — {brl(o.amount)} · venc. {o.due}{o.vencida ? " (vencida)" : ""}
+                        {maior ? " — valor maior que a cobrança" : parcial ? ` — parcial, fica ${brl(o.amount - r.valorNum)} em aberto` : ""}
                       </option>
                     )
                   })}
@@ -299,8 +332,38 @@ export function LancarRecebimentosForm({ hoje, metodos, alunos, abertas, recente
                 {opcoes.length === 0 && (
                   <p className="mt-1 text-[11px] text-muted-foreground">Este aluno não tem cobrança em aberto — vai como pagamento avulso.</p>
                 )}
+                {r.cobranca && r.restante > 0 && (
+                  <p className="mt-1 text-[11px] text-amber-600">
+                    Pagamento parcial: {brl(r.valorNum)} quitado agora e <strong>{brl(r.restante)}</strong> continua em aberto (venc. {r.cobranca.due}).
+                  </p>
+                )}
               </div>
             )}
+
+            {r.tipo === "aulas" && r.method === CARTAO && (
+              <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] md:items-start">
+                <div>
+                  <label className="text-xs font-medium">Parcelas no cartão</label>
+                  <select value={r.parcelas} onChange={(e) => atualizar(r.key, { parcelas: Number(e.target.value) })}
+                    className="mt-1 h-9 w-full rounded-lg border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
+                    {Array.from({ length: 12 }, (_, k) => k + 1).map((k) => <option key={k} value={k}>{k === 1 ? "À vista (1x)" : `${k}x`}</option>)}
+                  </select>
+                </div>
+                {r.parcelas > 1 && Number.isFinite(r.valorNum) && r.valorNum > 0 && (
+                  <p className="text-[11px] text-muted-foreground md:pt-6">
+                    Vira {r.parcelas} parcelas a receber:{" "}
+                    {partes(r.valorNum, r.parcelas).map((v, k) => `${brl(v)} em ${maisMeses(r.paidAt, k + 1)}`).join(" · ")}
+                  </p>
+                )}
+              </div>
+            )}
+
+            <div>
+              <label className="text-xs font-medium">Observações (opcional)</label>
+              <input value={r.obs} maxLength={300} placeholder="Ex.: pagou a mais, ajustar no perfil · combinou desconto…"
+                onChange={(e) => atualizar(r.key, { obs: e.target.value })}
+                className="mt-1 h-9 w-full rounded-lg border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
+            </div>
 
             {r.repetido && (
               <p className="flex items-center gap-1.5 text-xs text-amber-600">

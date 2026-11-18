@@ -22,6 +22,8 @@ import { normalizeGrade } from "@/lib/constants/grades"
 import { gerarRA }        from "@/lib/ra"
 import { temMetodo }      from "@/lib/payments"
 import { mapLimit, SEND_CONCURRENCY } from "@/lib/concurrency"
+import { addMonths }      from "date-fns"
+import { dividirParcelas } from "@/lib/course"
 
 /** Carrega as regras de taxa de cartão ativas (para snapshot em Payment.feeAmount). */
 async function loadFeeRates(): Promise<FeeRate[]> {
@@ -542,6 +544,10 @@ const recebimentoSchema = z.object({
   description: z.string().optional(),
   /** Só cantina: o aluno pegou e paga depois. */
   fiado:     z.boolean().optional(),
+  /** Cartão de crédito em N vezes (aulas): vira N parcelas a receber, como no perfil. */
+  parcelasCartao: z.number().int().min(1).max(12).optional(),
+  /** Observação livre — vai junto na descrição do lançamento. */
+  obs:       z.string().max(300).optional(),
 }).superRefine((r, ctx) => {
   if (r.tipo === "cantina" && !r.description?.trim()) {
     ctx.addIssue({ code: "custom", message: "Informe o item da cantina" })
@@ -554,15 +560,25 @@ const recebimentoSchema = z.object({
 
 export type Recebimento = z.infer<typeof recebimentoSchema>
 
+const CARTAO_CREDITO = "Cartão de crédito"
+const round2 = (n: number) => Math.round(n * 100) / 100
+const comObs = (desc: string, obs?: string) => (obs?.trim() ? `${desc} · Obs: ${obs.trim()}` : desc)
+
 /**
- * Lança vários "fulano pagou tanto" de uma vez. Cada linha ou quita uma
- * cobrança em aberto do próprio aluno (mesmo valor) ou vira um pagamento
- * avulso já pago. Tudo numa transação: se uma linha estiver errada, nada é
- * gravado e a mensagem diz qual linha corrigir.
+ * Lança vários "fulano pagou tanto" de uma vez. Cada linha:
+ *  - quita uma cobrança em aberto do aluno — se pagou MENOS, a parte paga é
+ *    quitada e a diferença continua em aberto (mesmo vencimento e vínculos);
+ *    pagar MAIS que a cobrança é recusado (ajuste manual + observação);
+ *  - ou vira um pagamento avulso;
+ *  - no cartão de crédito em N vezes, o valor vira N parcelas a receber (uma por
+ *    mês), igual ao parcelamento do perfil do aluno;
+ *  - ou, na cantina, vira um lançamento separado da receita de aulas.
+ * Tudo numa transação: se uma linha estiver errada, nada é gravado e a
+ * mensagem diz qual linha corrigir.
  */
 export async function lancarRecebimentosAction(
   rows: Recebimento[],
-): Promise<ActionResult<{ quitadas: number; avulsos: number; cantina: number; total: number }>> {
+): Promise<ActionResult<{ quitadas: number; parciais: number; parcelasCartao: number; avulsos: number; cantina: number; total: number }>> {
   return comResultado(async () => {
     await requireCollaboratorOrAdmin()
     if (rows.length === 0) throw new Error("Adicione pelo menos um recebimento")
@@ -580,7 +596,11 @@ export async function lancarRecebimentosAction(
     const cobrancas = ids.length
       ? await prisma.payment.findMany({
           where:  { id: { in: ids } },
-          select: { id: true, studentId: true, status: true, amount: true, installmentTotal: true },
+          select: {
+            id: true, studentId: true, status: true, amount: true, dueDate: true, description: true, method: true,
+            packageId: true, courseId: true, lessonId: true,
+            installmentNumber: true, installmentTotal: true, installmentGroupId: true,
+          },
         })
       : []
     const porId = new Map(cobrancas.map((c) => [c.id, c]))
@@ -589,23 +609,27 @@ export async function lancarRecebimentosAction(
       const c = porId.get(l.paymentId)
       if (!c || c.studentId !== l.studentId) throw new Error(`Linha ${i + 1}: a cobrança escolhida não é deste aluno`)
       if (c.status === "PAID") throw new Error(`Linha ${i + 1}: esta cobrança já está paga`)
-      if (Math.abs(Number(c.amount) - l.amount) > 0.009) {
-        throw new Error(`Linha ${i + 1}: o valor é diferente da cobrança escolhida — lance como avulso ou corrija o valor`)
+      if (l.amount > Number(c.amount) + 0.009) {
+        throw new Error(`Linha ${i + 1}: o valor é maior que a cobrança escolhida. Faça esse ajuste manualmente no perfil do aluno (anote nas observações).`)
       }
     })
 
     const rates = await loadFeeRates()
-    let quitadas = 0, avulsos = 0, cantina = 0
+    let quitadas = 0, parciais = 0, parcelasCartao = 0, avulsos = 0, cantina = 0
     await prisma.$transaction(async (tx) => {
       for (const l of linhas) {
         // Meio-dia de Brasília: a data nunca "pula" de dia por causa de fuso.
         const paidAt = parseBrazilDateTime(l.paidAt, "12:00")
+        const metodo = l.method?.trim() ?? ""
+        // Cartão de crédito em N vezes → N parcelas a receber (só nas aulas)
+        const n = l.tipo === "aulas" && metodo === CARTAO_CREDITO ? (l.parcelasCartao ?? 1) : 1
+
         if (l.tipo === "cantina") {
           // Fora de Payment: não entra na receita de aulas.
           await tx.canteenSale.create({
             data: {
               studentId:   l.studentId,
-              description: l.description!.trim(),
+              description: comObs(l.description!.trim(), l.obs),
               amount:      l.amount,
               soldAt:      paidAt,
               status:      l.fiado ? "PENDING" : "PAID",
@@ -616,18 +640,81 @@ export async function lancarRecebimentosAction(
           cantina++
         } else if (l.paymentId) {
           const c = porId.get(l.paymentId)!
+          const base    = c.description?.trim() || "Cobrança"
+          const vinculo = { packageId: c.packageId, courseId: c.courseId, lessonId: c.lessonId }
+          const restante = round2(Number(c.amount) - l.amount)
+
           // updateMany com status ≠ PAID: se alguém quitou no meio do caminho, não paga duas vezes
-          const { count } = await tx.payment.updateMany({
-            where: { id: l.paymentId, status: { not: "PAID" } },
-            data:  {
-              status:    "PAID",
-              paidAt,
-              method:    l.method!.trim(),
-              feeAmount: calcFee(rates, l.method!.trim(), c.installmentTotal ?? 1, l.amount),
-            },
-          })
+          let count: number
+          if (n === 1) {
+            ;({ count } = await tx.payment.updateMany({
+              where: { id: c.id, status: { not: "PAID" } },
+              data:  {
+                status:      "PAID",
+                amount:      l.amount,
+                paidAt,
+                method:      metodo,
+                feeAmount:   calcFee(rates, metodo, c.installmentTotal ?? 1, l.amount),
+                description: comObs(restante > 0.009 ? `${base} — parte paga` : base, l.obs),
+              },
+            }))
+          } else {
+            // A parte paga vira o parcelamento do cartão: a própria cobrança é a 1ª parcela
+            const partes = dividirParcelas(l.amount, n)
+            const grupo  = randomUUID()
+            ;({ count } = await tx.payment.updateMany({
+              where: { id: c.id, status: { not: "PAID" } },
+              data:  {
+                status: "PENDING", amount: partes[0], dueDate: addMonths(paidAt, 1), paidAt: null,
+                method: metodo, feeAmount: calcFee(rates, metodo, n, partes[0]),
+                installmentNumber: 1, installmentTotal: n, installmentGroupId: grupo,
+                description: comObs(`${base} — cartão 1/${n}`, l.obs),
+              },
+            }))
+            await tx.payment.createMany({
+              data: partes.slice(1).map((valor, k) => ({
+                studentId: c.studentId, ...vinculo,
+                amount: valor, dueDate: addMonths(paidAt, k + 2), status: "PENDING" as const,
+                method: metodo, feeAmount: calcFee(rates, metodo, n, valor),
+                installmentNumber: k + 2, installmentTotal: n, installmentGroupId: grupo,
+                description: `${base} — cartão ${k + 2}/${n}`,
+              })),
+            })
+            parcelasCartao += n
+          }
           if (count !== 1) throw new Error("Uma das cobranças acabou de ser quitada por outra pessoa. Recarregue a página.")
-          quitadas++
+
+          // Pagou menos: a diferença continua em aberto, com o mesmo vencimento e vínculos
+          if (restante > 0.009) {
+            await tx.payment.create({
+              data: {
+                studentId: c.studentId, ...vinculo,
+                amount: restante, dueDate: c.dueDate, status: c.status,
+                method: c.method, feeAmount: c.method ? calcFee(rates, c.method, c.installmentTotal ?? 1, restante) : null,
+                installmentNumber: c.installmentNumber, installmentTotal: c.installmentTotal, installmentGroupId: c.installmentGroupId,
+                description: `${base} — saldo restante`,
+              },
+            })
+            parciais++
+          } else {
+            quitadas++
+          }
+        } else if (n > 1) {
+          // Avulso no cartão em N vezes: N parcelas a receber
+          const partes = dividirParcelas(l.amount, n)
+          const grupo  = randomUUID()
+          const base   = l.description?.trim() || "Recebimento lançado em lote"
+          await tx.payment.createMany({
+            data: partes.map((valor, k) => ({
+              studentId: l.studentId,
+              amount: valor, dueDate: addMonths(paidAt, k + 1), status: "PENDING" as const,
+              method: metodo, feeAmount: calcFee(rates, metodo, n, valor),
+              installmentNumber: k + 1, installmentTotal: n, installmentGroupId: grupo,
+              description: comObs(`${base} — cartão ${k + 1}/${n}`, k === 0 ? l.obs : undefined),
+            })),
+          })
+          parcelasCartao += n
+          avulsos++
         } else {
           await tx.payment.create({
             data: {
@@ -636,9 +723,9 @@ export async function lancarRecebimentosAction(
               dueDate:     paidAt,
               paidAt,
               status:      "PAID",
-              method:      l.method!.trim(),
-              feeAmount:   calcFee(rates, l.method!.trim(), 1, l.amount),
-              description: l.description?.trim() || "Recebimento lançado em lote",
+              method:      metodo,
+              feeAmount:   calcFee(rates, metodo, 1, l.amount),
+              description: comObs(l.description?.trim() || "Recebimento lançado em lote", l.obs),
             },
           })
           avulsos++
@@ -653,7 +740,7 @@ export async function lancarRecebimentosAction(
     revalidatePath("/admin/relatorios", "layout")
     revalidatePath("/colaborador/financeiro/cantina")
 
-    return { quitadas, avulsos, cantina, total: linhas.reduce((s, l) => s + l.amount, 0) }
+    return { quitadas, parciais, parcelasCartao, avulsos, cantina, total: linhas.reduce((s, l) => s + l.amount, 0) }
   })
 }
 
