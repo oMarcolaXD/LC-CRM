@@ -12,6 +12,7 @@ import { format }         from "date-fns"
 import { ptBR }           from "date-fns/locale"
 import { parseBrazilDateTime } from "@/lib/datetime"
 import { aulasDe }    from "@/lib/lessons"
+import { operacoesDeDevolucao } from "@/lib/package-refund"
 
 /** Uma aula de 2h devolve 2 aulas ao pacote — ver src/lib/lessons.ts. */
 const lessonCost = aulasDe
@@ -106,24 +107,15 @@ export async function guardianCancelLessonAction(
     }
   }
 
-  const activePkg = await prisma.lessonPackage.findFirst({
-    where:   { studentId, status: { in: ["ACTIVE", "EXHAUSTED"] } },
-    orderBy: { purchaseDate: "desc" },
-  })
-  const refundCost = lessonCost(lesson.duration)
+  // Devolve sem estourar o total de nenhum pacote (ver package-refund.ts)
+  const devolucao = await operacoesDeDevolucao(studentId, lessonCost(lesson.duration))
 
   await prisma.$transaction([
     prisma.lesson.update({
       where: { id: lessonId },
       data:  { status: "CANCELLED" },
     }),
-    ...(activePkg
-      ? [prisma.lessonPackage.update({
-          where: { id: activePkg.id },
-          data:  { remainingLessons: { increment: refundCost }, status: "ACTIVE" },
-        })]
-      : []
-    ),
+    ...devolucao,
   ])
 
   const scheduledAt = format(lesson.scheduledAt, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
@@ -133,7 +125,7 @@ export async function guardianCancelLessonAction(
   await notifyStaff(
     "LESSON_CANCELLED",
     "Aula cancelada pelo responsável",
-    `${byName} cancelou a aula de ${subjectName} (${scheduledAt}).${reason ? ` Motivo: "${reason}"` : ""}${activePkg ? " O saldo foi devolvido ao pacote." : ""}`,
+    `${byName} cancelou a aula de ${subjectName} (${scheduledAt}).${reason ? ` Motivo: "${reason}"` : ""}${devolucao.length > 0 ? " O saldo foi devolvido ao pacote." : ""}`,
   )
 
   revalidatePath("/aluno/aulas")

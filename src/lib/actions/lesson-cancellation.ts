@@ -7,6 +7,7 @@ import { notify }         from "@/lib/notifications"
 import { format }         from "date-fns"
 import { ptBR }           from "date-fns/locale"
 import { aulasDe }    from "@/lib/lessons"
+import { operacoesDeDevolucao } from "@/lib/package-refund"
 
 /** Uma aula de 2h devolve 2 aulas ao pacote — ver src/lib/lessons.ts. */
 const lessonCost = aulasDe
@@ -37,27 +38,17 @@ export async function cancelLessonDirectAction(
 
   // Aula de turma não saiu de pacote nenhum (o contrato é por período), então
   // cancelá-la também não devolve saldo — devolver criaria aula do nada.
-  const activePkg = studentId && !lesson.courseId
-    ? await prisma.lessonPackage.findFirst({
-        where:   { studentId, status: { in: ["ACTIVE", "EXHAUSTED"] } },
-        orderBy: { purchaseDate: "desc" },
-      })
-    : null
-
-  const refundCost = lessonCost(lesson.duration)
+  // Devolve sem estourar o total de nenhum pacote (ver package-refund.ts)
+  const devolucao = studentId && !lesson.courseId
+    ? await operacoesDeDevolucao(studentId, lessonCost(lesson.duration))
+    : []
 
   await prisma.$transaction([
     prisma.lesson.update({
       where: { id: lessonId },
       data:  { status: "CANCELLED" },
     }),
-    ...(activePkg
-      ? [prisma.lessonPackage.update({
-          where: { id: activePkg.id },
-          data:  { remainingLessons: { increment: refundCost }, status: "ACTIVE" },
-        })]
-      : []
-    ),
+    ...devolucao,
   ])
 
   const scheduledAt   = format(lesson.scheduledAt, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
@@ -75,7 +66,7 @@ export async function cancelLessonDirectAction(
         userId:  admin.id,
         type:    "CANCELLATION_REQUEST",
         title:   "Aula cancelada pelo colaborador",
-        message: `${requesterName} cancelou a aula de ${subjectName} (${scheduledAt}).${reason ? ` Motivo: "${reason}"` : ""}${activePkg ? " O saldo foi devolvido ao pacote." : ""}`,
+        message: `${requesterName} cancelou a aula de ${subjectName} (${scheduledAt}).${reason ? ` Motivo: "${reason}"` : ""}${devolucao.length > 0 ? " O saldo foi devolvido ao pacote." : ""}`,
         email:   admin.email ?? undefined,
         phone:   admin.phone ?? undefined,
       })
@@ -113,27 +104,17 @@ export async function approveLessonCancellationAction(requestId: string): Promis
   const studentId  = lesson.participants[0]?.studentId ?? null
 
   // Ver cancelLessonDirectAction: aula de turma não devolve saldo de pacote.
-  const activePkg = studentId && !lesson.courseId
-    ? await prisma.lessonPackage.findFirst({
-        where:   { studentId, status: { in: ["ACTIVE", "EXHAUSTED"] } },
-        orderBy: { purchaseDate: "desc" },
-      })
-    : null
-
-  const refundCost = lessonCost(lesson.duration)
+  // Devolve sem estourar o total de nenhum pacote (ver package-refund.ts)
+  const devolucao = studentId && !lesson.courseId
+    ? await operacoesDeDevolucao(studentId, lessonCost(lesson.duration))
+    : []
 
   await prisma.$transaction([
     prisma.lesson.update({
       where: { id: lesson.id },
       data:  { status: "CANCELLED" },
     }),
-    ...(activePkg
-      ? [prisma.lessonPackage.update({
-          where: { id: activePkg.id },
-          data:  { remainingLessons: { increment: refundCost }, status: "ACTIVE" },
-        })]
-      : []
-    ),
+    ...devolucao,
     prisma.lessonCancellationRequest.update({
       where: { id: requestId },
       data:  { status: "APPROVED", reviewedById: session.user.id, reviewedAt: new Date() },
@@ -147,7 +128,7 @@ export async function approveLessonCancellationAction(requestId: string): Promis
     userId:  request.requestedById,
     type:    "CANCELLATION_REVIEWED",
     title:   "Cancelamento aprovado ✓",
-    message: `Seu pedido de cancelamento da aula de ${subjectName} (${scheduledAt}) foi aprovado.${activePkg ? " O saldo foi devolvido ao pacote." : ""}`,
+    message: `Seu pedido de cancelamento da aula de ${subjectName} (${scheduledAt}) foi aprovado.${devolucao.length > 0 ? " O saldo foi devolvido ao pacote." : ""}`,
     email:   request.requestedBy.email ?? undefined,
     phone:   request.requestedBy.phone ?? undefined,
   })

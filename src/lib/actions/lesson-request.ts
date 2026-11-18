@@ -35,6 +35,7 @@ import { format }              from "date-fns"
 import { ptBR }                from "date-fns/locale"
 import { parseBrazilDateTime, formatBR } from "@/lib/datetime"
 import { aulasDe, fmtAulas }   from "@/lib/lessons"
+import { operacoesDeDevolucao } from "@/lib/package-refund"
 import type { Availability }   from "@/lib/availability"
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -286,24 +287,12 @@ export async function updateLessonStatusAction(
   // Cancelamento de aula individual: devolve a aula ao pacote do aluno
   if (status === "CANCELLED" && !isGroup) {
     const studentId = lesson.participants[0]?.studentId
-    const activePkg = studentId
-      ? await prisma.lessonPackage.findFirst({
-          where:   { studentId, status: { in: ["ACTIVE", "EXHAUSTED"] } },
-          orderBy: { purchaseDate: "desc" },
-        })
-      : null
-    if (activePkg) {
-      const refundCost = lessonCost(lesson.duration)
-      await prisma.$transaction([
-        prisma.lesson.update({ where: { id: lessonId }, data: { status, topicsCovered, teacherNotes } }),
-        prisma.lessonPackage.update({
-          where: { id: activePkg.id },
-          data:  { remainingLessons: { increment: refundCost }, status: "ACTIVE" },
-        }),
-      ])
-    } else {
-      await prisma.lesson.update({ where: { id: lessonId }, data: { status, topicsCovered, teacherNotes } })
-    }
+    // Devolve sem estourar o total de nenhum pacote (ver package-refund.ts)
+    const devolucao = studentId ? await operacoesDeDevolucao(studentId, lessonCost(lesson.duration)) : []
+    await prisma.$transaction([
+      prisma.lesson.update({ where: { id: lessonId }, data: { status, topicsCovered, teacherNotes } }),
+      ...devolucao,
+    ])
   } else {
     await prisma.lesson.update({ where: { id: lessonId }, data: { status, topicsCovered, teacherNotes } })
   }
