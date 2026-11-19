@@ -8,7 +8,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
 import type { LessonSlot, TeacherCol } from "@/app/(colaborador)/colaborador/agenda/agenda-grid"
-import { format, parseISO } from "date-fns"
+import { format, parseISO, isToday, isTomorrow } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { somaAulas, fmtAulas, labelAulas } from "@/lib/lessons"
 
@@ -97,12 +97,14 @@ export function generateStudentWhatsappText(
   // Irmãos do mesmo responsável vêm na mesma mensagem
   const alunos      = [...new Set(studentLessons.map(l => l.studentName || studentName))]
   const professores = new Set(studentLessons.map(l => l.teacherId))
-  const quando      = `${prep} ${weekdayName} (${formattedDateShort})`
+  // "hoje" / "amanhã" quando for o caso — é quando a equipe mais manda
+  const quando      = isToday(parsedDate)    ? `hoje (${formattedDateShort})`
+                    : isTomorrow(parsedDate) ? `amanhã, ${weekdayName} (${formattedDateShort})`
+                    : `${prep} ${weekdayName} (${formattedDateShort})`
+  const qtdAulas    = totalAulas === 1 ? "uma aula agendada" : `${fmtAulas(totalAulas)} aulas agendadas`
   const lessonHeader = alunos.length > 1
-    ? `Temos aulas agendadas para ${listaDeNomes(alunos)} ${quando}!`
-    : plural
-      ? `Você tem ${fmtAulas(totalAulas)} aulas agendadas ${quando}!`
-      : `Você tem uma aula agendada ${quando}!`
+    ? `Temos ${qtdAulas} para ${listaDeNomes(alunos)} ${quando}!`
+    : `Você tem ${qtdAulas} ${quando}!`
 
   let text = `*CONFIRMAÇÃO*\n\n`
   text += `${greeting} Tudo bem? ${lessonHeader}\n\n`
