@@ -1754,8 +1754,9 @@ export function AgendaGrid({
             ) : (
               <>
                 <CalendarDays className="w-4 h-4 text-primary" />
-                <p className="text-sm font-semibold capitalize">
-                  {format(parsed, "EEEE, dd 'de' MMMM", { locale: ptBR })}
+                {/* Data curta: libera espaço para a barra caber numa linha só */}
+                <p className="text-sm font-semibold" title={format(parsed, "EEEE, dd 'de' MMMM", { locale: ptBR })}>
+                  {format(parsed, "EEE, dd/MM", { locale: ptBR })}
                 </p>
                 {today && (
                   <span className="text-[11px] bg-primary text-white px-2 py-0.5 rounded-full font-medium">Hoje</span>
@@ -1765,7 +1766,7 @@ export function AgendaGrid({
           </div>
 
           {/* Direita: contagem + legenda + botão grupo */}
-          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <Button
               size="sm"
               variant="outline"
@@ -1839,7 +1840,8 @@ export function AgendaGrid({
                 {showCancelled ? "esconder" : "ver"} {cancelledCount} cancelada{cancelledCount !== 1 ? "s" : ""}
               </button>
             )}
-            <div className="hidden sm:flex items-center gap-2">
+            {/* Legenda só em telas bem largas — os cards já trazem a cor do status */}
+            <div className="hidden 2xl:flex items-center gap-2">
               {(["CONFIRMED", "SCHEDULED", "COMPLETED"] as LessonStatus[]).map(s => (
                 <span key={s} className="flex items-center gap-1">
                   <span className={`w-2.5 h-2.5 rounded-sm ${STATUS_STYLE[s].bg}`} />
@@ -2109,7 +2111,8 @@ export function AgendaGrid({
                   return (
                     <div
                       key={t.id}
-                      style={{ width: COL_W, minWidth: COL_W }}
+                      // Estica para ocupar a largura da tela (mínimo COL_W)
+                      style={{ flex: "1 1 0", minWidth: COL_W }}
                       className={`px-3 py-2 border-l border-border flex flex-col items-center gap-1 ${
                         !available ? "bg-muted/25" : ""
                       }`}
@@ -2208,7 +2211,7 @@ export function AgendaGrid({
                   return (
                     <div
                       key={t.id}
-                      style={{ width: COL_W, minWidth: COL_W, height: TOTAL * HOUR_H }}
+                      style={{ flex: "1 1 0", minWidth: COL_W, height: TOTAL * HOUR_H }}
                       className={`relative ${colIdx > 0 ? "border-l border-border/50" : ""} ${
                         !hasAvailToday ? "bg-muted/25" : ""
                       } ${canSchedule ? "cursor-cell" : "cursor-default"}`}
