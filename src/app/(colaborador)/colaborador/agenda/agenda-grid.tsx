@@ -1003,6 +1003,10 @@ function LessonBlock({
         if (e.button !== 0) return
         onArrastar!(lesson, e)
       } : undefined}
+      // O arrastar próprio do navegador (o cursor de "proibido") não pode entrar:
+      // ele cancela o nosso e o card não sai do lugar.
+      draggable={false}
+      onDragStart={(e) => e.preventDefault()}
       title={movivel ? "Clique para ver · arraste para mudar professor/horário" : undefined}
       style={{ top: px(lesson.startMin - START * 60), height, left: 3, right: 3 }}
       className={`absolute rounded-lg border overflow-hidden select-none ${movivel ? "cursor-grab" : "cursor-pointer"} transition-opacity hover:opacity-85 ${sendoArrastada ? "opacity-40 ring-2 ring-primary" : ""} ${bg} ${text} ${border}`}
@@ -1600,11 +1604,17 @@ export function AgendaGrid({
     window.addEventListener("pointerup", soltar)
     window.addEventListener("pointercancel", soltar)
     window.addEventListener("keydown", cancelar)
+    // Com um card na mão, nada de arrastar nativo nem selecionar texto na página
+    const bloquear = (e: Event) => e.preventDefault()
+    window.addEventListener("dragstart", bloquear, true)
+    window.addEventListener("selectstart", bloquear, true)
     return () => {
       window.removeEventListener("pointermove", mover)
       window.removeEventListener("pointerup", soltar)
       window.removeEventListener("pointercancel", soltar)
       window.removeEventListener("keydown", cancelar)
+      window.removeEventListener("dragstart", bloquear, true)
+      window.removeEventListener("selectstart", bloquear, true)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [arrastandoId])
