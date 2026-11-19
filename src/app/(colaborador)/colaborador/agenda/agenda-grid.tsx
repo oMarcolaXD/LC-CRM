@@ -48,7 +48,7 @@ import { SearchSelect } from "@/components/shared/search-list"
 // ─── Constantes de layout ────────────────────────────────────────────────────
 
 const HOUR_H = 52   // altura de 1h na grade (era 72): mais horas visíveis na tela
-const COL_W  = 160
+const COL_W  = 140   // largura mínima da coluna do professor (era 160): mais professores por tela
 const TIME_W = 52
 const START  = 7
 const END    = 21
@@ -844,7 +844,16 @@ function SlotTypeChooser({
 
 type PillState = "ok" | "pend" | "atrasado"
 
-function ConfirmPill({ icon: Icon, state }: { icon: LucideIcon; state: PillState }) {
+const PILL_TEXTO: Record<PillState, string> = { ok: "ok", pend: "pendente", atrasado: "atrasado" }
+
+/**
+ * Bolinha de confirmação. No card da grade (`compacto`) mostra só o ícone na
+ * cor do estado — cabe na linha do horário mesmo com a coluna estreita; o texto
+ * completo aparece ao passar o mouse.
+ */
+function ConfirmPill({ icon: Icon, state, label, compacto }: {
+  icon: LucideIcon; state: PillState; label?: string; compacto?: boolean
+}) {
   const cfg: Record<PillState, { bg: string; color: string; symbol: string }> = {
     ok:       { bg: "var(--success-soft)", color: "var(--success)", symbol: "✓" },
     pend:     { bg: "var(--warn-soft)",    color: "var(--warn)",    symbol: "–" },
@@ -853,26 +862,28 @@ function ConfirmPill({ icon: Icon, state }: { icon: LucideIcon; state: PillState
   const { bg, color, symbol } = cfg[state]
   return (
     <span
+      title={label ? `${label}: ${PILL_TEXTO[state]}` : undefined}
       style={{
-        flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center",
-        gap: 2, padding: "2px 4px", borderRadius: 3,
+        flex: compacto ? "0 0 auto" : 1, display: "inline-flex", alignItems: "center", justifyContent: "center",
+        gap: 2, padding: compacto ? "2px 3px" : "2px 4px", borderRadius: 3,
         background: bg, color,
         fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden",
       }}
     >
       <Icon size={9} />
-      <span style={{ fontSize: 9, lineHeight: 1 }}>{symbol}</span>
+      {!compacto && <span style={{ fontSize: 9, lineHeight: 1 }}>{symbol}</span>}
     </span>
   )
 }
 
 
 // Helper lazy para evitar import circular — ModoBadge usa CSS vars da Fase 0
-function ModoBadgeDynamic({ modo }: { modo: "online" | "sede" }) {
+function ModoBadgeDynamic({ modo, compacto }: { modo: "online" | "sede"; compacto?: boolean }) {
   const isOnline = modo === "online"
   return (
     <span
-      className="inline-flex items-center gap-[5px] rounded font-mono text-[10.5px] font-semibold leading-none whitespace-nowrap px-1.5 py-0.5"
+      title={isOnline ? "Online" : "Sede"}
+      className={`inline-flex items-center gap-[5px] rounded font-mono text-[10.5px] font-semibold leading-none whitespace-nowrap py-0.5 ${compacto ? "px-1" : "px-1.5"}`}
       style={{
         background: isOnline ? "var(--info-soft)"   : "var(--muted-soft)",
         color:      isOnline ? "var(--info)"         : "var(--text-2)",
@@ -882,7 +893,7 @@ function ModoBadgeDynamic({ modo }: { modo: "online" | "sede" }) {
         ? <Wifi className="h-2.5 w-2.5" />
         : <Building2 className="h-2.5 w-2.5" />
       }
-      {isOnline ? "Online" : "Sede"}
+      {!compacto && (isOnline ? "Online" : "Sede")}
     </span>
   )
 }
@@ -985,11 +996,11 @@ function LessonBlock({
             1h cabe inteiro mesmo com a hora mais baixa (agenda compacta). */}
         <div className="flex items-center gap-1">
           <p className="text-[11px] font-bold leading-tight">{lesson.time}</p>
-          <ModoBadgeDynamic modo={modo} />
-          <div className="ml-auto flex gap-[3px]">
-            <ConfirmPill icon={CreditCard}    state={pkgState}   />
-            <ConfirmPill icon={User}          state={alunoState} />
-            <ConfirmPill icon={GraduationCap} state={profState}  />
+          <ModoBadgeDynamic modo={modo} compacto />
+          <div className="ml-auto flex gap-[2px]">
+            <ConfirmPill icon={CreditCard}    state={pkgState}   label="Pagamento" compacto />
+            <ConfirmPill icon={User}          state={alunoState} label="Aluno"     compacto />
+            <ConfirmPill icon={GraduationCap} state={profState}  label="Professor" compacto />
           </div>
         </div>
         <p className="text-[12px] font-semibold leading-tight truncate">
