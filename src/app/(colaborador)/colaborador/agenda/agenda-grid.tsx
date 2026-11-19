@@ -21,6 +21,7 @@ import {
   createLessonDirectAction,
   approveRequestAction,
   rejectRequestAction,
+  moverAulaAction,
 } from "@/lib/actions/lesson-request"
 import {
   confirmLessonAction,
@@ -903,9 +904,14 @@ function ModoBadgeDynamic({ modo, compacto }: { modo: "online" | "sede"; compact
 function LessonBlock({
   lesson,
   onSelect,
+  onArrastar,
+  onFimArrastar,
 }: {
   lesson:   LessonSlot
   onSelect: (l: LessonSlot) => void
+  /** Começou a arrastar o card (só aula individual/grupo agendada ou confirmada). */
+  onArrastar?:    (l: LessonSlot, offsetY: number) => void
+  onFimArrastar?: () => void
 }) {
   const height = Math.max(px(lesson.duration), 32)
 
@@ -984,12 +990,23 @@ function LessonBlock({
   const profState: PillState  = lesson.status === "CONFIRMED" || lesson.status === "COMPLETED" ? "ok" : "pend"
   const alunoState: PillState = profState
 
+  // Arrastável: aula individual/grupo que ainda vai acontecer (agendada/confirmada)
+  const movivel = !!onArrastar && (lesson.status === "SCHEDULED" || lesson.status === "CONFIRMED")
+
   return (
     <div
       data-lesson="true"
       onClick={() => onSelect(lesson)}
+      draggable={movivel}
+      onDragStart={movivel ? (e) => {
+        e.dataTransfer.effectAllowed = "move"
+        e.dataTransfer.setData("text/plain", lesson.id)
+        onArrastar!(lesson, e.clientY - e.currentTarget.getBoundingClientRect().top)
+      } : undefined}
+      onDragEnd={movivel ? () => onFimArrastar?.() : undefined}
+      title={movivel ? "Clique para ver · arraste para mudar professor/horário" : undefined}
       style={{ top: px(lesson.startMin - START * 60), height, left: 3, right: 3 }}
-      className={`absolute rounded-lg border overflow-hidden select-none cursor-pointer transition-opacity hover:opacity-85 active:opacity-70 ${bg} ${text} ${border}`}
+      className={`absolute rounded-lg border overflow-hidden select-none ${movivel ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"} transition-opacity hover:opacity-85 active:opacity-70 ${bg} ${text} ${border}`}
     >
       <div className="flex h-full flex-col px-1.5 pt-0.5 pb-0.5">
         {/* Horário + modo + bolinhas de confirmação na MESMA linha: o card de
@@ -1014,6 +1031,101 @@ function LessonBlock({
         )}
       </div>
     </div>
+  )
+}
+
+// ─── Modal: confirmar aula arrastada ─────────────────────────────────────────
+
+const hhmm = (min: number) => `${String(Math.floor(min / 60)).padStart(2, "0")}:${String(min % 60).padStart(2, "0")}`
+
+function MoverAulaDialog({
+  lesson, teacherDe, teacherPara, startMin, date, onClose, onMovida,
+}: {
+  lesson:      LessonSlot
+  teacherDe:   TeacherCol | undefined
+  teacherPara: TeacherCol
+  startMin:    number
+  date:        string
+  onClose:     () => void
+  onMovida:    () => void
+}) {
+  // Matéria: a mesma, se o novo professor der; senão, ele escolhe
+  const materias = teacherPara.subjects ?? []
+  const mesma = materias.find((s) => s.name === lesson.subjectName)
+  const [subjectId, setSubjectId] = useState(mesma?.id ?? (materias.length === 1 ? materias[0].id : ""))
+  const [pending, start] = useTransition()
+
+  const dentroDaDisponibilidade = teacherPara.slots.some(
+    (s) => startMin >= s.start && startMin + lesson.duration <= s.end,
+  )
+  const nomeAluno = lesson.studentName || lesson.title || "Aula"
+
+  function mover() {
+    start(async () => {
+      try {
+        ouFalhe(await moverAulaAction({
+          lessonId: lesson.id, teacherId: teacherPara.id, subjectId, date, time: hhmm(startMin),
+        }))
+        toast.success("Aula movida — atualizada na agenda e no perfil do aluno")
+        onMovida()
+      } catch (e) {
+        toast.error(mensagemDeErro(e, "Não foi possível mover a aula"))
+      }
+    })
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o) onClose() }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Mover aula</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 text-sm">
+          <div className="rounded-lg border border-border bg-muted/30 p-3">
+            <p className="font-semibold">{nomeAluno}{lesson.isGroupLesson && lesson.groupSize ? ` (+${lesson.groupSize - 1} no grupo)` : ""}</p>
+            <p className="text-muted-foreground">
+              De: {lesson.subjectName} com {teacherDe?.name ?? "—"} às {lesson.time}
+            </p>
+            <p>
+              Para: <strong>{teacherPara.name}</strong> às <strong>{hhmm(startMin)}</strong>
+            </p>
+          </div>
+
+          <div>
+            <label className="text-xs font-medium">Matéria *</label>
+            <select
+              value={subjectId}
+              onChange={(e) => setSubjectId(e.target.value)}
+              className="mt-1 h-9 w-full rounded-lg border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+            >
+              <option value="">Selecionar matéria…</option>
+              {materias.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+            {!mesma && (
+              <p className="mt-1 text-[11px] text-amber-600">
+                {teacherPara.name} não está cadastrado(a) em {lesson.subjectName} — escolha a matéria da aula.
+              </p>
+            )}
+          </div>
+
+          {!dentroDaDisponibilidade && (
+            <p className="rounded-lg border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
+              ⚠️ Esse horário está fora da disponibilidade de {teacherPara.name} hoje. Dá para mover mesmo assim.
+            </p>
+          )}
+          {lesson.isGroupLesson && (
+            <p className="text-xs text-muted-foreground">É aula em grupo: a mudança vale para todos os alunos dela.</p>
+          )}
+          <p className="text-xs text-muted-foreground">Só esta aula muda (as outras da série, se houver, ficam como estão).</p>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={pending}>Cancelar</Button>
+          <Button onClick={mover} disabled={pending || !subjectId}>
+            {pending ? "Movendo…" : "Mover aula"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -1418,6 +1530,19 @@ export function AgendaGrid({
   }, [view])
 
   const [selectedLesson,  setSelectedLesson]  = useState<LessonSlot | null>(null)
+
+  // ── Arrastar aula (visão Dia) ──────────────────────────────────────────────
+  // offsetY: onde o card foi "pego", para o topo dele cair onde o mouse indica.
+  const [arrastando,  setArrastando]  = useState<(LessonSlot & { offsetY: number }) | null>(null)
+  const [alvoArraste, setAlvoArraste] = useState<{ teacherId: string; startMin: number } | null>(null)
+  const [movendo,     setMovendo]     = useState<{ lesson: LessonSlot; teacher: TeacherCol; startMin: number } | null>(null)
+  /** Horário (minutos) em que o topo do card cai, de 30 em 30 min, dentro do dia. */
+  const inicioNoSoltar = (e: React.DragEvent<HTMLDivElement>, l: LessonSlot & { offsetY: number }) => {
+    const rect = e.currentTarget.getBoundingClientRect()
+    const y    = e.clientY - rect.top - l.offsetY
+    const min  = Math.round((START * 60 + (y / HOUR_H) * 60) / 30) * 30
+    return Math.min(Math.max(min, START * 60), END * 60 - l.duration)
+  }
   const [selectedPending, setSelectedPending] = useState<PendingRequestSlot | null>(null)
   const [quickSchedule,  setQuickSchedule]  = useState<{
     teacherId:   string
@@ -2229,7 +2354,37 @@ export function AgendaGrid({
                       onMouseMove={(e) => handleMouseMove(t, e)}
                       onMouseLeave={() => setHoveredCell(null)}
                       onClick={(e) => handleColumnClick(t, e)}
+                      onDragOver={(e) => {
+                        if (!arrastando) return
+                        e.preventDefault()
+                        e.dataTransfer.dropEffect = "move"
+                        const inicio = inicioNoSoltar(e, arrastando)
+                        if (alvoArraste?.teacherId !== t.id || alvoArraste.startMin !== inicio) {
+                          setAlvoArraste({ teacherId: t.id, startMin: inicio })
+                        }
+                      }}
+                      onDrop={(e) => {
+                        if (!arrastando) return
+                        e.preventDefault()
+                        const inicio = inicioNoSoltar(e, arrastando)
+                        const l = arrastando
+                        setArrastando(null); setAlvoArraste(null)
+                        if (l.teacherId === t.id && l.startMin === inicio) return   // soltou no mesmo lugar
+                        setMovendo({ lesson: l, teacher: t, startMin: inicio })
+                      }}
                     >
+                      {/* Onde a aula vai cair enquanto é arrastada */}
+                      {arrastando && alvoArraste?.teacherId === t.id && (
+                        <div
+                          style={{ top: px(alvoArraste.startMin - START * 60), height: Math.max(px(arrastando.duration), 32), left: 3, right: 3 }}
+                          className="absolute z-30 rounded-lg border-2 border-dashed border-primary bg-primary/15 pointer-events-none flex items-start justify-center pt-0.5"
+                        >
+                          <span className="text-[11px] font-bold text-primary tabular-nums">
+                            {String(Math.floor(alvoArraste.startMin / 60)).padStart(2, "0")}:{String(alvoArraste.startMin % 60).padStart(2, "0")}
+                          </span>
+                        </div>
+                      )}
+
                       {/* Disponibilidade (fundo verde) */}
                       {t.slots.map((slot, i) => {
                         const top    = px(slot.start - START * 60)
@@ -2282,7 +2437,15 @@ export function AgendaGrid({
 
                       {/* Blocos de aula (sobre as pendentes) */}
                       {byTeacher(t.id).map(lesson => (
-                        <LessonBlock key={lesson.id} lesson={lesson} onSelect={setSelectedLesson} />
+                        <LessonBlock
+                          key={lesson.id}
+                          lesson={lesson}
+                          onSelect={setSelectedLesson}
+                          onArrastar={lesson.lessonType === "INDIVIDUAL" || lesson.lessonType === "GROUP"
+                            ? (l, offsetY) => { setHoveredCell(null); setArrastando({ ...l, offsetY }) }
+                            : undefined}
+                          onFimArrastar={() => { setArrastando(null); setAlvoArraste(null) }}
+                        />
                       ))}
                     </div>
                   )
@@ -2421,6 +2584,18 @@ export function AgendaGrid({
           defaultDate={curDate}
         />
       )}
+      {movendo && (
+        <MoverAulaDialog
+          lesson={movendo.lesson}
+          teacherDe={effectiveTeachers.find((t) => t.id === movendo.lesson.teacherId)}
+          teacherPara={movendo.teacher}
+          startMin={movendo.startMin}
+          date={curDate}
+          onClose={() => setMovendo(null)}
+          onMovida={() => { setMovendo(null); fetchData(curDate, view) }}
+        />
+      )}
+
       {showExportDialog && (
         <ExportAgendaDialog
           open={showExportDialog}

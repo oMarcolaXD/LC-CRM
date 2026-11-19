@@ -1305,6 +1305,58 @@ export async function updateLessonDirectAction(
 }
 
 /**
+ * Arrastar o card na agenda: troca SÓ professor, matéria e horário da aula.
+ * Lê a aula atual e reaproveita o resto (modalidade, duração, status, conteúdo
+ * dado e observações) — passar pela edição direta pela tela apagaria as notas.
+ * Usa a mesma `editarAula`, então valem as mesmas checagens (professor livre,
+ * sala) e a mudança aparece em todo lugar, inclusive no perfil do aluno.
+ */
+export async function moverAulaAction(input: {
+  lessonId:  string
+  teacherId: string
+  subjectId: string
+  date:      string   // "YYYY-MM-DD"
+  time:      string   // "HH:mm"
+}): Promise<ActionResult<UpdateLessonResult>> {
+  return comResultado(async () => {
+    const aula = await prisma.lesson.findUnique({
+      where:  { id: input.lessonId },
+      select: {
+        status: true, lessonType: true, modality: true, duration: true,
+        topicsCovered: true, teacherNotes: true,
+        participants: { select: { studentId: true } },
+      },
+    })
+    if (!aula) throw new Error("Aula não encontrada")
+    if (aula.status !== "SCHEDULED" && aula.status !== "CONFIRMED") {
+      throw new Error("Só dá para mover aulas agendadas ou confirmadas")
+    }
+    if (aula.lessonType !== "INDIVIDUAL" && aula.lessonType !== "GROUP") {
+      throw new Error("Aulões e compromissos não podem ser arrastados — edite pela tela deles")
+    }
+    if (!input.subjectId) throw new Error("Escolha a matéria")
+
+    const r = await editarAula({
+      lessonId:      input.lessonId,
+      studentId:     aula.participants[0]?.studentId ?? "",
+      date:          input.date,
+      time:          input.time,
+      teacherId:     input.teacherId,
+      subjectId:     input.subjectId,
+      modality:      aula.modality,
+      duration:      aula.duration,
+      topicsCovered: aula.topicsCovered ?? undefined,
+      teacherNotes:  aula.teacherNotes  ?? undefined,
+      status:        aula.status,
+      scope:         "ONE",
+    })
+    // Aula em grupo: o perfil de todos os participantes mostra a mudança
+    for (const p of aula.participants.slice(1)) revalidarAula(p.studentId)
+    return r
+  })
+}
+
+/**
  * Acerta o saldo do pacote quando a duração da aula muda.
  *
  * Criar uma aula de 2h debita 2 aulas do pacote; editar de 1h para 2h não
