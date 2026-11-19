@@ -10,6 +10,7 @@ import { toast } from "sonner"
 import type { LessonSlot, TeacherCol } from "@/app/(colaborador)/colaborador/agenda/agenda-grid"
 import { format, parseISO } from "date-fns"
 import { ptBR } from "date-fns/locale"
+import { somaAulas, fmtAulas, labelAulas } from "@/lib/lessons"
 
 interface ExportAgendaDialogProps {
   open: boolean
@@ -90,10 +91,18 @@ export function generateStudentWhatsappText(
   const prep = getWeekdayPrep(weekdayName)
 
   const greeting = getGreeting(3)
-  const hasMultiple = studentLessons.length > 1
-  const lessonHeader = hasMultiple
-    ? `Você tem aulas agendadas ${prep} ${weekdayName} (${formattedDateShort})!`
-    : `Você tem uma aula agendada ${prep} ${weekdayName} (${formattedDateShort})!`
+  // Conta em AULAS, não em linhas: das 18h às 20h são 2 aulas (src/lib/lessons.ts)
+  const totalAulas  = somaAulas(studentLessons)
+  const plural      = studentLessons.length > 1 || totalAulas >= 2
+  // Irmãos do mesmo responsável vêm na mesma mensagem
+  const alunos      = [...new Set(studentLessons.map(l => l.studentName || studentName))]
+  const professores = new Set(studentLessons.map(l => l.teacherId))
+  const quando      = `${prep} ${weekdayName} (${formattedDateShort})`
+  const lessonHeader = alunos.length > 1
+    ? `Temos aulas agendadas para ${listaDeNomes(alunos)} ${quando}!`
+    : plural
+      ? `Você tem ${fmtAulas(totalAulas)} aulas agendadas ${quando}!`
+      : `Você tem uma aula agendada ${quando}!`
 
   let text = `*CONFIRMAÇÃO*\n\n`
   text += `${greeting} Tudo bem? ${lessonHeader}\n\n`
@@ -135,10 +144,22 @@ export function generateStudentWhatsappText(
   text += lessonBlocks.join("\n\n") + "\n\n"
   text += `Podemos confirmar?\n\n`
   text += `‼️ATENÇÃO‼️\n`
-  text += `_*Cancelamento e reagendamentos de aula(s) devem ser feitos antes de 24 horas. Tempo necessário para o(a) professor(a) reorganizar a sua agenda e não ter prejuízos*_\n\n`
-  text += `*Cancelamentos fora do prazo cobramos 100% do valor da aula.*`
+  text += plural
+    ? `_*Cancelamentos e reagendamentos de aulas devem ser feitos antes de 24 horas. `
+    : `_*Cancelamento e reagendamento de aula devem ser feitos antes de 24 horas. `
+  text += professores.size > 1
+    ? `Tempo necessário para os(as) professores(as) reorganizarem as suas agendas e não terem prejuízos*_\n\n`
+    : `Tempo necessário para o(a) professor(a) reorganizar a sua agenda e não ter prejuízos*_\n\n`
+  text += plural
+    ? `*Cancelamentos fora do prazo cobramos 100% do valor das aulas.*`
+    : `*Cancelamentos fora do prazo cobramos 100% do valor da aula.*`
 
   return text
+}
+
+/** "Ana" · "Ana e Pedro" · "Ana, Pedro e Lia" */
+function listaDeNomes(nomes: string[]): string {
+  return nomes.length <= 1 ? (nomes[0] ?? "") : `${nomes.slice(0, -1).join(", ")} e ${nomes[nomes.length - 1]}`
 }
 
 export function generateTeacherWhatsappText(
@@ -249,10 +270,11 @@ export function ExportAgendaDialog({
     }
   }).filter(g => g.lessons.length > 0)
 
-  // Agrupamento por Aluno / Responsável
+  // Agrupamento por Responsável: irmãos (mesmo responsável) recebem UMA
+  // mensagem só. Sem responsável cadastrado, cada aluno fica na sua.
   const studentMap = new Map<string, { studentName: string; guardianName: string | null; lessons: LessonSlot[] }>()
   for (const l of activeLessons) {
-    const key = l.studentId || l.studentName
+    const key = l.guardianId ? `resp:${l.guardianId}` : (l.studentId || l.studentName)
     const existing = studentMap.get(key)
     if (existing) {
       existing.lessons.push(l)
@@ -266,6 +288,8 @@ export function ExportAgendaDialog({
   }
   const lessonsByStudent = Array.from(studentMap.values()).map(g => ({
     ...g,
+    // Irmãos: "Ana e Pedro" no título do grupo
+    studentName: listaDeNomes([...new Set(g.lessons.map(l => l.studentName).filter(Boolean))]) || g.studentName,
     lessons: g.lessons.sort((a, b) => a.startMin - b.startMin),
   }))
 
@@ -716,7 +740,7 @@ export function ExportAgendaDialog({
                               <span className="text-[11px] text-muted-foreground ml-1.5">(Resp: {g.guardianName})</span>
                             )}
                             <span className="ml-2 text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-medium">
-                              {g.lessons.length} {g.lessons.length === 1 ? "aula" : "aulas"}
+                              {labelAulas(somaAulas(g.lessons))}
                             </span>
                           </div>
                           <Button
@@ -764,7 +788,7 @@ export function ExportAgendaDialog({
                           <div className="min-w-0">
                             <span className="font-bold text-foreground text-xs">{g.teacher.name}</span>
                             <span className="ml-2 text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-medium">
-                              {g.lessons.length} {g.lessons.length === 1 ? "aula" : "aulas"}
+                              {labelAulas(somaAulas(g.lessons))}
                             </span>
                           </div>
                           <Button

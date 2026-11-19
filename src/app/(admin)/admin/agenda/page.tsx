@@ -110,6 +110,7 @@ export default async function AdminAgendaPage({ searchParams }: AgendaPageProps)
       studentName:   first?.student.name ?? (isSpecial ? "" : "Aluno"),
       subjectName:   l.subject?.name ?? "–",
       guardianName:  first?.student.guardian?.user.name ?? null,
+      guardianId:    first?.student.guardian?.id ?? null,
       isGroupLesson: isGroup,
       groupSize:     isGroup ? l.participants.length : null,
       groupMates:    l.participants.slice(1).map(p => p.student.name ?? "Aluno"),

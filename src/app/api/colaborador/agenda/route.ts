@@ -64,6 +64,7 @@ function mapLesson(l: RawLesson) {
     studentName:   first?.student.name ?? (isSpecial ? "" : "Aluno"),
     subjectName:   l.subject?.name ?? "–",
     guardianName:  first?.student.guardian?.user.name ?? null,
+    guardianId:    first?.student.guardian?.id ?? null,
     date:          formatBR(d, "yyyy-MM-dd"),
     isGroupLesson: isGroup,
     groupSize:     isGroup ? l.participants.length : null,

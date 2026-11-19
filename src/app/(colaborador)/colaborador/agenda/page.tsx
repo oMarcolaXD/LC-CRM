@@ -52,7 +52,7 @@ function mapToLessonSlot(
       student: {
         name: string
         user: { name: string } | null
-        guardian: { user: { name: string } } | null
+        guardian: { id: string; user: { name: string } } | null
         packages: { remainingLessons: number | { toNumber(): number } }[]
       }
     }[]
@@ -85,6 +85,7 @@ function mapToLessonSlot(
     studentName,
     subjectName:   l.subject?.name ?? "–",
     guardianName:  first?.student.guardian?.user.name ?? null,
+    guardianId:    first?.student.guardian?.id ?? null,
     isGroupLesson: isGroup,
     groupSize:     isGroup ? l.participants.length : null,
     groupMates:    l.participants.slice(1).map(p => p.student.name ?? "Aluno"),

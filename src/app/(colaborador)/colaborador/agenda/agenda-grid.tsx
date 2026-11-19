@@ -106,6 +106,8 @@ export interface LessonSlot {
   studentName:   string
   subjectName:   string
   guardianName:  string | null
+  /** Responsável do aluno: junta irmãos na mesma mensagem de confirmação. */
+  guardianId?:   string | null
   isGroupLesson: boolean
   groupSize:     number | null
   groupMates:    string[]
