@@ -1550,6 +1550,7 @@ export function AgendaGrid({
   // "ativo" só depois de mover uns pixels — antes disso é um clique comum no card.
   const [arrastando,  setArrastando]  = useState<(LessonSlot & { offsetY: number; x0: number; y0: number; ativo: boolean }) | null>(null)
   const [alvoArraste, setAlvoArraste] = useState<{ teacherId: string; startMin: number } | null>(null)
+  const [mouseArraste, setMouseArraste] = useState<{ x: number; y: number } | null>(null)
   const [movendo,     setMovendo]     = useState<{ lesson: LessonSlot; teacher: TeacherCol; startMin: number } | null>(null)
   /** Horário (minutos) em que o topo do card cai, de 30 em 30 min, dentro do dia. */
   const inicioNoSoltar = (coluna: HTMLElement, clientY: number, l: LessonSlot & { offsetY: number }) => {
@@ -1580,6 +1581,7 @@ export function AgendaGrid({
       const col = colunaNoPonto(e.clientX, e.clientY)
       const tId = col?.dataset.colunaProfessor
       setAlvoArraste(col && tId ? { teacherId: tId, startMin: inicioNoSoltar(col, e.clientY, a) } : null)
+      setMouseArraste({ x: e.clientX, y: e.clientY })
     }
     const soltar = (e: PointerEvent) => {
       const a = arrasteRef.current
@@ -2645,6 +2647,20 @@ export function AgendaGrid({
           teachers={effectiveTeachers.map(t => ({ id: t.id, name: t.name }))}
           defaultDate={curDate}
         />
+      )}
+      {/* Card "na mão": segue o mouse e diz para onde a aula vai */}
+      {arrastando?.ativo && mouseArraste && (
+        <div
+          style={{ left: mouseArraste.x + 12, top: mouseArraste.y + 12 }}
+          className="pointer-events-none fixed z-[100] rounded-lg border-2 border-primary bg-background px-2.5 py-1.5 text-xs shadow-xl"
+        >
+          <p className="font-semibold">{arrastando.studentName || arrastando.title} · {arrastando.subjectName}</p>
+          <p className="text-primary font-medium">
+            {alvoArraste
+              ? `→ ${effectiveTeachers.find((t) => t.id === alvoArraste.teacherId)?.name.split(" ")[0] ?? ""} às ${hhmm(alvoArraste.startMin)}`
+              : "Solte na coluna de um professor"}
+          </p>
+        </div>
       )}
       {movendo && (
         <MoverAulaDialog
