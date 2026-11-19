@@ -1421,6 +1421,24 @@ export function AgendaGrid({
   const [showAulaoDialog,  setShowAulaoDialog]  = useState(false)
   const [showCommitmentDialog, setShowCommitmentDialog] = useState(false)
   const [showExportDialog, setShowExportDialog]     = useState(false)
+
+  // A grade ocupa até o fim da tela, em vez de uma altura fixa — mede o espaço
+  // que sobra abaixo dela (muda com avisos, tamanho da janela e menu lateral).
+  const gradeRef = useRef<HTMLDivElement>(null)
+  const [alturaGrade, setAlturaGrade] = useState<number | null>(null)
+  useEffect(() => {
+    function medir() {
+      const el = gradeRef.current
+      if (!el) return
+      const topo = el.getBoundingClientRect().top
+      setAlturaGrade(Math.max(320, Math.floor(window.innerHeight - topo - 16)))
+    }
+    medir()
+    const t = setTimeout(medir, 400)          // depois que avisos/banners terminam de aparecer
+    window.addEventListener("resize", medir)
+    return () => { clearTimeout(t); window.removeEventListener("resize", medir) }
+  }, [view, curDate])
+  const estiloGrade = { maxHeight: alturaGrade ? `${alturaGrade}px` : "calc(100vh - 240px)" }
   // Seletor de tipo ao clicar num horário vazio + pré-preenchimento (professor+horário)
   const [slotChooser, setSlotChooser] = useState<{ teacherId: string; teacherName: string; time: string } | null>(null)
   const [prefill,     setPrefill]     = useState<{ teacherId: string; time: string } | null>(null)
@@ -1838,7 +1856,7 @@ export function AgendaGrid({
 
         {/* ── VISUALIZAÇÃO: MÊS ───────────────────────────── */}
         {view === "month" && (
-          <div className="overflow-auto" style={{ maxHeight: "calc(100vh - 240px)" }}>
+          <div ref={gradeRef} className="overflow-auto" style={estiloGrade}>
 
             {/* Cabeçalho dos dias da semana */}
             <div className="sticky top-0 z-10 grid grid-cols-7 border-b border-border bg-background/95 backdrop-blur-sm">
@@ -1941,7 +1959,7 @@ export function AgendaGrid({
 
         {/* ── VISUALIZAÇÃO: SEMANA ─────────────────────────── */}
         {view === "week" && (
-          <div className="overflow-auto" style={{ maxHeight: "calc(100vh - 240px)" }}>
+          <div ref={gradeRef} className="overflow-auto" style={estiloGrade}>
             <div className="grid" style={{ gridTemplateColumns: `repeat(7, minmax(130px, 1fr))`, minWidth: 910 }}>
               {weekDays.map(day => {
                 const dayStr    = format(day, "yyyy-MM-dd")
@@ -2055,7 +2073,7 @@ export function AgendaGrid({
 
         {/* ── VISUALIZAÇÃO: DIA ────────────────────────────── */}
         {view === "day" && (
-          <div className="flex overflow-hidden relative" style={{ maxHeight: "calc(100vh - 240px)" }}>
+          <div ref={gradeRef} className="flex overflow-hidden relative" style={estiloGrade}>
             {canScrollRight && (
               <div className="pointer-events-none absolute right-0 top-0 bottom-0 z-40 flex items-center justify-end w-20"
                 style={{ background: "linear-gradient(to left, hsl(var(--background)) 10%, transparent 100%)" }}>

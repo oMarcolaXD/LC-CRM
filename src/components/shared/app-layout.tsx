@@ -1,4 +1,5 @@
 import { Sidebar }              from "./sidebar"
+import { CollapsibleSidebar }   from "./collapsible-sidebar"
 import { Header }               from "./header"
 import { WhatsAppButton }       from "./whatsapp-button"
 import { EmailMissingBanner }   from "./email-missing-banner"
@@ -29,9 +30,9 @@ export async function AppLayout({ children, name, email, role, image, phone, mis
     <div className="flex h-screen bg-muted/30 overflow-hidden">
       <NavigationProgress />
       {/* Sidebar — desktop */}
-      <aside className="hidden lg:flex w-60 shrink-0 flex-col">
+      <CollapsibleSidebar>
         <Sidebar name={name} email={email} role={role} image={image} phone={phone} />
-      </aside>
+      </CollapsibleSidebar>
 
       {/* Conteúdo principal */}
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
