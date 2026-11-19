@@ -41,6 +41,39 @@ async function guardAdminAccount(targetId: string, sessionUserId: string) {
   }
 }
 
+// ─── Nível de acesso da equipe (colaborador ↔ administrador) ─────────────────
+// Só entre esses dois: professor, aluno e responsável têm cadastro próprio
+// (agenda, pacotes…) que não combina com trocar de papel por um botão.
+
+export async function alterarNivelDeAcessoAction(id: string, novo: "ADMIN" | "COLLABORATOR") {
+  const session = await requireAdmin()
+  if (novo !== "ADMIN" && novo !== "COLLABORATOR") throw new Error("Nível inválido")
+  if (id === session.user.id) throw new Error("Você não pode mudar o seu próprio nível de acesso")
+
+  const alvo = await prisma.user.findUnique({ where: { id }, select: { role: true, name: true } })
+  if (!alvo) throw new Error("Usuário não encontrado")
+  if (alvo.role !== "ADMIN" && alvo.role !== "COLLABORATOR") {
+    throw new Error("Só dá para trocar o nível de colaboradores e administradores")
+  }
+  if (alvo.role === novo) return
+
+  if (alvo.role === "ADMIN") {
+    const outrosAdmins = await prisma.user.count({ where: { role: "ADMIN", active: true, id: { not: id } } })
+    if (outrosAdmins === 0) throw new Error("O sistema precisa ter pelo menos um administrador ativo")
+  }
+
+  await prisma.$transaction([
+    prisma.user.update({ where: { id }, data: { role: novo } }),
+    prisma.activityLog.create({
+      data: {
+        userId: session.user.id, action: "ALTERAR_NIVEL_ACESSO", entityType: "User", entityId: id,
+        metadata: { de: alvo.role, para: novo, nome: alvo.name },
+      },
+    }),
+  ])
+  revalidatePath("/admin/usuarios", "layout")
+}
+
 // ─── Agendamento externo do professor ────────────────────────────────────────
 
 export async function setTeacherExternalBookingAction(teacherId: string, enabled: boolean) {

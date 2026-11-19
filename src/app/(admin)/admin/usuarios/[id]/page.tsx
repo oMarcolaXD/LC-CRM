@@ -6,6 +6,8 @@ import { UserForm }      from "../user-form"
 import { updateUserAction } from "../actions"
 import { TeacherSubjectsForm } from "@/components/shared/teacher-subjects-form"
 import { ExternalBookingToggle } from "./external-booking-toggle"
+import { NivelAcessoCard }   from "./nivel-acesso-card"
+import { auth }              from "@/lib/auth"
 import type { Role, TeacherMode, EducationLevel } from "@prisma/client"
 
 interface EditUserPageProps {
@@ -17,7 +19,8 @@ export default async function EditUserPage({ params, searchParams }: EditUserPag
   const { id }               = await params
   const { error, success }   = await searchParams
 
-  const [user, guardians] = await Promise.all([
+  const [session, user, guardians] = await Promise.all([
+    auth(),
     prisma.user.findUnique({
       where:   { id },
       include: {
@@ -95,6 +98,25 @@ export default async function EditUserPage({ params, searchParams }: EditUserPag
           />
         </CardContent>
       </Card>
+
+      {(user.role === "ADMIN" || user.role === "COLLABORATOR") && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Nível de acesso</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Escolha o que {user.name.split(" ")[0]} pode ver e fazer no sistema.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <NivelAcessoCard
+              userId={user.id}
+              nome={user.name}
+              atual={user.role}
+              ehVoce={session?.user?.id === user.id}
+            />
+          </CardContent>
+        </Card>
+      )}
 
       {user.role === "TEACHER" && user.teacher && (
         <Card>
