@@ -905,13 +905,15 @@ function LessonBlock({
   lesson,
   onSelect,
   onArrastar,
-  onFimArrastar,
+  sendoArrastada,
 }: {
   lesson:   LessonSlot
   onSelect: (l: LessonSlot) => void
-  /** Começou a arrastar o card (só aula individual/grupo agendada ou confirmada). */
-  onArrastar?:    (l: LessonSlot, offsetY: number) => void
-  onFimArrastar?: () => void
+  /** Apertou o mouse no card (só aula individual/grupo agendada ou confirmada).
+   *  O arraste em si é seguido pela grade (mouse), não pelo arrastar nativo do
+   *  navegador — no Windows com zoom de tela (125%…) o nativo erra a posição. */
+  onArrastar?:    (l: LessonSlot, e: React.PointerEvent<HTMLDivElement>) => void
+  sendoArrastada?: boolean
 }) {
   const height = Math.max(px(lesson.duration), 32)
 
@@ -997,16 +999,13 @@ function LessonBlock({
     <div
       data-lesson="true"
       onClick={() => onSelect(lesson)}
-      draggable={movivel}
-      onDragStart={movivel ? (e) => {
-        e.dataTransfer.effectAllowed = "move"
-        e.dataTransfer.setData("text/plain", lesson.id)
-        onArrastar!(lesson, e.clientY - e.currentTarget.getBoundingClientRect().top)
+      onPointerDown={movivel ? (e) => {
+        if (e.button !== 0) return
+        onArrastar!(lesson, e)
       } : undefined}
-      onDragEnd={movivel ? () => onFimArrastar?.() : undefined}
       title={movivel ? "Clique para ver · arraste para mudar professor/horário" : undefined}
       style={{ top: px(lesson.startMin - START * 60), height, left: 3, right: 3 }}
-      className={`absolute rounded-lg border overflow-hidden select-none ${movivel ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"} transition-opacity hover:opacity-85 active:opacity-70 ${bg} ${text} ${border}`}
+      className={`absolute rounded-lg border overflow-hidden select-none ${movivel ? "cursor-grab" : "cursor-pointer"} transition-opacity hover:opacity-85 ${sendoArrastada ? "opacity-40 ring-2 ring-primary" : ""} ${bg} ${text} ${border}`}
     >
       <div className="flex h-full flex-col px-1.5 pt-0.5 pb-0.5">
         {/* Horário + modo + bolinhas de confirmação na MESMA linha: o card de
@@ -1509,6 +1508,17 @@ export function AgendaGrid({
       return a.name.localeCompare(b.name)
     })
 
+  // Depois de mover uma aula, as colunas NÃO se reordenam: senão o professor que
+  // recebeu a aula pula de lugar e parece que o card foi parar em outro canto.
+  // A ordem volta a ser recalculada quando muda o dia/visão.
+  const ordemColunas   = useRef<string[]>([])
+  const congelarOrdem  = useRef(false)
+  if (congelarOrdem.current && ordemColunas.current.length) {
+    const pos = (id: string) => { const i = ordemColunas.current.indexOf(id); return i < 0 ? Infinity : i }
+    effectiveTeachers.sort((a, b) => pos(a.id) - pos(b.id))
+  }
+  ordemColunas.current = effectiveTeachers.map((t) => t.id)
+
   const [view, setView]                     = useState<ViewMode>(initialView)
 
   /** Quantas canceladas a visão atual está escondendo. */
@@ -1533,16 +1543,71 @@ export function AgendaGrid({
 
   // ── Arrastar aula (visão Dia) ──────────────────────────────────────────────
   // offsetY: onde o card foi "pego", para o topo dele cair onde o mouse indica.
-  const [arrastando,  setArrastando]  = useState<(LessonSlot & { offsetY: number }) | null>(null)
+  // "ativo" só depois de mover uns pixels — antes disso é um clique comum no card.
+  const [arrastando,  setArrastando]  = useState<(LessonSlot & { offsetY: number; x0: number; y0: number; ativo: boolean }) | null>(null)
   const [alvoArraste, setAlvoArraste] = useState<{ teacherId: string; startMin: number } | null>(null)
   const [movendo,     setMovendo]     = useState<{ lesson: LessonSlot; teacher: TeacherCol; startMin: number } | null>(null)
   /** Horário (minutos) em que o topo do card cai, de 30 em 30 min, dentro do dia. */
-  const inicioNoSoltar = (e: React.DragEvent<HTMLDivElement>, l: LessonSlot & { offsetY: number }) => {
-    const rect = e.currentTarget.getBoundingClientRect()
-    const y    = e.clientY - rect.top - l.offsetY
+  const inicioNoSoltar = (coluna: HTMLElement, clientY: number, l: LessonSlot & { offsetY: number }) => {
+    const rect = coluna.getBoundingClientRect()
+    const y    = clientY - rect.top - l.offsetY
     const min  = Math.round((START * 60 + (y / HOUR_H) * 60) / 30) * 30
     return Math.min(Math.max(min, START * 60), END * 60 - l.duration)
   }
+  /** Coluna de professor que está debaixo do mouse (ou null). */
+  const colunaNoPonto = (x: number, y: number) =>
+    (document.elementFromPoint(x, y) as HTMLElement | null)?.closest<HTMLElement>("[data-coluna-professor]") ?? null
+
+  // Segue o mouse enquanto um card está "na mão". Os cálculos ficam fora dos
+  // setState (que não podem ter efeito colateral), lendo o estado por uma ref.
+  const arrasteRef = useRef(arrastando)
+  arrasteRef.current = arrastando
+  const arrastandoId = arrastando?.id
+  useEffect(() => {
+    if (!arrastandoId) return
+    const mover = (e: PointerEvent) => {
+      const a = arrasteRef.current
+      if (!a) return
+      if (!a.ativo) {
+        if (Math.hypot(e.clientX - a.x0, e.clientY - a.y0) < 6) return
+        setArrastando({ ...a, ativo: true })
+      }
+      e.preventDefault()
+      const col = colunaNoPonto(e.clientX, e.clientY)
+      const tId = col?.dataset.colunaProfessor
+      setAlvoArraste(col && tId ? { teacherId: tId, startMin: inicioNoSoltar(col, e.clientY, a) } : null)
+    }
+    const soltar = (e: PointerEvent) => {
+      const a = arrasteRef.current
+      setArrastando(null)
+      setAlvoArraste(null)
+      if (!a?.ativo) return
+      // Depois de arrastar, o clique que o navegador manda junto não pode abrir
+      // o card nem o "agendar aqui" da coluna.
+      const engolir = (ev: MouseEvent) => { ev.stopPropagation(); ev.preventDefault() }
+      window.addEventListener("click", engolir, { capture: true, once: true })
+      setTimeout(() => window.removeEventListener("click", engolir, { capture: true }), 50)
+      if (e.type === "pointercancel") return
+      const col = colunaNoPonto(e.clientX, e.clientY)
+      const t   = effectiveTeachers.find((x) => x.id === col?.dataset.colunaProfessor)
+      if (!col || !t) return
+      const inicio = inicioNoSoltar(col, e.clientY, a)
+      if (a.teacherId === t.id && a.startMin === inicio) return   // soltou no mesmo lugar
+      setMovendo({ lesson: a, teacher: t, startMin: inicio })
+    }
+    const cancelar = (e: KeyboardEvent) => { if (e.key === "Escape") { setArrastando(null); setAlvoArraste(null) } }
+    window.addEventListener("pointermove", mover)
+    window.addEventListener("pointerup", soltar)
+    window.addEventListener("pointercancel", soltar)
+    window.addEventListener("keydown", cancelar)
+    return () => {
+      window.removeEventListener("pointermove", mover)
+      window.removeEventListener("pointerup", soltar)
+      window.removeEventListener("pointercancel", soltar)
+      window.removeEventListener("keydown", cancelar)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [arrastandoId])
   const [selectedPending, setSelectedPending] = useState<PendingRequestSlot | null>(null)
   const [quickSchedule,  setQuickSchedule]  = useState<{
     teacherId:   string
@@ -1609,6 +1674,7 @@ export function AgendaGrid({
   // fetchData é redefinido a cada render de propósito (lê estado atual);
   // incluí-lo nas deps faria o efeito rodar em todo render — não é o desejado.
   useEffect(() => {
+    congelarOrdem.current = false   // outro dia/visão: reordena as colunas
     if (!hasMounted.current) { hasMounted.current = true; return }
     fetchData(curDate, view)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1745,7 +1811,7 @@ export function AgendaGrid({
   }
 
   const handleMouseMove = (t: TeacherCol, e: React.MouseEvent<HTMLDivElement>) => {
-    if (!students?.length || !t.slots.length) {
+    if (!students?.length || !t.slots.length || arrasteRef.current) {
       setHoveredCell(null)
       return
     }
@@ -2354,27 +2420,10 @@ export function AgendaGrid({
                       onMouseMove={(e) => handleMouseMove(t, e)}
                       onMouseLeave={() => setHoveredCell(null)}
                       onClick={(e) => handleColumnClick(t, e)}
-                      onDragOver={(e) => {
-                        if (!arrastando) return
-                        e.preventDefault()
-                        e.dataTransfer.dropEffect = "move"
-                        const inicio = inicioNoSoltar(e, arrastando)
-                        if (alvoArraste?.teacherId !== t.id || alvoArraste.startMin !== inicio) {
-                          setAlvoArraste({ teacherId: t.id, startMin: inicio })
-                        }
-                      }}
-                      onDrop={(e) => {
-                        if (!arrastando) return
-                        e.preventDefault()
-                        const inicio = inicioNoSoltar(e, arrastando)
-                        const l = arrastando
-                        setArrastando(null); setAlvoArraste(null)
-                        if (l.teacherId === t.id && l.startMin === inicio) return   // soltou no mesmo lugar
-                        setMovendo({ lesson: l, teacher: t, startMin: inicio })
-                      }}
+                      data-coluna-professor={t.id}
                     >
                       {/* Onde a aula vai cair enquanto é arrastada */}
-                      {arrastando && alvoArraste?.teacherId === t.id && (
+                      {arrastando?.ativo && alvoArraste?.teacherId === t.id && (
                         <div
                           style={{ top: px(alvoArraste.startMin - START * 60), height: Math.max(px(arrastando.duration), 32), left: 3, right: 3 }}
                           className="absolute z-30 rounded-lg border-2 border-dashed border-primary bg-primary/15 pointer-events-none flex items-start justify-center pt-0.5"
@@ -2442,9 +2491,12 @@ export function AgendaGrid({
                           lesson={lesson}
                           onSelect={setSelectedLesson}
                           onArrastar={lesson.lessonType === "INDIVIDUAL" || lesson.lessonType === "GROUP"
-                            ? (l, offsetY) => { setHoveredCell(null); setArrastando({ ...l, offsetY }) }
+                            ? (l, e) => {
+                                setHoveredCell(null)
+                                setArrastando({ ...l, offsetY: e.clientY - e.currentTarget.getBoundingClientRect().top, x0: e.clientX, y0: e.clientY, ativo: false })
+                              }
                             : undefined}
-                          onFimArrastar={() => { setArrastando(null); setAlvoArraste(null) }}
+                          sendoArrastada={!!arrastando?.ativo && arrastando.id === lesson.id}
                         />
                       ))}
                     </div>
@@ -2592,7 +2644,7 @@ export function AgendaGrid({
           startMin={movendo.startMin}
           date={curDate}
           onClose={() => setMovendo(null)}
-          onMovida={() => { setMovendo(null); fetchData(curDate, view) }}
+          onMovida={() => { congelarOrdem.current = true; setMovendo(null); fetchData(curDate, view) }}
         />
       )}
 
