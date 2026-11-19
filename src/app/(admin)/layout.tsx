@@ -7,7 +7,7 @@ import { CURRENT_VERSION } from "@/data/changelog"
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const session = await auth()
-  if (!session?.user)                redirect("/login")
+  if (!session?.user)                redirect("/api/sair")   // limpa o cookie (conta suspensa); /login daria loop
   // Admin rebaixado cai na área dele (ir para /login daria loop: o cookie
   // ainda diz ADMIN e o middleware o mandaria de volta para cá)
   if (session.user.role !== "ADMIN") redirect(ROLE_HOME[session.user.role] ?? "/login")

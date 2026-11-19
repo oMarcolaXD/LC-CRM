@@ -205,14 +205,19 @@ export function UsersTable({ users, currentId }: UsersTableProps) {
                       {format(user.createdAt, "dd/MM/yyyy", { locale: ptBR })}
                     </td>
                     <td className="px-4 py-3 text-center">
-                      {isProtectedAdmin
-                        ? <ShieldAlert className="w-4 h-4 text-muted-foreground mx-auto" aria-label="Conta protegida" />
-                        : <ToggleActiveButton id={user.id} active={user.active} />
+                      {/* Outro admin pode ser suspenso (ex.: saiu da empresa); só a
+                          própria conta não — ninguém se tranca para fora. */}
+                      {isSelf
+                        ? <span title="Você não pode suspender a sua própria conta"><ShieldAlert className="w-4 h-4 text-muted-foreground mx-auto" aria-label="Sua conta" /></span>
+                        : <ToggleActiveButton id={user.id} active={user.active} name={user.name ?? undefined} />
                       }
                     </td>
                     <td className="px-4 py-3 text-right">
                       {isProtectedAdmin ? (
-                        <span className="text-xs text-muted-foreground px-2">Protegido</span>
+                        // Admin não é excluído (perderia o histórico) — suspende e/ou rebaixa
+                        <LinkButton href={`/admin/usuarios/${user.id}`} variant="ghost" size="icon">
+                          <Pencil className="w-4 h-4" />
+                        </LinkButton>
                       ) : (
                         <div className="flex items-center justify-end gap-1">
                           <LinkButton href={`/admin/usuarios/${user.id}`} variant="ghost" size="icon">

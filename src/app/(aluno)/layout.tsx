@@ -5,7 +5,7 @@ import { getActiveStudent }   from "@/lib/get-active-student"
 
 export default async function AlunoLayout({ children }: { children: React.ReactNode }) {
   const session = await auth()
-  if (!session?.user) redirect("/login")
+  if (!session?.user) redirect("/api/sair")   // limpa o cookie (conta suspensa); /login daria loop
   if (!["GUARDIAN", "ADMIN"].includes(session.user.role)) redirect("/login")
 
   const { student, allStudents } = await getActiveStudent(session.user.id)

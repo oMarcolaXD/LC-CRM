@@ -40,23 +40,23 @@ async function findActiveUserByEmail(email: string) {
  * continuava admin até sair da conta. Fica 1 min em memória para não custar
  * uma consulta a cada página — então a troca vale em até 1 minuto.
  */
-const papelCache = new Map<string, { role: Role; at: number }>()
+const papelCache = new Map<string, { role: Role; active: boolean; at: number }>()
 const PAPEL_TTL  = 60_000
 
 export function esquecerPapel(userId: string) {
   papelCache.delete(userId)
 }
 
-async function papelAtual(userId: string, doToken: Role): Promise<Role> {
+async function papelAtual(userId: string, doToken: Role): Promise<{ role: Role; active: boolean }> {
   const c = papelCache.get(userId)
-  if (c && Date.now() - c.at < PAPEL_TTL) return c.role
+  if (c && Date.now() - c.at < PAPEL_TTL) return c
   try {
-    const u    = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } })
-    const role = u?.role ?? doToken
-    papelCache.set(userId, { role, at: Date.now() })
-    return role
+    const u     = await prisma.user.findUnique({ where: { id: userId }, select: { role: true, active: true } })
+    const atual = { role: u?.role ?? doToken, active: u ? u.active : false, at: Date.now() }
+    papelCache.set(userId, atual)
+    return atual
   } catch {
-    return doToken   // banco fora do ar: segue com o que o token diz
+    return { role: doToken, active: true }   // banco fora do ar: segue com o que o token diz
   }
 }
 
@@ -153,11 +153,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.role  = (user as { id: string; role: Role }).role
         token.phone = (user as { phone?: string | null }).phone ?? null
         token.remember = (user as { remember?: boolean }).remember ?? true
-      } else if (token.id && token.role === "ADMIN") {
-        // Só o rebaixamento vale na hora (perder acesso não pode esperar).
-        // Promoção vale no próximo login: o middleware lê o papel do cookie e
-        // mandaria o recém-promovido de volta para a área de colaborador.
-        token.role = await papelAtual(token.id as string, "ADMIN")
+      } else if (token.id && (token.role === "ADMIN" || token.role === "COLLABORATOR")) {
+        // Equipe: conta suspensa perde a sessão e admin rebaixado perde o acesso
+        // de admin em até 1 min (perder acesso não pode esperar o próximo login).
+        // Promoção vale só no próximo login: o middleware lê o papel do cookie
+        // e mandaria o recém-promovido de volta para a área de colaborador.
+        const atual = await papelAtual(token.id as string, token.role as Role)
+        if (!atual.active) return null
+        if (token.role === "ADMIN") token.role = atual.role
       }
       return token
     },

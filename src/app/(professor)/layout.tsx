@@ -7,7 +7,7 @@ import { CURRENT_VERSION } from "@/data/changelog"
 
 export default async function ProfessorLayout({ children }: { children: React.ReactNode }) {
   const session = await auth()
-  if (!session?.user)                                          redirect("/login")
+  if (!session?.user)                                          redirect("/api/sair")   // limpa o cookie (conta suspensa); /login daria loop
   if (!["ADMIN", "TEACHER"].includes(session.user.role)) redirect("/login")
 
   const dbUser = await prisma.user.findUnique({

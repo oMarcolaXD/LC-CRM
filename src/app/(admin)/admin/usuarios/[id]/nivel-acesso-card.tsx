@@ -32,7 +32,9 @@ export function NivelAcessoCard({ userId, nome, atual, ehVoce }: {
     start(async () => {
       try {
         await alterarNivelDeAcessoAction(userId, novo)
-        toast.success(`${nome} agora é ${novo === "ADMIN" ? "administrador" : "colaborador"}. Vale a partir do próximo login.`)
+        toast.success(novo === "ADMIN"
+          ? `${nome} agora é administrador. Vale a partir do próximo login.`
+          : `${nome} agora é colaborador. Perde o acesso de administrador em até 1 minuto.`)
         router.refresh()
       } catch (e) {
         toast.error(mensagemDeErro(e, "Não foi possível mudar o nível de acesso"))
@@ -68,7 +70,7 @@ export function NivelAcessoCard({ userId, nome, atual, ehVoce }: {
       <p className="text-xs text-muted-foreground">
         {ehVoce
           ? "Você não pode mudar o seu próprio nível — peça para outro administrador."
-          : "A mudança vale quando a pessoa sair e entrar de novo no sistema."}
+          : "Tornar administrador vale quando a pessoa sair e entrar de novo. Tirar o acesso de administrador vale em até 1 minuto."}
       </p>
     </div>
   )

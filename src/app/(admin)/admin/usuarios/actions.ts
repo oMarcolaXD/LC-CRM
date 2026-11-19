@@ -325,8 +325,22 @@ export async function updateUserAction(id: string, formData: FormData) {
 
 // ─── Alternar status ativo ────────────────────────────────────────────────────
 export async function toggleUserActiveAction(id: string, active: boolean) {
-  await requireAdmin()
-  await prisma.user.update({ where: { id }, data: { active } })
+  const session = await requireAdmin()
+  if (!active) {
+    if (id === session.user.id) throw new Error("Você não pode suspender o seu próprio acesso")
+    const alvo = await prisma.user.findUnique({ where: { id }, select: { role: true } })
+    if (alvo?.role === "ADMIN") {
+      const outrosAdmins = await prisma.user.count({ where: { role: "ADMIN", active: true, id: { not: id } } })
+      if (outrosAdmins === 0) throw new Error("O sistema precisa ter pelo menos um administrador ativo")
+    }
+  }
+  await prisma.$transaction([
+    prisma.user.update({ where: { id }, data: { active } }),
+    prisma.activityLog.create({
+      data: { userId: session.user.id, action: active ? "REATIVAR_ACESSO" : "SUSPENDER_ACESSO", entityType: "User", entityId: id },
+    }),
+  ])
+  esquecerPapel(id)   // sessão aberta de quem foi suspenso cai no próximo clique
   revalidatePath("/admin/usuarios")
 }
 

@@ -74,6 +74,14 @@ export default async function EditUserPage({ params, searchParams }: EditUserPag
         </div>
       )}
 
+      {user.role === "ADMIN" && session?.user?.id !== user.id ? (
+        <Card>
+          <CardContent className="pt-6 text-sm text-muted-foreground">
+            Os dados de outro administrador não podem ser editados por aqui. Para tirar o acesso,
+            use a chave <strong>Ativo</strong> na lista de usuários (suspende) ou mude o nível abaixo.
+          </CardContent>
+        </Card>
+      ) : (
       <Card>
         <CardContent className="pt-6">
           <UserForm
@@ -98,6 +106,7 @@ export default async function EditUserPage({ params, searchParams }: EditUserPag
           />
         </CardContent>
       </Card>
+      )}
 
       {(user.role === "ADMIN" || user.role === "COLLABORATOR") && (
         <Card>
