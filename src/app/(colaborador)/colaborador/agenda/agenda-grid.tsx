@@ -10,7 +10,7 @@ import {
 } from "date-fns"
 import { ptBR }                    from "date-fns/locale"
 import {
-  ChevronLeft, ChevronRight, CalendarDays, CalendarRange, LayoutGrid,
+  ChevronLeft, ChevronRight, CalendarDays, CalendarRange, LayoutGrid, CalendarPlus,
   CheckCircle2, XCircle, UserX, MessageCircle, BellRing,
   Loader2, Wifi, MapPin, Clock, Plus, Building2, Home, AlertCircle, Users,
   CreditCard, User, GraduationCap, StickyNote, Printer, type LucideIcon,
@@ -37,7 +37,6 @@ import { CreateAulaoDialog }        from "@/components/shared/create-aulao-dialo
 import type { AulaoCreatedPayload } from "@/components/shared/create-aulao-dialog"
 import { CreateCommitmentDialog }   from "@/components/shared/create-commitment-dialog"
 import { ExportAgendaDialog }       from "@/components/shared/export-agenda-dialog"
-import { AuloesSection }            from "./auloes-section"
 import { NotificationConfigWarning } from "@/components/shared/notification-config-warning"
 import type { NotificationStatus }  from "@/lib/notifications/status"
 import { parseBrazilDateTime }      from "@/lib/datetime"
@@ -1758,6 +1757,15 @@ export function AgendaGrid({
               <Plus className="w-3.5 h-3.5" />
               Aulão
             </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs gap-1.5"
+              onClick={() => { setPrefill(null); setShowCommitmentDialog(true) }}
+            >
+              <CalendarPlus className="w-3.5 h-3.5" />
+              Compromisso
+            </Button>
             {allStudents && allStudents.length >= 2 && (
               <Button
                 size="sm"
@@ -1824,14 +1832,9 @@ export function AgendaGrid({
           </div>
         </div>
 
-        {/* ── AULÕES E GRUPOS (somente view dia) ─────────── */}
-        {view === "day" && auloes.length > 0 && (
-          <AuloesSection
-            auloes={auloes}
-            onNewAulao={() => setShowAulaoDialog(true)}
-            onNewCommitment={() => setShowCommitmentDialog(true)}
-          />
-        )}
+        {/* A faixa "Aulões e grupos" saiu daqui: os aulões já aparecem como
+            cards na própria grade, e a faixa só roubava espaço da agenda.
+            "Aulão" e "Compromisso" ficaram na barra de cima. */}
 
         {/* ── VISUALIZAÇÃO: MÊS ───────────────────────────── */}
         {view === "month" && (
