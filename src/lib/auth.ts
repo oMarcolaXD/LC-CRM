@@ -34,6 +34,32 @@ async function findActiveUserByEmail(email: string) {
   return matches.length === 1 ? matches[0] : null
 }
 
+/**
+ * Nível de acesso atual da equipe (admin ↔ colaborador), relido do banco.
+ * O token guarda o papel do momento do login; sem isto, um admin rebaixado
+ * continuava admin até sair da conta. Fica 1 min em memória para não custar
+ * uma consulta a cada página — então a troca vale em até 1 minuto.
+ */
+const papelCache = new Map<string, { role: Role; at: number }>()
+const PAPEL_TTL  = 60_000
+
+export function esquecerPapel(userId: string) {
+  papelCache.delete(userId)
+}
+
+async function papelAtual(userId: string, doToken: Role): Promise<Role> {
+  const c = papelCache.get(userId)
+  if (c && Date.now() - c.at < PAPEL_TTL) return c.role
+  try {
+    const u    = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } })
+    const role = u?.role ?? doToken
+    papelCache.set(userId, { role, at: Date.now() })
+    return role
+  } catch {
+    return doToken   // banco fora do ar: segue com o que o token diz
+  }
+}
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
   // A validade real do token (exp) é decidida aqui, com base em token.remember.
@@ -127,6 +153,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.role  = (user as { id: string; role: Role }).role
         token.phone = (user as { phone?: string | null }).phone ?? null
         token.remember = (user as { remember?: boolean }).remember ?? true
+      } else if (token.id && token.role === "ADMIN") {
+        // Só o rebaixamento vale na hora (perder acesso não pode esperar).
+        // Promoção vale no próximo login: o middleware lê o papel do cookie e
+        // mandaria o recém-promovido de volta para a área de colaborador.
+        token.role = await papelAtual(token.id as string, "ADMIN")
       }
       return token
     },

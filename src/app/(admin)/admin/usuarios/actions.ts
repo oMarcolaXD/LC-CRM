@@ -1,7 +1,7 @@
 "use server"
 
 import { prisma }           from "@/lib/prisma"
-import { auth }             from "@/lib/auth"
+import { auth, esquecerPapel } from "@/lib/auth"
 import { createUserSchema, updateUserSchema } from "@/lib/validations/user"
 import { revalidatePath }   from "next/cache"
 import { redirect }         from "next/navigation"
@@ -71,6 +71,7 @@ export async function alterarNivelDeAcessoAction(id: string, novo: "ADMIN" | "CO
       },
     }),
   ])
+  esquecerPapel(id)
   revalidatePath("/admin/usuarios", "layout")
 }
 
