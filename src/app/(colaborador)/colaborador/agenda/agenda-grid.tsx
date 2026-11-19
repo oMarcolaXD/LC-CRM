@@ -47,7 +47,7 @@ import { SearchSelect } from "@/components/shared/search-list"
 
 // ─── Constantes de layout ────────────────────────────────────────────────────
 
-const HOUR_H = 72
+const HOUR_H = 52   // altura de 1h na grade (era 72): mais horas visíveis na tela
 const COL_W  = 160
 const TIME_W = 52
 const START  = 7
@@ -980,28 +980,26 @@ function LessonBlock({
       style={{ top: px(lesson.startMin - START * 60), height, left: 3, right: 3 }}
       className={`absolute rounded-lg border overflow-hidden select-none cursor-pointer transition-opacity hover:opacity-85 active:opacity-70 ${bg} ${text} ${border}`}
     >
-      <div className="flex h-full flex-col justify-between px-1.5 pt-1 pb-0.5">
-        <div>
-          <div className="flex items-center gap-1">
-            <p className="text-[11px] font-bold leading-tight">{lesson.time}</p>
-            <ModoBadgeDynamic modo={modo} />
-          </div>
-          <p className="text-[12px] font-semibold leading-tight truncate mt-0.5">
-            {lesson.studentName.split(" ")[0]}
-            {lesson.studentName.split(" ").length > 1 && (
-              <span className="opacity-80"> {lesson.studentName.split(" ")[1]?.[0]}.</span>
-            )}
-          </p>
-          {height >= 52 && (
-            <p className="text-[10px] leading-tight truncate opacity-85">{lesson.subjectName}</p>
-          )}
-        </div>
-        {height >= 64 && (
-          <div className="flex gap-[3px] mt-1">
+      <div className="flex h-full flex-col px-1.5 pt-0.5 pb-0.5">
+        {/* Horário + modo + bolinhas de confirmação na MESMA linha: o card de
+            1h cabe inteiro mesmo com a hora mais baixa (agenda compacta). */}
+        <div className="flex items-center gap-1">
+          <p className="text-[11px] font-bold leading-tight">{lesson.time}</p>
+          <ModoBadgeDynamic modo={modo} />
+          <div className="ml-auto flex gap-[3px]">
             <ConfirmPill icon={CreditCard}    state={pkgState}   />
             <ConfirmPill icon={User}          state={alunoState} />
             <ConfirmPill icon={GraduationCap} state={profState}  />
           </div>
+        </div>
+        <p className="text-[12px] font-semibold leading-tight truncate">
+          {lesson.studentName.split(" ")[0]}
+          {lesson.studentName.split(" ").length > 1 && (
+            <span className="opacity-80"> {lesson.studentName.split(" ")[1]?.[0]}.</span>
+          )}
+        </p>
+        {height >= 40 && (
+          <p className="text-[10px] leading-tight truncate opacity-85">{lesson.subjectName}</p>
         )}
       </div>
     </div>
@@ -1841,7 +1839,7 @@ export function AgendaGrid({
               </button>
             )}
             {/* Legenda só em telas bem largas — os cards já trazem a cor do status */}
-            <div className="hidden 2xl:flex items-center gap-2">
+            <div className="hidden min-[1900px]:flex items-center gap-2">
               {(["CONFIRMED", "SCHEDULED", "COMPLETED"] as LessonStatus[]).map(s => (
                 <span key={s} className="flex items-center gap-1">
                   <span className={`w-2.5 h-2.5 rounded-sm ${STATUS_STYLE[s].bg}`} />
@@ -2113,7 +2111,7 @@ export function AgendaGrid({
                       key={t.id}
                       // Estica para ocupar a largura da tela (mínimo COL_W)
                       style={{ flex: "1 1 0", minWidth: COL_W }}
-                      className={`px-3 py-2 border-l border-border flex flex-col items-center gap-1 ${
+                      className={`px-2 py-1.5 border-l border-border flex flex-col items-center gap-0.5 ${
                         !available ? "bg-muted/25" : ""
                       }`}
                     >
@@ -2125,7 +2123,8 @@ export function AgendaGrid({
                         )}
                       </p>
 
-                      {/* Disponibilidade */}
+                      {/* Disponibilidade + contadores numa linha só (cabeçalho compacto) */}
+                      <div className="flex items-center gap-x-2 gap-y-0.5 flex-wrap justify-center">
                       {available ? (
                         <div className="flex items-center gap-1 flex-wrap justify-center">
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
@@ -2162,6 +2161,7 @@ export function AgendaGrid({
                             {pendingCount}
                           </span>
                         )}
+                      </div>
                       </div>
                     </div>
                   )
